@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-page">
+    <div class="page-header">
+        <h1><i class="fas fa-chart-line"></i> Dashboard Neo4j - Consultas</h1>
+        <p>Organización: <strong>{{ org }}</strong> - Visualización de consultas desde dashboard.json</p>
+    </div>
+
+    <div class="reconocimiento-nav">
+        <a href="/pentesting/{{ org }}/reconocimiento" class="nav-tab">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/scan" class="nav-tab">
+            <i class="fas fa-search"></i> Escanear
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/results" class="nav-tab">
+            <i class="fas fa-chart-bar"></i> Resultados
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/evidence" class="nav-tab">
+            <i class="fas fa-file-code"></i> Evidencias
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/visualization" class="nav-tab">
+            <i class="fas fa-project-diagram"></i> Visualización
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/dashboard" class="nav-tab active">
+            <i class="fas fa-chart-line"></i> Consultas
+        </a>
+    </div>
+
+    <!-- Configuración de Neo4j -->
+    <div class="neo4j-config-card">
+        <h2><i class="fas fa-cog"></i> Configuración de Neo4j</h2>
+        <div class="config-form">
+            <div class="form-group">
+                <label>Bolt URL:</label>
+                <input type="text" id="neo4j-bolt-url" value="bolt://localhost:7687" placeholder="bolt://localhost:7687">
+            </div>
+            <div class="form-group">
+                <label>Usuario:</label>
+                <input type="text" id="neo4j-username" value="neo4j" placeholder="neo4j">
+            </div>
+            <div class="form-group">
+                <label>Contraseña:</label>
+                <input type="password" id="neo4j-password" value="neo4j" placeholder="neo4j">
+            </div>
+            <button class="btn btn-primary" onclick="loadDashboard()">
+                <i class="fas fa-sync"></i> Cargar Dashboard
+            </button>
+        </div>
+    </div>
+
+    <!-- Selector de página -->
+    <div class="page-selector">
+        <label>Página:</label>
+        <select id="page-selector" onchange="loadPage()">
+            <option value="">Cargando...</option>
+        </select>
+    </div>
+
+    <!-- Contenedor del dashboard -->
+    <div id="dashboard-container" class="dashboard-container">
+        <div class="loading-message">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Cargando dashboard...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let dashboardConfig = null;
+    let currentPage = null;
+    let currentOrg = '{{ org }}';
+    let neo4jConfig = {
+        bolt_url: 'bolt://localhost:7687',
+        username: 'neo4j',
+        password: 'neo4j'
+    };
+
+    // Cargar configuración del dashboard
+    async function loadDashboardConfig() {
+        try {
+            const response = await fetch('/api/dashboard/config');
+            const data = await response.json();
+            
+            if (response.ok) {
+                dashboardConfig = data;
+                populatePageSelector();
+                if (data.pages && data.pages.length > 0) {
+                    loadPage(0);
+                }
+            } else {
+                showError('Error cargando dashboard.json: ' + (data.error || 'Error desconocido'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showError('Error de conexión al cargar dashboard');
+        }
+    }
+
+    function populatePageSelector() {
+        const selector = document.getElementById('page-selector');
+        selector.innerHTML = '';
+        
+        if (dashboardConfig && dashboardConfig.pages) {
+            dashboardConfig.pages.forEach((page, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = page.title || `Página ${index + 1}`;
+                selector.appendChild(option);
+            });
+        }
+    }
+
+    async function loadPage(pageIndex) {
+        if (!dashboardConfig || !dashboardConfig.pages) return;
+        
+        const index = pageIndex !== undefined ? pageIndex : parseInt(document.getElementById('page-selector').value);
+        if (isNaN(index) || index < 0 || index >= dashboardConfig.pages.length) return;
+        
+        currentPage = dashboardConfig.pages[index];
+        const container = document.getElementById('dashboard-container');
+        container.innerHTML = '<div class="loading-message"><i class="fas fa-spinner fa-spin"></i><p>Cargando consultas...</p></div>';
+        
+        // Crear grid para los reportes
+        const grid = document.createElement('div');
+        grid.className = 'dashboard-grid';
+        
+        // Ordenar reportes por posición (y, x)
+        const reports = [...currentPage.reports].sort((a, b) => {
+            if (a.y !== b.y) return a.y - b.y;
+            return a.x - b.x;
+        });
+        
+        // Renderizar cada reporte
+        for (const report of reports) {
+            const reportDiv = await renderReport(report);
+            if (reportDiv) {
+                grid.appendChild(reportDiv);
+            }
+        }
+        
+        container.innerHTML = '';
+        container.appendChild(grid);
+    }
+
+    async function renderReport(report) {
+        const div = document.createElement('div');
+        div.className = 'report-card';
+        div.style.gridColumn = `span ${report.width || 12}`;
+        div.style.gridRow = `span ${report.height || 4}`;
+        
+        const title = document.createElement('h3');
+        title.textContent = report.title || 'Sin título';
+        div.appendChild(title);
+        
+        const content = document.createElement('div');
+        content.className = 'report-content';
+        content.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i></div>';
+        div.appendChild(content);
+        
+        // Ejecutar consulta
+        try {
+            const query = report.query || '';
+            if (!query) {
+                content.innerHTML = '<p class="error">Sin consulta definida</p>';
+                return div;
+            }
+            
+            // Preparar parámetros
+            const parameters = {};
+            if (dashboardConfig.settings && dashboardConfig.settings.parameters) {
+                Object.assign(parameters, dashboardConfig.settings.parameters);
+            }
+            
+            // Reemplazar parámetros con valores de la organización actual
+            if (parameters.neodash_org_org) {
+                parameters.neodash_org_org = currentOrg.upper();
+            }
+            
+            const response = await fetch('/api/neo4j/query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    query: query,
+                    parameters: parameters,
+                    org: currentOrg,
+                    bolt_url: neo4jConfig.bolt_url,
+                    username: neo4jConfig.username,
+                    password: neo4jConfig.password
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.records) {
+                renderReportContent(content, report, data.records);
+            } else {
+                content.innerHTML = `<p class="error">Error: ${data.error || 'Error desconocido'}</p>`;
+            }
+        } catch (error) {
+            console.error('Error ejecutando consulta:', error);
+            content.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+        }
+        
+        return div;
+    }
+
+    function renderReportContent(container, report, records) {
+        const type = report.type || 'table';
+        
+        switch (type) {
+            case 'graph':
+                renderGraph(container, report, records);
+                break;
+            case 'bar':
+                renderBarChart(container, report, records);
+                break;
+            case 'table':
+                renderTable(container, report, records);
+                break;
+            case 'value':
+                renderValue(container, report, records);
+                break;
+            default:
+                renderTable(container, report, records);
+        }
+    }
+
+    function renderGraph(container, report, records) {
+        const canvas = document.createElement('div');
+        canvas.id = 'graph-' + report.id;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.minHeight = '400px';
+        container.appendChild(canvas);
+        
+        // Extraer nodos y relaciones de los registros
+        const nodes = new vis.DataSet();
+        const edges = new vis.DataSet();
+        const nodeMap = new Map();
+        
+        records.forEach(record => {
+            Object.values(record).forEach(value => {
+                if (value && value.type === 'path') {
+                    value.nodes.forEach(node => {
+                        const nodeId = JSON.stringify(node.properties);
+                        if (!nodeMap.has(nodeId)) {
+                            const labels = node.labels.join(':');
+                            nodes.add({
+                                id: nodeId,
+                                label: node.properties.org || node.properties.IP || node.properties.number || labels,
+                                group: labels,
+                                properties: node.properties
+                            });
+                            nodeMap.set(nodeId, true);
+                        }
+                    });
+                    
+                    // Crear relaciones
+                    value.relationships.forEach((rel, idx) => {
+                        if (idx < value.nodes.length - 1) {
+                            const fromId = JSON.stringify(value.nodes[idx].properties);
+                            const toId = JSON.stringify(value.nodes[idx + 1].properties);
+                            edges.add({
+                                from: fromId,
+                                to: toId,
+                                label: rel.type
+                            });
+                        }
+                    });
+                }
+            });
+        });
+        
+        if (nodes.length > 0) {
+            const data = { nodes: nodes, edges: edges };
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    size: 16,
+                    font: { size: 12 }
+                },
+                edges: {
+                    width: 2,
+                    smooth: { type: 'continuous' }
+                },
+                physics: {
+                    enabled: true
+                }
+            };
+            
+            new vis.Network(canvas, data, options);
+        } else {
+            container.innerHTML = '<p>No hay datos para visualizar</p>';
+        }
+    }
+
+    function renderBarChart(container, report, records) {
+        const canvas = document.createElement('canvas');
+        container.appendChild(canvas);
+        
+        const selection = report.selection || {};
+        const indexKey = selection.index || Object.keys(records[0] || {})[0];
+        const valueKey = selection.value || Object.keys(records[0] || {})[1];
+        
+        const labels = records.map(r => r[indexKey] || '');
+        const values = records.map(r => parseFloat(r[valueKey]) || 0);
+        
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: valueKey,
+                    data: values,
+                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    function renderTable(container, report, records) {
+        if (records.length === 0) {
+            container.innerHTML = '<p>No hay datos</p>';
+            return;
+        }
+        
+        const table = document.createElement('table');
+        table.className = 'report-table';
+        
+        // Encabezados
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        Object.keys(records[0]).forEach(key => {
+            const th = document.createElement('th');
+            th.textContent = key;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        
+        // Filas
+        const tbody = document.createElement('tbody');
+        records.forEach(record => {
+            const row = document.createElement('tr');
+            Object.values(record).forEach(value => {
+                const td = document.createElement('td');
+                td.textContent = typeof value === 'object' ? JSON.stringify(value) : value;
+                row.appendChild(td);
+            });
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+        
+        container.appendChild(table);
+    }
+
+    function renderValue(container, report, records) {
+        if (records.length > 0) {
+            const value = Object.values(records[0])[0];
+            container.innerHTML = `<div class="value-display">${value}</div>`;
+        } else {
+            container.innerHTML = '<p>No hay datos</p>';
+        }
+    }
+
+    function showError(message) {
+        const container = document.getElementById('dashboard-container');
+        container.innerHTML = `<div class="error-message"><i class="fas fa-exclamation-circle"></i> ${message}</div>`;
+    }
+
+    function loadDashboard() {
+        neo4jConfig = {
+            bolt_url: document.getElementById('neo4j-bolt-url').value,
+            username: document.getElementById('neo4j-username').value,
+            password: document.getElementById('neo4j-password').value
+        };
+        loadDashboardConfig();
+    }
+
+    // Inicializar
+    loadDashboardConfig();
+</script>
+
+<style>
+.dashboard-page {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.neo4j-config-card {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.config-form {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.config-form .form-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+.config-form label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.config-form input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+}
+
+.page-selector {
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.page-selector select {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    font-size: 1rem;
+}
+
+.dashboard-container {
+    min-height: 400px;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 1rem;
+}
+
+.report-card {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.report-card h3 {
+    margin: 0 0 1rem 0;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 0.5rem;
+}
+
+.report-content {
+    height: calc(100% - 3rem);
+    overflow: auto;
+}
+
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.report-table th,
+.report-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-table th {
+    background: var(--light-bg);
+    font-weight: 600;
+}
+
+.value-display {
+    font-size: 3rem;
+    font-weight: bold;
+    text-align: center;
+    color: var(--primary-color);
+    padding: 2rem;
+}
+
+.loading-message,
+.loading-spinner {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-secondary);
+}
+
+.loading-spinner i {
+    font-size: 2rem;
+    color: var(--primary-color);
+}
+
+.error-message {
+    background: #fee;
+    color: #c33;
+    padding: 1rem;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.error {
+    color: #c33;
+    padding: 1rem;
+}
+</style>
+{% endblock %}
+

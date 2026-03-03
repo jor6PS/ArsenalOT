@@ -1,0 +1,771 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="simulacion-page">
+    <div class="page-header">
+        <h1><i class="fas fa-vial"></i> Simulación de Protocolos Industriales</h1>
+        <p>Simula entornos industriales con diferentes protocolos para pruebas y desarrollo</p>
+    </div>
+
+    <div class="simulation-sections">
+        <!-- Sección de Protocolos Disponibles -->
+        <div class="section-card">
+            <h2><i class="fas fa-list"></i> Protocolos Disponibles</h2>
+            <div id="protocols-list" class="protocols-grid">
+                <div class="loading-spinner">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando protocolos...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Simuladores Activos -->
+        <div class="section-card">
+            <h2><i class="fas fa-play-circle"></i> Simuladores Activos</h2>
+            <div id="simulators-list" class="simulators-list">
+                <p class="empty-message">No hay simuladores creados</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para crear/configurar simulador -->
+    <div id="simulator-modal" class="modal">
+        <div class="modal-content modal-large">
+            <span class="close">&times;</span>
+            <h2 id="modal-title">Crear Simulador</h2>
+            <div id="modal-body">
+                <form id="simulator-form">
+                    <div class="form-group">
+                        <label for="modal-protocol"><i class="fas fa-network-wired"></i> Protocolo</label>
+                        <select id="modal-protocol" required>
+                            <option value="">Selecciona un protocolo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-port"><i class="fas fa-plug"></i> Puerto</label>
+                        <input type="number" id="modal-port" min="1" max="65535" placeholder="Puerto (opcional, usa el por defecto)">
+                        <small>Deja vacío para usar el puerto por defecto del protocolo</small>
+                    </div>
+                    <div id="config-section" class="config-section" style="display: none;">
+                        <h3>Configuración Avanzada</h3>
+                        <div id="config-fields"></div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Guardar y Crear
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="createAndStart()">
+                            <i class="fas fa-play"></i> Crear e Iniciar
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="closeSimulatorModal()">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver logs -->
+    <div id="logs-modal" class="modal">
+        <div class="modal-content modal-large">
+            <span class="close">&times;</span>
+            <h2 id="logs-modal-title">Logs del Simulador</h2>
+            <div class="logs-controls">
+                <button class="btn btn-secondary" onclick="refreshLogs()">
+                    <i class="fas fa-sync"></i> Actualizar
+                </button>
+                <button class="btn btn-secondary" onclick="clearLogs()">
+                    <i class="fas fa-trash"></i> Limpiar
+                </button>
+            </div>
+            <div id="logs-container" class="logs-container">
+                <div class="loading-spinner">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando logs...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const socket = io();
+    let currentSimulatorId = null;
+    let protocols = [];
+    let simulators = [];
+
+    socket.on('connect', () => {
+        console.log('Conectado al servidor');
+        loadProtocols();
+        loadSimulators();
+        setInterval(loadSimulators, 3000); // Actualizar cada 3 segundos
+    });
+
+    socket.on('simulator_log', (log) => {
+        if (currentSimulatorId && log.protocol) {
+            addLogEntry(log);
+        }
+    });
+
+    async function loadProtocols() {
+        try {
+            const response = await fetch('/api/simulators/protocols');
+            const data = await response.json();
+            protocols = data.protocols || [];
+            displayProtocols(protocols);
+        } catch (error) {
+            console.error('Error cargando protocolos:', error);
+        }
+    }
+
+    function displayProtocols(protocolsList) {
+        const container = document.getElementById('protocols-list');
+        
+        if (protocolsList.length === 0) {
+            container.innerHTML = '<p class="empty-message">No hay protocolos disponibles</p>';
+            return;
+        }
+
+        container.innerHTML = protocolsList.map(protocol => `
+            <div class="protocol-card">
+                <div class="protocol-header">
+                    <h3>${protocol.name}</h3>
+                    <span class="protocol-port">Puerto: ${protocol.port}</span>
+                </div>
+                <p class="protocol-description">${protocol.description}</p>
+                <div class="protocol-actions">
+                    <button class="btn btn-primary" onclick="startSimulatorQuick('${protocol.id}')">
+                        <i class="fas fa-play"></i> Iniciar Simulador
+                    </button>
+                    <button class="btn btn-secondary" onclick="createSimulator('${protocol.id}')">
+                        <i class="fas fa-cog"></i> Configurar
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function loadSimulators() {
+        try {
+            const response = await fetch('/api/simulators');
+            const data = await response.json();
+            simulators = data.simulators || [];
+            displaySimulators(simulators);
+        } catch (error) {
+            console.error('Error cargando simuladores:', error);
+        }
+    }
+
+    function displaySimulators(simulatorsList) {
+        const container = document.getElementById('simulators-list');
+        
+        if (simulatorsList.length === 0) {
+            container.innerHTML = '<p class="empty-message">No hay simuladores creados</p>';
+            return;
+        }
+
+        container.innerHTML = simulatorsList.map(sim => {
+            const statusClass = sim.status.is_running ? 'status-running' : 'status-stopped';
+            const statusText = sim.status.is_running ? 'En Ejecución' : 'Detenido';
+            
+            return `
+                <div class="simulator-card">
+                    <div class="simulator-header">
+                        <div>
+                            <h3>${sim.info.name}</h3>
+                            <p class="simulator-info">${sim.protocol.toUpperCase()} - Puerto ${sim.port}</p>
+                        </div>
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="simulator-actions">
+                        ${sim.status.is_running ? 
+                            `<button class="btn btn-warning" onclick="stopSimulator('${sim.id}')">
+                                <i class="fas fa-stop"></i> Detener
+                            </button>` :
+                            `<button class="btn btn-success" onclick="startSimulator('${sim.id}')">
+                                <i class="fas fa-play"></i> Iniciar
+                            </button>`
+                        }
+                        <button class="btn btn-primary" onclick="viewLogs('${sim.id}')">
+                            <i class="fas fa-file-alt"></i> Ver Logs
+                        </button>
+                        <button class="btn btn-secondary" onclick="configureSimulator('${sim.id}')">
+                            <i class="fas fa-cog"></i> Configurar
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteSimulator('${sim.id}')">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                    </div>
+                    <div class="simulator-stats">
+                        <span><i class="fas fa-network-wired"></i> Conexiones: ${sim.status.connections || 0}</span>
+                        ${sim.status.requests_handled !== undefined ? `<span><i class="fas fa-exchange-alt"></i> Peticiones: ${sim.status.requests_handled}</span>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function startSimulatorQuick(protocolId) {
+        const protocol = protocols.find(p => p.id === protocolId);
+        if (!protocol) return;
+
+        try {
+            // Crear simulador con configuración por defecto
+            const response = await fetch('/api/simulators', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    protocol: protocolId,
+                    port: null, // Usar puerto por defecto
+                    config: {}
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.simulator_id) {
+                // Iniciar el simulador automáticamente
+                const startResponse = await fetch(`/api/simulators/${data.simulator_id}/start`, {
+                    method: 'POST'
+                });
+                
+                const startData = await startResponse.json();
+                
+                if (startResponse.ok) {
+                    if (typeof Utils !== 'undefined' && Utils.showNotification) {
+                        Utils.showNotification(`Simulador ${protocol.name} iniciado correctamente`, 'success');
+                    } else {
+                        alert(`Simulador ${protocol.name} iniciado correctamente`);
+                    }
+                    loadSimulators();
+                } else {
+                    if (typeof Utils !== 'undefined' && Utils.showNotification) {
+                        Utils.showNotification(startData.error || 'Error iniciando simulador', 'error');
+                    } else {
+                        alert(startData.error || 'Error iniciando simulador');
+                    }
+                }
+            } else {
+                if (typeof Utils !== 'undefined' && Utils.showNotification) {
+                    Utils.showNotification(data.error || 'Error creando simulador', 'error');
+                } else {
+                    alert(data.error || 'Error creando simulador');
+                }
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            const errorMsg = 'Error de conexión: ' + error.message;
+            if (typeof Utils !== 'undefined' && Utils.showNotification) {
+                Utils.showNotification(errorMsg, 'error');
+            } else {
+                alert(errorMsg);
+            }
+        }
+    }
+
+    function createSimulator(protocolId) {
+        const protocol = protocols.find(p => p.id === protocolId);
+        if (!protocol) return;
+
+        document.getElementById('modal-title').textContent = `Configurar Simulador - ${protocol.name}`;
+        document.getElementById('modal-protocol').value = protocolId;
+        document.getElementById('modal-port').value = protocol.port;
+        document.getElementById('modal-port').placeholder = `Puerto (por defecto: ${protocol.port})`;
+        
+        // Limpiar campos de configuración
+        document.getElementById('config-fields').innerHTML = '';
+        document.getElementById('config-section').style.display = 'none';
+        
+        document.getElementById('simulator-modal').style.display = 'block';
+    }
+
+    function closeSimulatorModal() {
+        document.getElementById('simulator-modal').style.display = 'none';
+        document.getElementById('simulator-form').reset();
+    }
+
+    async function createSimulatorFromForm(startAfterCreate = false) {
+        const protocol = document.getElementById('modal-protocol').value;
+        const port = document.getElementById('modal-port').value;
+        const config = {};
+        
+        // Recopilar configuración avanzada
+        const configInputs = document.querySelectorAll('#config-fields input, #config-fields select');
+        configInputs.forEach(input => {
+            if (input.value) {
+                config[input.name] = input.value;
+            }
+        });
+        
+        try {
+            const response = await fetch('/api/simulators', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    protocol: protocol,
+                    port: port ? parseInt(port) : null,
+                    config: config
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                if (startAfterCreate && data.simulator_id) {
+                    // Iniciar el simulador automáticamente
+                    const startResponse = await fetch(`/api/simulators/${data.simulator_id}/start`, {
+                        method: 'POST'
+                    });
+                    
+                    const startData = await startResponse.json();
+                    
+                    if (startResponse.ok) {
+                        if (typeof Utils !== 'undefined' && Utils.showNotification) {
+                            Utils.showNotification('Simulador creado e iniciado correctamente', 'success');
+                        } else {
+                            alert('Simulador creado e iniciado correctamente');
+                        }
+                    } else {
+                        if (typeof Utils !== 'undefined' && Utils.showNotification) {
+                            Utils.showNotification('Simulador creado pero no se pudo iniciar: ' + (startData.error || 'Error desconocido'), 'warning');
+                        } else {
+                            alert('Simulador creado pero no se pudo iniciar');
+                        }
+                    }
+                } else {
+                    if (typeof Utils !== 'undefined' && Utils.showNotification) {
+                        Utils.showNotification('Simulador creado correctamente', 'success');
+                    } else {
+                        alert('Simulador creado correctamente');
+                    }
+                }
+                closeSimulatorModal();
+                loadSimulators();
+            } else {
+                if (typeof Utils !== 'undefined' && Utils.showNotification) {
+                    Utils.showNotification(data.error || 'Error creando simulador', 'error');
+                } else {
+                    alert(data.error || 'Error creando simulador');
+                }
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            const errorMsg = 'Error de conexión: ' + error.message;
+            if (typeof Utils !== 'undefined' && Utils.showNotification) {
+                Utils.showNotification(errorMsg, 'error');
+            } else {
+                alert(errorMsg);
+            }
+        }
+    }
+
+    function createAndStart() {
+        createSimulatorFromForm(true);
+    }
+
+    document.getElementById('simulator-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        createSimulatorFromForm(false);
+    });
+
+    async function startSimulator(simulatorId) {
+        try {
+            const response = await fetch(`/api/simulators/${simulatorId}/start`, {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                Utils.showNotification('Simulador iniciado', 'success');
+                loadSimulators();
+            } else {
+                Utils.showNotification(data.error || 'Error iniciando simulador', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            Utils.showNotification('Error de conexión', 'error');
+        }
+    }
+
+    async function stopSimulator(simulatorId) {
+        try {
+            const response = await fetch(`/api/simulators/${simulatorId}/stop`, {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                Utils.showNotification('Simulador detenido', 'success');
+                loadSimulators();
+            } else {
+                Utils.showNotification(data.error || 'Error deteniendo simulador', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            Utils.showNotification('Error de conexión', 'error');
+        }
+    }
+
+    async function deleteSimulator(simulatorId) {
+        if (!confirm('¿Estás seguro de eliminar este simulador?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/simulators/${simulatorId}`, {
+                method: 'DELETE'
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                Utils.showNotification('Simulador eliminado', 'success');
+                loadSimulators();
+            } else {
+                Utils.showNotification(data.error || 'Error eliminando simulador', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            Utils.showNotification('Error de conexión', 'error');
+        }
+    }
+
+    function viewLogs(simulatorId) {
+        currentSimulatorId = simulatorId;
+        const simulator = simulators.find(s => s.id === simulatorId);
+        document.getElementById('logs-modal-title').textContent = `Logs - ${simulator ? simulator.info.name : 'Simulador'}`;
+        document.getElementById('logs-modal').style.display = 'block';
+        
+        // Suscribirse a logs en tiempo real
+        socket.emit('subscribe_simulator_logs', { simulator_id: simulatorId });
+        
+        refreshLogs();
+    }
+
+    async function refreshLogs() {
+        if (!currentSimulatorId) return;
+        
+        const container = document.getElementById('logs-container');
+        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><p>Cargando logs...</p></div>';
+        
+        try {
+            const response = await fetch(`/api/simulators/${currentSimulatorId}/logs?limit=200`);
+            const data = await response.json();
+            
+            if (data.logs && data.logs.length > 0) {
+                container.innerHTML = data.logs.reverse().map(log => `
+                    <div class="log-entry log-${log.level}">
+                        <div class="log-header">
+                            <span class="log-time">${new Date(log.timestamp).toLocaleString()}</span>
+                            <span class="log-level">${log.level.toUpperCase()}</span>
+                        </div>
+                        <div class="log-message">${log.message}</div>
+                        ${log.data && Object.keys(log.data).length > 0 ? `
+                            <div class="log-data">
+                                <pre>${JSON.stringify(log.data, null, 2)}</pre>
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            } else {
+                container.innerHTML = '<p class="empty-message">No hay logs disponibles</p>';
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            container.innerHTML = '<p class="error-message">Error cargando logs</p>';
+        }
+    }
+
+    function clearLogs() {
+        document.getElementById('logs-container').innerHTML = '<p class="empty-message">Logs limpiados</p>';
+    }
+
+    function configureSimulator(simulatorId) {
+        // TODO: Implementar configuración
+        alert('Configuración avanzada próximamente');
+    }
+
+    // Cerrar modales
+    document.querySelectorAll('.close').forEach(closeBtn => {
+        closeBtn.onclick = function() {
+            this.closest('.modal').style.display = 'none';
+            if (this.closest('#logs-modal')) {
+                currentSimulatorId = null;
+            }
+        };
+    });
+
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.style.display = 'none';
+            if (event.target.id === 'logs-modal') {
+                currentSimulatorId = null;
+            }
+        }
+    };
+
+    // Cargar protocolos en el select del modal
+    loadProtocols().then(() => {
+        const select = document.getElementById('modal-protocol');
+        protocols.forEach(protocol => {
+            const option = document.createElement('option');
+            option.value = protocol.id;
+            option.textContent = `${protocol.name} (Puerto ${protocol.port})`;
+            select.appendChild(option);
+        });
+    });
+</script>
+
+<style>
+.simulacion-page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.simulation-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.protocols-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.protocol-card {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: all 0.3s;
+}
+
+.protocol-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+}
+
+.protocol-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.protocol-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.protocol-port {
+    background: var(--primary-color);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    font-size: 0.8rem;
+}
+
+.protocol-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+}
+
+.protocol-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.protocol-actions .btn {
+    flex: 1;
+    justify-content: center;
+}
+
+.simulators-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.simulator-card {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.simulator-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.simulator-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.simulator-info {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
+.status-badge {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.status-running {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.status-stopped {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.simulator-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.simulator-actions .btn {
+    flex: 1;
+    min-width: 120px;
+    justify-content: center;
+}
+
+.simulator-stats {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.config-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.config-section h3 {
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.logs-controls {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.logs-container {
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--dark-bg);
+    border-radius: 5px;
+    padding: 1rem;
+}
+
+.log-entry {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border-radius: 5px;
+    border-left: 4px solid;
+}
+
+.log-entry.log-info {
+    background: #1e3a5f;
+    border-color: #3b82f6;
+    color: #dbeafe;
+}
+
+.log-entry.log-warning {
+    background: #5a4a1a;
+    border-color: #f59e0b;
+    color: #fef3c7;
+}
+
+.log-entry.log-error {
+    background: #5a1a1a;
+    border-color: #ef4444;
+    color: #fee2e2;
+}
+
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.log-time {
+    opacity: 0.8;
+}
+
+.log-level {
+    font-weight: 600;
+}
+
+.log-message {
+    margin-bottom: 0.5rem;
+}
+
+.log-data {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(0,0,0,0.3);
+    border-radius: 3px;
+}
+
+.log-data pre {
+    margin: 0;
+    font-size: 0.8rem;
+    overflow-x: auto;
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, var(--warning-color), #d97706);
+    color: white;
+}
+
+.btn-warning:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(245, 158, 11, 0.3);
+}
+
+@media (max-width: 1024px) {
+    .simulation-sections {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+

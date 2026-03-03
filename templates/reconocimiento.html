@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="reconocimiento-page">
+    <div class="page-header">
+        <h1><i class="fas fa-search"></i> Fase 1: Reconocimiento</h1>
+        <p>Organización: <strong>{{ org }}</strong> - Recopilación de información inicial sobre el objetivo. Identificación de hosts, servicios y arquitectura de red.</p>
+    </div>
+
+    <div class="reconocimiento-nav">
+        <a href="/pentesting/{{ org }}/reconocimiento" class="nav-tab active">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/scan" class="nav-tab">
+            <i class="fas fa-search"></i> Escanear
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/results" class="nav-tab">
+            <i class="fas fa-chart-bar"></i> Resultados
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/evidence" class="nav-tab">
+            <i class="fas fa-file-code"></i> Evidencias
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/visualization" class="nav-tab">
+            <i class="fas fa-project-diagram"></i> Visualización
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/dashboard" class="nav-tab">
+            <i class="fas fa-chart-line"></i> Consultas
+        </a>
+    </div>
+
+    <div class="dashboard">
+        <div class="dashboard-header">
+            <h2><i class="fas fa-tachometer-alt"></i> Dashboard de Reconocimiento</h2>
+            <p>Vista general de tus escaneos y resultados</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon green">
+                    <i class="fas fa-map-marker-alt"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="total-locations">0</h3>
+                    <p>Ubicaciones de Escaneo</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon orange">
+                    <i class="fas fa-server"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="total-hosts">0</h3>
+                    <p>Hosts Encontrados</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon red">
+                    <i class="fas fa-network-wired"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="total-ports">0</h3>
+                    <p>Puertos Abiertos</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon purple">
+                    <i class="fas fa-file-code"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="total-scans">0</h3>
+                    <p>Escaneos Realizados</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-sections">
+            <div class="section-card">
+                <h2><i class="fas fa-play-circle"></i> Escaneos Activos</h2>
+                <div id="active-scans" class="scans-list">
+                    <p class="empty-message">No hay escaneos activos</p>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><i class="fas fa-map-marker-alt"></i> Ubicaciones de Escaneo</h2>
+                <div id="locations-list" class="locations-list">
+                    <p class="empty-message">Cargando ubicaciones...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.reconocimiento-page {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.reconocimiento-nav {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    background: var(--card-bg);
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    flex-wrap: wrap;
+}
+
+.nav-tab {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text-primary);
+    background: var(--light-bg);
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+}
+
+.nav-tab:hover {
+    background: #e5e7eb;
+    transform: translateY(-2px);
+}
+
+.nav-tab.active {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+}
+</style>
+
+<script>
+    const socket = io();
+    
+    socket.on('connect', () => {
+        console.log('Conectado al servidor');
+        loadDashboard();
+        setInterval(loadDashboard, 5000); // Actualizar cada 5 segundos
+    });
+
+    socket.on('scan_update', (data) => {
+        console.log('Actualización de escaneo:', data);
+        loadActiveScans();
+    });
+
+    async function loadDashboard() {
+        try {
+            const currentOrg = '{{ org }}';
+            
+            // Cargar estadísticas específicas de la organización
+            const statsResponse = await fetch(`/api/stats?org=${encodeURIComponent(currentOrg)}`);
+            const statsData = await statsResponse.json();
+            
+            // Mostrar estadísticas
+            document.getElementById('total-locations').textContent = statsData.locations || 0;
+            document.getElementById('total-hosts').textContent = statsData.hosts || 0;
+            document.getElementById('total-ports').textContent = statsData.ports || 0;
+            document.getElementById('total-scans').textContent = statsData.scans || 0;
+            
+            // Cargar ubicaciones de la organización
+            await loadLocations(currentOrg);
+            
+            // Cargar escaneos activos
+            loadActiveScans();
+        } catch (error) {
+            console.error('Error cargando dashboard:', error);
+            // Mostrar mensaje de error al usuario
+            document.getElementById('total-locations').textContent = '?';
+            document.getElementById('total-hosts').textContent = '?';
+            document.getElementById('total-ports').textContent = '?';
+            document.getElementById('total-scans').textContent = '?';
+        }
+    }
+
+    async function loadLocations(orgName) {
+        try {
+            const response = await fetch(`/api/results?org=${encodeURIComponent(orgName)}`);
+            const data = await response.json();
+            
+            const locationsList = document.getElementById('locations-list');
+            
+            if (data.results && data.results[orgName]) {
+                const locations = Object.keys(data.results[orgName]);
+                
+                if (locations.length > 0) {
+                    locationsList.innerHTML = locations.map(location => {
+                        const locationData = data.results[orgName][location];
+                        const hosts = Object.keys(locationData || {}).length;
+                        const ports = Object.values(locationData || {}).reduce((sum, subnet) => {
+                            return sum + Object.values(subnet || {}).reduce((s, ip) => {
+                                return s + Object.keys(ip || {}).length;
+                            }, 0);
+                        }, 0);
+                        
+                        return `
+                            <div class="location-item">
+                                <div class="location-name">
+                                    <i class="fas fa-map-marker-alt"></i> ${location}
+                                </div>
+                                <div class="location-stats">
+                                    <span><i class="fas fa-server"></i> ${hosts} hosts</span>
+                                    <span><i class="fas fa-network-wired"></i> ${ports} puertos</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    locationsList.innerHTML = '<p class="empty-message">No hay ubicaciones de escaneo registradas</p>';
+                }
+            } else {
+                locationsList.innerHTML = '<p class="empty-message">No hay datos disponibles</p>';
+            }
+        } catch (error) {
+            console.error('Error cargando ubicaciones:', error);
+            document.getElementById('locations-list').innerHTML = '<p class="empty-message">Error cargando ubicaciones</p>';
+        }
+    }
+
+    async function loadActiveScans() {
+        try {
+            const response = await fetch('/api/scans');
+            const data = await response.json();
+            const scansContainer = document.getElementById('active-scans');
+            const currentOrg = '{{ org }}';
+            
+            // Filtrar escaneos de la organización actual
+            const orgScans = data.scans ? data.scans.filter(scan => scan.org === currentOrg) : [];
+            
+            if (orgScans.length > 0) {
+                scansContainer.innerHTML = orgScans.map(scan => {
+                    const statusClass = {
+                        'running': 'status-running',
+                        'completed': 'status-completed',
+                        'failed': 'status-failed',
+                        'starting': 'status-starting'
+                    }[scan.status] || 'status-unknown';
+                    
+                    return `
+                        <div class="scan-item">
+                            <div class="scan-header">
+                                <span class="scan-id">${scan.org} - ${scan.location}</span>
+                                <span class="status-badge ${statusClass}">${scan.status}</span>
+                            </div>
+                            <div class="scan-progress">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${scan.progress}%"></div>
+                                </div>
+                                <span class="progress-text">${scan.progress}%</span>
+                            </div>
+                            <div class="scan-info">
+                                <span><i class="fas fa-server"></i> ${scan.hosts_found || 0} hosts</span>
+                                <span><i class="fas fa-network-wired"></i> ${scan.ports_found || 0} puertos</span>
+                                <span><i class="fas fa-clock"></i> ${new Date(scan.started_at).toLocaleString()}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                scansContainer.innerHTML = '<p class="empty-message">No hay escaneos activos para esta organización</p>';
+            }
+        } catch (error) {
+            console.error('Error cargando escaneos activos:', error);
+        }
+    }
+
+    // Marcar tab activo según la URL
+    const currentPath = window.location.pathname;
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.classList.remove('active');
+        const href = tab.getAttribute('href');
+        if (href === currentPath || (currentPath.includes('/reconocimiento') && !currentPath.includes('/scan') && !currentPath.includes('/results') && !currentPath.includes('/evidence') && !currentPath.includes('/neo4j') && href.includes('/reconocimiento') && !href.includes('/scan'))) {
+            tab.classList.add('active');
+        }
+    });
+
+    loadDashboard();
+</script>
+
+<style>
+.location-item {
+    background: var(--light-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s;
+}
+
+.location-item:hover {
+    background: #e5e7eb;
+    transform: translateX(5px);
+}
+
+.location-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.location-stats {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.stat-icon.purple {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+</style>
+{% endblock %}
+

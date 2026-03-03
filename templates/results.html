@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="results-page">
+    <div class="page-header">
+        <h1><i class="fas fa-chart-bar"></i> Fase 1: Reconocimiento - Resultados</h1>
+        <p>Organización: <strong>{{ org }}</strong> - Visualiza y analiza los resultados de tus escaneos</p>
+    </div>
+
+    <div class="reconocimiento-nav">
+        <a href="/pentesting/{{ org }}/reconocimiento" class="nav-tab">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/scan" class="nav-tab">
+            <i class="fas fa-search"></i> Escanear
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/results" class="nav-tab active">
+            <i class="fas fa-chart-bar"></i> Resultados
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/evidence" class="nav-tab">
+            <i class="fas fa-file-code"></i> Evidencias
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/visualization" class="nav-tab">
+            <i class="fas fa-project-diagram"></i> Visualización
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/dashboard" class="nav-tab">
+            <i class="fas fa-chart-line"></i> Consultas
+        </a>
+    </div>
+
+    <div class="filters-section">
+        <div class="filter-group">
+            <label for="filter-location"><i class="fas fa-map-marker-alt"></i> Ubicación</label>
+            <select id="filter-location">
+                <option value="">Todas</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" onclick="loadResults()">
+            <i class="fas fa-sync"></i> Cargar Resultados
+        </button>
+    </div>
+
+    <div class="import-export-section">
+        <div class="import-export-card">
+            <h3><i class="fas fa-download"></i> Exportar Resultados</h3>
+            <p>Descarga los resultados en formato JSON para trabajar localmente o compartir con el equipo.</p>
+            <div class="export-buttons">
+                <button class="btn btn-primary" onclick="exportResults()">
+                    <i class="fas fa-file-export"></i> Exportar Filtrados
+                </button>
+                <button class="btn btn-secondary" onclick="exportAllResults()">
+                    <i class="fas fa-database"></i> Exportar Todos
+                </button>
+            </div>
+        </div>
+
+        <div class="import-export-card">
+            <h3><i class="fas fa-upload"></i> Importar Resultados</h3>
+            <p>Importa resultados desde un archivo JSON. Los datos se fusionarán inteligentemente con los existentes.</p>
+            <div class="import-area">
+                <input type="file" id="import-file" accept=".json" style="display: none;">
+                <button class="btn btn-success" onclick="document.getElementById('import-file').click()">
+                    <i class="fas fa-file-import"></i> Seleccionar Archivo JSON
+                </button>
+                <span id="import-filename" class="import-filename"></span>
+            </div>
+            <div id="import-status" class="import-status" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div id="results-container" class="results-container">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Cargando resultados...</p>
+        </div>
+    </div>
+</div>
+
+<div id="host-modal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2 id="modal-title">Detalles del Host</h2>
+        <div id="modal-body"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allResults = {};
+
+    async function loadResults() {
+        const currentOrg = '{{ org }}';
+        const location = document.getElementById('filter-location').value;
+        
+        const resultsContainer = document.getElementById('results-container');
+        resultsContainer.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><p>Cargando resultados...</p>';
+
+        try {
+            let url = '/api/results';
+            if (location) {
+                url += `?org=${encodeURIComponent(currentOrg)}&location=${encodeURIComponent(location)}`;
+            } else {
+                url += `?org=${encodeURIComponent(currentOrg)}`;
+            }
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (response.ok && data.results) {
+                allResults = data.results;
+                displayResults(data.results);
+                populateFilters(data.results);
+            } else {
+                const errorMsg = data.error || 'No se encontraron resultados';
+                resultsContainer.innerHTML = `<p class="empty-message">${errorMsg}</p>`;
+            }
+        } catch (error) {
+            console.error('Error cargando resultados:', error);
+            resultsContainer.innerHTML = '<p class="error-message">Error al cargar resultados: ' + error.message + '</p>';
+        }
+    }
+    
+    // Cargar resultados al cargar la página
+    window.addEventListener('DOMContentLoaded', function() {
+        loadResults();
+    });
+
+    function populateFilters(results) {
+        const locationSelect = document.getElementById('filter-location');
+        const currentOrg = '{{ org }}';
+        
+        const locations = new Set();
+
+        // Solo obtener ubicaciones de la organización actual
+        if (results[currentOrg]) {
+            for (const loc in results[currentOrg]) {
+                locations.add(loc);
+            }
+        }
+
+        locationSelect.innerHTML = '<option value="">Todas</option>';
+        locations.forEach(loc => {
+            locationSelect.innerHTML += `<option value="${loc}">${loc}</option>`;
+        });
+    }
+
+    function displayResults(results) {
+        const container = document.getElementById('results-container');
+        
+        if (Object.keys(results).length === 0) {
+            container.innerHTML = '<p class="empty-message">No hay resultados para mostrar</p>';
+            return;
+        }
+
+        let html = '';
+
+        for (const org in results) {
+            for (const location in results[org]) {
+                const locationData = results[org][location];
+                html += `<div class="result-section">
+                    <h2><i class="fas fa-building"></i> ${org} - <i class="fas fa-map-marker-alt"></i> ${location}</h2>`;
+
+                for (const subnet in locationData) {
+                    html += `<div class="subnet-section">
+                        <h3><i class="fas fa-network-wired"></i> ${subnet}</h3>
+                        <div class="hosts-grid">`;
+
+                    for (const host in locationData[subnet]) {
+                        const hostData = locationData[subnet][host];
+                        const ports = Object.keys(hostData).filter(k => k.includes('/'));
+                        
+                        html += `<div class="host-card" onclick="showHostDetails('${org}', '${location}', '${subnet}', '${host}')">
+                            <div class="host-header">
+                                <i class="fas fa-server"></i>
+                                <strong>${host}</strong>
+                            </div>
+                            <div class="host-info">
+                                <span><i class="fas fa-network-wired"></i> ${ports.length} puertos</span>
+                                ${hostData[ports[0]]?.Hostname ? `<span><i class="fas fa-tag"></i> ${hostData[ports[0]].Hostname}</span>` : ''}
+                            </div>
+                        </div>`;
+                    }
+
+                    html += `</div></div>`;
+                }
+
+                html += `</div>`;
+            }
+        }
+
+        container.innerHTML = html;
+    }
+
+    function showHostDetails(org, location, subnet, host) {
+        const hostData = allResults[org][location][subnet][host];
+        const modal = document.getElementById('host-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+
+        modalTitle.textContent = `Host: ${host}`;
+        
+        let html = `<div class="host-details">
+            <div class="detail-section">
+                <h3><i class="fas fa-info-circle"></i> Información General</h3>
+                <p><strong>IP:</strong> ${host}</p>
+                <p><strong>Subred:</strong> ${subnet}</p>
+                <p><strong>Organización:</strong> ${org}</p>
+                <p><strong>Ubicación:</strong> ${location}</p>
+            </div>
+            <div class="detail-section">
+                <h3><i class="fas fa-network-wired"></i> Puertos y Servicios</h3>
+                <div class="ports-table">`;
+
+        for (const port in hostData) {
+            if (port.includes('/')) {
+                const portData = hostData[port];
+                html += `<div class="port-item">
+                    <div class="port-header">
+                        <strong>${port}</strong>
+                        <span class="port-state">${portData.State || 'unknown'}</span>
+                    </div>
+                    <div class="port-details">
+                        <p><strong>Servicio:</strong> ${portData.Name || 'N/A'}</p>
+                        <p><strong>Producto:</strong> ${portData.Product || 'N/A'}</p>
+                        <p><strong>Versión:</strong> ${portData.Version || 'N/A'}</p>
+                        ${portData.Screenshot ? `<p><strong>Screenshot:</strong> Disponible</p>` : ''}
+                        ${portData.modbus_banner ? `<pre class="banner-data">${portData.modbus_banner}</pre>` : ''}
+                        ${portData.bacnet_banner ? `<pre class="banner-data">${portData.bacnet_banner}</pre>` : ''}
+                    </div>
+                </div>`;
+            }
+        }
+
+        html += `</div></div></div>`;
+        modalBody.innerHTML = html;
+        modal.style.display = 'block';
+    }
+
+    // Cerrar modal
+    document.querySelector('.close').onclick = function() {
+        document.getElementById('host-modal').style.display = 'none';
+    };
+
+    window.onclick = function(event) {
+        const modal = document.getElementById('host-modal');
+        if (event.target == modal) {
+            modal.style.display = 'none';
+        }
+    };
+
+    // Marcar tab activo según la URL
+    const currentPath = window.location.pathname;
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.getAttribute('href') === currentPath) {
+            tab.classList.add('active');
+        }
+    });
+
+    // Funciones de exportación
+    function exportResults() {
+        const org = '{{ org }}';
+        const location = document.getElementById('filter-location').value;
+        
+        let url = '/api/results/export?';
+        url += `org=${encodeURIComponent(org)}`;
+        if (location) url += `&location=${encodeURIComponent(location)}`;
+        
+        // Descargar archivo
+        window.location.href = url;
+        
+        if (location) {
+            Utils.showNotification(`Exportando resultados de ${org} - ${location}`, 'info');
+        } else {
+            Utils.showNotification(`Exportando resultados de ${org}`, 'info');
+        }
+    }
+
+    function exportAllResults() {
+        window.location.href = '/api/results/export';
+        Utils.showNotification('Exportando todos los resultados', 'info');
+    }
+
+    // Funciones de importación
+    async function importResults() {
+        const fileInput = document.getElementById('import-file');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            Utils.showNotification('Por favor selecciona un archivo', 'error');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const statusDiv = document.getElementById('import-status');
+        statusDiv.style.display = 'block';
+        statusDiv.className = 'import-status info';
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando resultados...';
+        
+        try {
+            const response = await fetch('/api/results/import', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                statusDiv.className = 'import-status success';
+                const stats = data.stats || {};
+                statusDiv.innerHTML = `
+                    <i class="fas fa-check-circle"></i> ${data.message}
+                    <div class="import-stats">
+                        <p><strong>Organizaciones añadidas:</strong> ${stats.orgs_added || 0}</p>
+                        <p><strong>Ubicaciones añadidas:</strong> ${stats.locations_added || 0}</p>
+                        <p><strong>Hosts añadidos:</strong> ${stats.hosts_added || 0}</p>
+                        <p><strong>Hosts actualizados:</strong> ${stats.hosts_updated || 0}</p>
+                        <p><strong>Puertos añadidos:</strong> ${stats.ports_added || 0}</p>
+                        <p><strong>Puertos actualizados:</strong> ${stats.ports_updated || 0}</p>
+                    </div>
+                `;
+                
+                // Recargar resultados
+                setTimeout(() => {
+                    loadResults();
+                }, 1000);
+                
+                // Limpiar input
+                fileInput.value = '';
+                document.getElementById('import-filename').textContent = '';
+            } else {
+                statusDiv.className = 'import-status error';
+                statusDiv.innerHTML = `<i class="fas fa-times-circle"></i> ${data.error || 'Error al importar'}`;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            statusDiv.className = 'import-status error';
+            statusDiv.innerHTML = `<i class="fas fa-times-circle"></i> Error de conexión: ${error.message}`;
+        }
+    }
+
+    // Manejar selección de archivo
+    document.getElementById('import-file').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        if (!file.name.endsWith('.json')) {
+            Utils.showNotification('El archivo debe ser un JSON', 'error');
+            e.target.value = '';
+            return;
+        }
+        
+        document.getElementById('import-filename').textContent = file.name;
+        document.getElementById('import-status').style.display = 'none';
+        
+        // Importar automáticamente al seleccionar
+        importResults();
+    });
+
+    loadResults();
+</script>
+{% endblock %}
+

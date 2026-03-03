@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="artifacts-page">
+    <div class="page-header">
+        <h1><i class="fas fa-images"></i> Artefactos de Escaneo</h1>
+        <p>Organización: <strong>{{ org }}</strong> - Visualiza capturas, código fuente y vulnerabilidades</p>
+    </div>
+
+    <div class="reconocimiento-nav">
+        <a href="/pentesting/{{ org }}/reconocimiento" class="nav-tab">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/scan" class="nav-tab">
+            <i class="fas fa-search"></i> Escanear
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/results" class="nav-tab">
+            <i class="fas fa-chart-bar"></i> Resultados
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/evidence" class="nav-tab">
+            <i class="fas fa-file-code"></i> Evidencias
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/artifacts" class="nav-tab active">
+            <i class="fas fa-images"></i> Artefactos
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/visualization" class="nav-tab">
+            <i class="fas fa-project-diagram"></i> Visualización
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/dashboard" class="nav-tab">
+            <i class="fas fa-chart-line"></i> Consultas
+        </a>
+    </div>
+
+    <div class="filters-section">
+        <div class="filter-group">
+            <label for="filter-location"><i class="fas fa-map-marker-alt"></i> Ubicación</label>
+            <select id="filter-location">
+                <option value="">Seleccionar ubicación...</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" onclick="loadArtifacts()">
+            <i class="fas fa-sync"></i> Cargar Artefactos
+        </button>
+    </div>
+
+    <div id="artifacts-container" class="artifacts-container">
+        <div class="empty-message">
+            <i class="fas fa-info-circle"></i>
+            <p>Selecciona una ubicación y haz clic en "Cargar Artefactos" para ver los artefactos disponibles</p>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para visualizar contenido -->
+<div id="artifact-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <div id="modal-body"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.artifacts-page {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.artifacts-container {
+    margin-top: 2rem;
+}
+
+.artifact-section {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.artifact-section h2 {
+    margin-top: 0;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.artifacts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.artifact-card {
+    background: var(--light-bg);
+    border-radius: 8px;
+    padding: 1rem;
+    transition: all 0.3s;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.artifact-card:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+}
+
+.artifact-card.screenshot {
+    padding: 0;
+    overflow: hidden;
+}
+
+.artifact-card.screenshot img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    display: block;
+}
+
+.artifact-info {
+    padding: 1rem;
+}
+
+.artifact-info h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.artifact-info .host-port {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+.artifact-info .meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.8);
+    overflow: auto;
+}
+
+.modal-content {
+    background-color: var(--card-bg);
+    margin: 5% auto;
+    padding: 2rem;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 1200px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.close {
+    color: var(--text-secondary);
+    float: right;
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+}
+
+.close:hover {
+    color: var(--text-primary);
+}
+
+#modal-body {
+    margin-top: 2rem;
+}
+
+.code-viewer {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 1rem;
+    border-radius: 5px;
+    overflow-x: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.screenshot-viewer img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 5px;
+}
+
+.empty-message {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+
+.empty-message i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+</style>
+
+<script>
+const currentOrg = '{{ org }}';
+const currentLocation = '{{ location }}';
+
+// Cargar ubicaciones disponibles
+async function loadLocations() {
+    try {
+        const response = await fetch(`/api/results?org=${encodeURIComponent(currentOrg)}`);
+        const data = await response.json();
+        const locationSelect = document.getElementById('filter-location');
+        
+        locationSelect.innerHTML = '<option value="">Seleccionar ubicación...</option>';
+        
+        if (data.results && data.results[currentOrg]) {
+            const locations = Object.keys(data.results[currentOrg]);
+            locations.forEach(loc => {
+                const option = document.createElement('option');
+                option.value = loc;
+                option.textContent = loc;
+                if (loc === currentLocation) {
+                    option.selected = true;
+                }
+                locationSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error cargando ubicaciones:', error);
+    }
+}
+
+// Cargar artefactos
+async function loadArtifacts() {
+    const location = document.getElementById('filter-location').value;
+    if (!location) {
+        alert('Por favor selecciona una ubicación');
+        return;
+    }
+    
+    const container = document.getElementById('artifacts-container');
+    container.innerHTML = '<div class="empty-message"><i class="fas fa-spinner fa-spin"></i><p>Cargando artefactos...</p></div>';
+    
+    try {
+        const response = await fetch(`/api/artifacts/list?org=${encodeURIComponent(currentOrg)}&location=${encodeURIComponent(location)}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            container.innerHTML = `<div class="empty-message"><i class="fas fa-exclamation-triangle"></i><p>${data.error}</p></div>`;
+            return;
+        }
+        
+        let html = '';
+        
+        // Screenshots
+        if (data.screenshots && data.screenshots.length > 0) {
+            html += `
+                <div class="artifact-section">
+                    <h2><i class="fas fa-camera"></i> Capturas de Pantalla (${data.screenshots.length})</h2>
+                    <div class="artifacts-grid">
+            `;
+            data.screenshots.forEach(screenshot => {
+                html += `
+                    <div class="artifact-card screenshot" onclick="viewScreenshot('${screenshot.url}', '${screenshot.host}', ${screenshot.port})">
+                        <img src="${screenshot.url}" alt="${screenshot.filename}" loading="lazy">
+                        <div class="artifact-info">
+                            <h3>${screenshot.filename}</h3>
+                            <div class="host-port">${screenshot.host}:${screenshot.port}</div>
+                            <div class="meta">
+                                <span>${formatBytes(screenshot.size)}</span>
+                                <span>${new Date(screenshot.modified).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div></div>';
+        }
+        
+        // Sources
+        if (data.sources && data.sources.length > 0) {
+            html += `
+                <div class="artifact-section">
+                    <h2><i class="fas fa-code"></i> Código Fuente HTML (${data.sources.length})</h2>
+                    <div class="artifacts-grid">
+            `;
+            data.sources.forEach(source => {
+                html += `
+                    <div class="artifact-card" onclick="viewSource('${source.url}', '${source.filename}', '${source.host}', ${source.port})">
+                        <div class="artifact-info">
+                            <h3><i class="fas fa-file-code"></i> ${source.filename}</h3>
+                            <div class="host-port">${source.host}:${source.port}</div>
+                            <div class="meta">
+                                <span>${formatBytes(source.size)}</span>
+                                <span>${new Date(source.modified).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div></div>';
+        }
+        
+        // Vulnerabilities
+        if (data.vulnerabilities && data.vulnerabilities.length > 0) {
+            html += `
+                <div class="artifact-section">
+                    <h2><i class="fas fa-shield-alt"></i> Vulnerabilidades (${data.vulnerabilities.length})</h2>
+                    <div class="artifacts-grid">
+            `;
+            data.vulnerabilities.forEach(vuln => {
+                html += `
+                    <div class="artifact-card" onclick="viewVuln('${vuln.url}', '${vuln.filename}', '${vuln.host}', ${vuln.port})">
+                        <div class="artifact-info">
+                            <h3><i class="fas fa-exclamation-triangle"></i> ${vuln.filename}</h3>
+                            <div class="host-port">${vuln.host}:${vuln.port}</div>
+                            <div class="meta">
+                                <span>${formatBytes(vuln.size)}</span>
+                                <span>${new Date(vuln.modified).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div></div>';
+        }
+        
+        if (!html) {
+            html = '<div class="empty-message"><i class="fas fa-folder-open"></i><p>No se encontraron artefactos para esta ubicación</p></div>';
+        }
+        
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Error cargando artefactos:', error);
+        container.innerHTML = '<div class="empty-message"><i class="fas fa-exclamation-triangle"></i><p>Error cargando artefactos</p></div>';
+    }
+}
+
+// Visualizar screenshot
+function viewScreenshot(url, host, port) {
+    const modal = document.getElementById('artifact-modal');
+    const modalBody = document.getElementById('modal-body');
+    
+    modalBody.innerHTML = `
+        <h2>Captura de Pantalla - ${host}:${port}</h2>
+        <div class="screenshot-viewer">
+            <img src="${url}" alt="Screenshot">
+        </div>
+    `;
+    modal.style.display = 'block';
+}
+
+// Visualizar código fuente
+async function viewSource(url, filename, host, port) {
+    const modal = document.getElementById('artifact-modal');
+    const modalBody = document.getElementById('modal-body');
+    
+    modalBody.innerHTML = '<div class="empty-message"><i class="fas fa-spinner fa-spin"></i><p>Cargando código fuente...</p></div>';
+    modal.style.display = 'block';
+    
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        modalBody.innerHTML = `
+            <h2>Código Fuente - ${host}:${port}</h2>
+            <p><strong>Archivo:</strong> ${filename}</p>
+            <div class="code-viewer">
+                <pre>${escapeHtml(data.content)}</pre>
+            </div>
+        `;
+    } catch (error) {
+        modalBody.innerHTML = `<div class="empty-message"><i class="fas fa-exclamation-triangle"></i><p>Error cargando código fuente: ${error.message}</p></div>`;
+    }
+}
+
+// Visualizar vulnerabilidades
+async function viewVuln(url, filename, host, port) {
+    const modal = document.getElementById('artifact-modal');
+    const modalBody = document.getElementById('modal-body');
+    
+    modalBody.innerHTML = '<div class="empty-message"><i class="fas fa-spinner fa-spin"></i><p>Cargando vulnerabilidades...</p></div>';
+    modal.style.display = 'block';
+    
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        modalBody.innerHTML = `
+            <h2>Vulnerabilidades - ${host}:${port}</h2>
+            <p><strong>Archivo:</strong> ${filename}</p>
+            <div class="code-viewer">
+                <pre>${escapeHtml(data.content)}</pre>
+            </div>
+        `;
+    } catch (error) {
+        modalBody.innerHTML = `<div class="empty-message"><i class="fas fa-exclamation-triangle"></i><p>Error cargando vulnerabilidades: ${error.message}</p></div>`;
+    }
+}
+
+// Cerrar modal
+function closeModal() {
+    document.getElementById('artifact-modal').style.display = 'none';
+}
+
+// Cerrar modal al hacer clic fuera
+window.onclick = function(event) {
+    const modal = document.getElementById('artifact-modal');
+    if (event.target == modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Utilidades
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Cargar ubicaciones al iniciar
+loadLocations();
+
+// Si hay ubicación en la URL, cargar automáticamente
+if (currentLocation) {
+    document.getElementById('filter-location').value = currentLocation;
+    loadArtifacts();
+}
+</script>
+{% endblock %}
+

@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h1><i class="fas fa-tachometer-alt"></i> Dashboard</h1>
+        <p>Vista general de tus escaneos y resultados</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon blue">
+                <i class="fas fa-building"></i>
+            </div>
+            <div class="stat-info">
+                <h3 id="total-orgs">0</h3>
+                <p>Organizaciones</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon green">
+                <i class="fas fa-map-marker-alt"></i>
+            </div>
+            <div class="stat-info">
+                <h3 id="total-locations">0</h3>
+                <p>Ubicaciones</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon orange">
+                <i class="fas fa-server"></i>
+            </div>
+            <div class="stat-info">
+                <h3 id="total-hosts">0</h3>
+                <p>Hosts Encontrados</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon red">
+                <i class="fas fa-network-wired"></i>
+            </div>
+            <div class="stat-info">
+                <h3 id="total-ports">0</h3>
+                <p>Puertos Abiertos</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-sections">
+        <div class="section-card">
+            <h2><i class="fas fa-play-circle"></i> Escaneos Activos</h2>
+            <div id="active-scans" class="scans-list">
+                <p class="empty-message">No hay escaneos activos</p>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <h2><i class="fas fa-list"></i> Organizaciones</h2>
+            <div id="organizations-list" class="organizations-list">
+                <p class="empty-message">Cargando organizaciones...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const socket = io();
+    
+    socket.on('connect', () => {
+        console.log('Conectado al servidor');
+        loadDashboard();
+        setInterval(loadDashboard, 5000); // Actualizar cada 5 segundos
+    });
+
+    socket.on('scan_update', (data) => {
+        console.log('Actualización de escaneo:', data);
+        loadActiveScans();
+    });
+
+    async function loadDashboard() {
+        try {
+            // Cargar estadísticas
+            const statsResponse = await fetch('/api/stats');
+            const statsData = await statsResponse.json();
+            
+            document.getElementById('total-orgs').textContent = statsData.total_orgs || 0;
+            document.getElementById('total-locations').textContent = statsData.total_locations || 0;
+            document.getElementById('total-hosts').textContent = statsData.total_hosts || 0;
+            document.getElementById('total-ports').textContent = statsData.total_ports || 0;
+            
+            // Cargar organizaciones
+            const orgsList = document.getElementById('organizations-list');
+            if (statsData.organizations && statsData.organizations.length > 0) {
+                orgsList.innerHTML = statsData.organizations.map(org => `
+                    <div class="org-item">
+                        <div class="org-name">${org.name}</div>
+                        <div class="org-stats">
+                            <span><i class="fas fa-map-marker-alt"></i> ${org.locations} ubicaciones</span>
+                            <span><i class="fas fa-server"></i> ${org.hosts} hosts</span>
+                            <span><i class="fas fa-network-wired"></i> ${org.ports} puertos</span>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                orgsList.innerHTML = '<p class="empty-message">No hay organizaciones registradas</p>';
+            }
+            
+            // Cargar escaneos activos
+            loadActiveScans();
+        } catch (error) {
+            console.error('Error cargando dashboard:', error);
+        }
+    }
+
+    async function loadActiveScans() {
+        try {
+            const response = await fetch('/api/scans');
+            const data = await response.json();
+            const scansContainer = document.getElementById('active-scans');
+            
+            if (data.scans && data.scans.length > 0) {
+                scansContainer.innerHTML = data.scans.map(scan => {
+                    const statusClass = {
+                        'running': 'status-running',
+                        'completed': 'status-completed',
+                        'failed': 'status-failed',
+                        'starting': 'status-starting'
+                    }[scan.status] || 'status-unknown';
+                    
+                    return `
+                        <div class="scan-item">
+                            <div class="scan-header">
+                                <span class="scan-id">${scan.org} - ${scan.location}</span>
+                                <span class="status-badge ${statusClass}">${scan.status}</span>
+                            </div>
+                            <div class="scan-progress">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${scan.progress}%"></div>
+                                </div>
+                                <span class="progress-text">${scan.progress}%</span>
+                            </div>
+                            <div class="scan-info">
+                                <span><i class="fas fa-server"></i> ${scan.hosts_found || 0} hosts</span>
+                                <span><i class="fas fa-network-wired"></i> ${scan.ports_found || 0} puertos</span>
+                                <span><i class="fas fa-clock"></i> ${new Date(scan.started_at).toLocaleString()}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                scansContainer.innerHTML = '<p class="empty-message">No hay escaneos activos</p>';
+            }
+        } catch (error) {
+            console.error('Error cargando escaneos activos:', error);
+        }
+    }
+
+    loadDashboard();
+</script>
+{% endblock %}
+

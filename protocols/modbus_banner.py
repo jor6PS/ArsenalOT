@@ -1,9 +1,12 @@
 import binascii
 import socket
-import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 port = 502
 bufsize = 2048
+timeout = 5
 unit_id = "\x00"
 payload = (
     "\x44\x62"  # Transaction Identifier
@@ -79,56 +82,111 @@ def handle_exception_codes(code):
         return "[!] MODBUS - received incorrect data {}".format(code)
 
 def parse_response(data, host):
-    data = binascii.hexlify(data)
-    unit_id = data[mbtcp["unit_id"]["start"]:mbtcp["unit_id"]["end"]]
+    """Parsea la respuesta Modbus y devuelve información formateada."""
+    if not data or len(data) < 8:
+        logger.warning(f"Respuesta Modbus demasiado corta de {host}")
+        return f"[!] MODBUS - Respuesta inválida de {host}\n"
     
-    result = ""
-    result += "[+] Host:\t\t" + host + "\n"
-    result += "[+] Port:\t\t" + str(port) + "\n"
-    result += "[+] Unit Identifier:\t" + unit_id.decode("utf-8") + "\n"
-
-    if data[mbtcp["func_code"]["start"]:mbtcp["mei"]["end"]] == b'2b0e':
-        num_objects = data[mbtcp["num_objects"]["start"]:mbtcp["num_objects"]["end"]]
-        result += "[+] Number of Objects: " + str(dec(num_objects)) + "\n"
-        result += "\n"
+    try:
+        data = binascii.hexlify(data)
+        unit_id_hex = data[mbtcp["unit_id"]["start"]:mbtcp["unit_id"]["end"]]
         
-        object_start = mbtcp["object_id"]["start"]
-        for i in range(dec(num_objects)):
-            object              = {}
-            end_id              = object_start + mbtcp["object_id"]["length"]
-            object["id"]        = data[object_start:end_id]
-            end_len             = end_id + mbtcp["objects_len"]["length"]
-            object["len"]       = data[end_id:end_len] # len in bytes
-            end_str_value       = end_len + (dec(object["len"]) * 2)
-            object["str_value"] = data[end_len:end_str_value]
-            try:
-                object["name"] = object_name[dec(object["id"])]
-            except:
-                object["name"] = "Name X"
+        result = ""
+        result += "[+] Host:\t\t" + host + "\n"
+        result += "[+] Port:\t\t" + str(port) + "\n"
+        result += "[+] Unit Identifier:\t" + unit_id_hex.decode("utf-8") + "\n"
 
-            result += "[*] {}: {}\n".format(
-                object["name"].ljust(20),
-                binascii.unhexlify(object["str_value"]).decode("utf-8")
-            )
+        if len(data) < mbtcp["mei"]["end"]:
+            logger.warning(f"Respuesta Modbus incompleta de {host}")
+            return result + "[!] MODBUS - Respuesta incompleta\n"
 
-            object_start = end_str_value
-        result += "\n"
+        func_code_mei = data[mbtcp["func_code"]["start"]:mbtcp["mei"]["end"]]
+        if func_code_mei == b'2b0e':
+            if len(data) < mbtcp["num_objects"]["end"]:
+                logger.warning(f"Respuesta Modbus sin objetos de {host}")
+                return result + "[!] MODBUS - Respuesta sin objetos\n"
+            
+            num_objects = data[mbtcp["num_objects"]["start"]:mbtcp["num_objects"]["end"]]
+            num_objects_int = dec(num_objects)
+            result += "[+] Number of Objects: " + str(num_objects_int) + "\n"
+            result += "\n"
+            
+            object_start = mbtcp["object_id"]["start"]
+            for i in range(num_objects_int):
+                if object_start >= len(data):
+                    logger.warning(f"Índice de objeto fuera de rango en {host}")
+                    break
+                
+                object = {}
+                end_id = object_start + mbtcp["object_id"]["length"]
+                if end_id > len(data):
+                    break
+                object["id"] = data[object_start:end_id]
+                
+                end_len = end_id + mbtcp["objects_len"]["length"]
+                if end_len > len(data):
+                    break
+                object["len"] = data[end_id:end_len]  # len in bytes
+                
+                obj_len_bytes = dec(object["len"])
+                end_str_value = end_len + (obj_len_bytes * 2)
+                if end_str_value > len(data):
+                    logger.warning(f"Longitud de objeto excede datos disponibles en {host}")
+                    break
+                
+                object["str_value"] = data[end_len:end_str_value]
+                try:
+                    object["name"] = object_name[dec(object["id"])]
+                except KeyError:
+                    object["name"] = f"Unknown Object {dec(object['id'])}"
 
-    else:
-        result += "\n"
-        result += handle_exception_codes(data[mbtcp["func_code"]["start"]:mbtcp["mei"]["end"]])
-        result += "\n"
-    
-    return result
+                try:
+                    decoded_value = binascii.unhexlify(object["str_value"]).decode("utf-8", errors='replace')
+                    result += "[*] {}: {}\n".format(
+                        object["name"].ljust(20),
+                        decoded_value
+                    )
+                except Exception as e:
+                    logger.warning(f"Error decodificando objeto de {host}: {e}")
+                    result += "[*] {}: [Error decodificando]\n".format(object["name"].ljust(20))
+
+                object_start = end_str_value
+            result += "\n"
+        else:
+            result += "\n"
+            result += handle_exception_codes(func_code_mei)
+            result += "\n"
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error parseando respuesta Modbus de {host}: {e}")
+        return f"[!] MODBUS - Error parseando respuesta: {e}\n"
 
 def modbus_banner(host):
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    """Obtiene el banner Modbus de un dispositivo."""
+    client = None
     try:
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.settimeout(timeout)
         client.connect((host, port))
-        client.send(payload.encode())
+        client.send(payload.encode('latin-1'))
         data = client.recv(bufsize)
-        client.close()
+        if not data:
+            logger.warning(f"No se recibieron datos de {host}:{port}")
+            return None
         return parse_response(data, host)
+    except socket.timeout:
+        logger.warning(f"Timeout al conectar a Modbus {host}:{port}")
+        return None
+    except socket.error as e:
+        logger.warning(f"Error de socket al conectar a Modbus {host}:{port}: {e}")
+        return None
     except Exception as e:
-        print("[!] MODBUS - did not receive data.")
-        print(e)
+        logger.error(f"Error inesperado al obtener banner Modbus de {host}:{port}: {e}")
+        return None
+    finally:
+        if client:
+            try:
+                client.close()
+            except Exception:
+                pass

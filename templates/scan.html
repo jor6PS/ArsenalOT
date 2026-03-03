@@ -1,0 +1,498 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="scan-page">
+    <div class="page-header">
+        <h1><i class="fas fa-search"></i> Fase 1: Reconocimiento - Nuevo Escaneo</h1>
+        <p>Organización: <strong>{{ org }}</strong> - Configura y ejecuta un escaneo de red</p>
+    </div>
+
+    <div class="reconocimiento-nav">
+        <a href="/pentesting/{{ org }}/reconocimiento" class="nav-tab">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/scan" class="nav-tab active">
+            <i class="fas fa-search"></i> Escanear
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/results" class="nav-tab">
+            <i class="fas fa-chart-bar"></i> Resultados
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/evidence" class="nav-tab">
+            <i class="fas fa-file-code"></i> Evidencias
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/visualization" class="nav-tab">
+            <i class="fas fa-project-diagram"></i> Visualización
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/dashboard" class="nav-tab">
+            <i class="fas fa-chart-line"></i> Consultas
+        </a>
+    </div>
+
+    <div class="scan-form-container">
+        <form id="scan-form" class="scan-form">
+            <div class="form-section">
+                <h2><i class="fas fa-info-circle"></i> Información Básica</h2>
+                
+                <div class="form-group">
+                    <label for="rango"><i class="fas fa-network-wired"></i> Rango de IPs *</label>
+                    <input type="text" id="rango" name="rango" required 
+                           placeholder="192.168.1.0/24 o 10.0.0.1">
+                    <small>Ejemplo: 192.168.1.0/24, 10.0.0.0/16, 192.168.1.1</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="desde"><i class="fas fa-map-marker-alt"></i> Punto de Escaneo *</label>
+                    <input type="text" id="desde" name="desde" required 
+                           placeholder="Oficina, DataCenter, Sede, etc.">
+                    <small>Especifica desde dónde se lanza el escaneo (ubicación física o lógica)</small>
+                </div>
+                
+                <input type="hidden" id="org" name="org" value="{{ org }}">
+            </div>
+
+            <div class="form-section">
+                <h2><i class="fas fa-cog"></i> Configuración de Escaneo</h2>
+                
+                <div class="form-group">
+                    <label for="scan_type"><i class="fas fa-sliders-h"></i> Tipo de Escaneo *</label>
+                    <select id="scan_type" name="scan_type" required>
+                        <option value="">Selecciona un tipo de escaneo</option>
+                        <optgroup label="Escaneos Generales">
+                            <option value="rapido">⚡ Rápido (-T4) - Escaneo rápido general</option>
+                            <option value="normal">⚙️ Normal (-T3) - Escaneo estándar equilibrado</option>
+                            <option value="lento">🐌 Lento (-T2) - Escaneo cuidadoso</option>
+                        </optgroup>
+                        <optgroup label="Escaneos OT - Perfiles Especializados">
+                            <option value="ot_quick_discovery">🔍 Descubrimiento Rápido OT - Puertos críticos OT</option>
+                            <option value="ot_plc_focused">🔧 Enfocado en PLCs - Modbus, S7comm, etc.</option>
+                            <option value="ot_scada_hmi">🖥️ SCADA/HMI - Sistemas de supervisión</option>
+                            <option value="ot_network_devices">🌐 Dispositivos de Red Industrial</option>
+                            <option value="industrial_rapido">⚡ Industrial Rápido - Puertos OT comunes</option>
+                            <option value="industrial">🛡️ Industrial Seguro - Lento y cuidadoso</option>
+                            <option value="industrial_completo">📋 Industrial Completo - TCP + UDP exhaustivo</option>
+                            <option value="industrial_udp">📡 Industrial UDP - Solo protocolos UDP</option>
+                            <option value="ot_safe_stealth">🥷 Stealth Seguro OT - Muy lento y sigiloso</option>
+                        </optgroup>
+                        <optgroup label="Avanzado">
+                            <option value="custom">⚙️ Personalizado - Define tus propios argumentos</option>
+                        </optgroup>
+                    </select>
+                    <small id="scan-description" class="scan-description"></small>
+                    <div id="scan-estimate" class="scan-estimate" style="display: none;">
+                        <i class="fas fa-clock"></i> 
+                        <span id="estimate-text">Tiempo estimado: calculando...</span>
+                    </div>
+                </div>
+
+                <div class="form-group" id="custom-args-group" style="display: none;">
+                    <label for="custom_args"><i class="fas fa-code"></i> Argumentos Personalizados</label>
+                    <input type="text" id="custom_args" name="custom_args" 
+                           placeholder="-T4 -Pn -p 80,443,8080">
+                    <small>Argumentos personalizados para Nmap</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="interfaz"><i class="fas fa-ethernet"></i> Interfaz de Red</label>
+                    <input type="text" id="interfaz" name="interfaz" value="eth0" 
+                           placeholder="eth0">
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="hostdiscovery" name="hostdiscovery">
+                        <span><i class="fas fa-radar"></i> Descubrimiento de Hosts (ARP + Ping)</span>
+                    </label>
+                    <small>Realiza descubrimiento de hosts antes del escaneo para optimizar tiempo</small>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2><i class="fas fa-check-square"></i> Opciones de Escaneo</h2>
+                <p class="section-description">Selecciona las funcionalidades adicionales que deseas incluir en el escaneo</p>
+                
+                <div class="options-grid">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable_ot" name="enable_ot" checked>
+                            <span><i class="fas fa-industry"></i> Puertos OT (Operational Technology)</span>
+                        </label>
+                        <small>Incluye puertos industriales comunes (Modbus, S7comm, DNP3, etc.)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable_versions" name="enable_versions" checked>
+                            <span><i class="fas fa-tag"></i> Detección de Versiones</span>
+                        </label>
+                        <small>Detecta versiones de servicios y sistemas operativos (-sV)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable_screenshots" name="enable_screenshots">
+                            <span><i class="fas fa-camera"></i> Capturas de Pantalla</span>
+                        </label>
+                        <small>Toma capturas de pantalla de servicios web detectados</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable_source" name="enable_source">
+                            <span><i class="fas fa-code"></i> Código Fuente HTML</span>
+                        </label>
+                        <small>Extrae el código fuente HTML de servicios web</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable_vulns" name="enable_vulns">
+                            <span><i class="fas fa-shield-alt"></i> Escaneo de Vulnerabilidades</span>
+                        </label>
+                        <small>Ejecuta scripts de Nmap para detectar vulnerabilidades conocidas</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-play"></i> Iniciar Escaneo
+                </button>
+                <button type="reset" class="btn btn-secondary">
+                    <i class="fas fa-redo"></i> Limpiar
+                </button>
+            </div>
+        </form>
+
+        <div id="scan-status" class="scan-status" style="display: none;">
+            <h3><i class="fas fa-spinner fa-spin"></i> Escaneo en Progreso</h3>
+            <div class="status-info">
+                <p id="status-message">Iniciando escaneo...</p>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <span id="progress-text" class="progress-text">0%</span>
+                </div>
+            </div>
+            <div id="scan-details" class="scan-details"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.scan-description {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 0.875rem;
+    min-height: 1.5rem;
+    padding: 0.5rem;
+    background: var(--light-bg);
+    border-radius: 5px;
+}
+
+.scan-estimate {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+    border-left: 4px solid var(--primary-color);
+    border-radius: 5px;
+    color: var(--primary-color);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.scan-estimate i {
+    font-size: 1.1rem;
+}
+
+optgroup {
+    font-weight: bold;
+}
+
+optgroup option {
+    font-weight: normal;
+    padding-left: 1rem;
+}
+
+.section-description {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+    font-style: italic;
+}
+
+.options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.options-grid .form-group {
+    margin-bottom: 0;
+    padding: 1rem;
+    background: var(--light-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.options-grid .form-group:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.options-grid .checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    cursor: pointer;
+    margin-bottom: 0.5rem;
+}
+
+.options-grid .checkbox-label input[type="checkbox"] {
+    margin-top: 0.25rem;
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.options-grid .checkbox-label span {
+    font-weight: 500;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.options-grid .checkbox-label span i {
+    color: var(--primary-color);
+}
+
+.options-grid small {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+</style>
+
+<script>
+    const socket = io();
+    let currentScanId = null;
+
+    socket.on('connect', () => {
+        console.log('Conectado al servidor');
+    });
+
+    socket.on('scan_update', (data) => {
+        if (data.scan_id === currentScanId) {
+            updateScanStatus(data);
+        }
+    });
+
+    // Descripciones de tipos de escaneo
+    const scanDescriptions = {
+        'rapido': 'Escaneo rápido con timing agresivo. Ideal para redes conocidas y no críticas.',
+        'normal': 'Escaneo equilibrado entre velocidad y precisión. Recomendado para uso general.',
+        'lento': 'Escaneo cuidadoso con rate limitado. Para redes sensibles.',
+        'ot_quick_discovery': 'Descubrimiento rápido de dispositivos OT. Escanea solo puertos críticos (502, 102, 47808, etc.)',
+        'ot_plc_focused': 'Enfocado en PLCs. Escanea puertos específicos de controladores (Modbus, S7comm, FINS, DNP3, IEC104)',
+        'ot_scada_hmi': 'Optimizado para sistemas SCADA y HMI. Puertos comunes de supervisión y control.',
+        'ot_network_devices': 'Diseñado para switches, routers y dispositivos de red industrial.',
+        'industrial_rapido': 'Escaneo rápido de puertos OT comunes. Balance entre velocidad y cobertura OT.',
+        'industrial': 'Escaneo lento y seguro para entornos OT críticos. Minimiza impacto en sistemas industriales.',
+        'industrial_completo': 'Escaneo exhaustivo TCP+UDP de todos los puertos OT conocidos. Tarda más pero es completo.',
+        'industrial_udp': 'Escaneo específico de protocolos UDP industriales (BACnet UDP, DNP3 UDP, etc.)',
+        'ot_safe_stealth': 'Escaneo muy lento y sigiloso. Para entornos OT extremadamente críticos. Máxima seguridad.',
+        'custom': 'Define tus propios argumentos de Nmap para máximo control.'
+    };
+
+    document.getElementById('scan_type').addEventListener('change', function() {
+        const customGroup = document.getElementById('custom-args-group');
+        const descriptionEl = document.getElementById('scan-description');
+        const estimateEl = document.getElementById('scan-estimate');
+        
+        if (this.value === 'custom') {
+            customGroup.style.display = 'block';
+            document.getElementById('custom_args').required = true;
+            descriptionEl.textContent = scanDescriptions['custom'] || '';
+            estimateEl.style.display = 'none';
+        } else {
+            customGroup.style.display = 'none';
+            document.getElementById('custom_args').required = false;
+            descriptionEl.textContent = scanDescriptions[this.value] || '';
+            
+            // Actualizar estimación
+            updateScanEstimate();
+        }
+    });
+
+    // Actualizar estimación cuando cambia el rango, tipo de escaneo u opciones
+    document.getElementById('rango').addEventListener('input', debounce(updateScanEstimate, 500));
+    document.getElementById('hostdiscovery').addEventListener('change', updateScanEstimate);
+    document.getElementById('enable_ot').addEventListener('change', updateScanEstimate);
+    document.getElementById('enable_versions').addEventListener('change', updateScanEstimate);
+    document.getElementById('enable_screenshots').addEventListener('change', updateScanEstimate);
+    document.getElementById('enable_source').addEventListener('change', updateScanEstimate);
+    document.getElementById('enable_vulns').addEventListener('change', updateScanEstimate);
+
+    async function updateScanEstimate() {
+        const rango = document.getElementById('rango').value;
+        const scanType = document.getElementById('scan_type').value;
+        const hostdiscovery = document.getElementById('hostdiscovery').checked;
+        const enable_ot = document.getElementById('enable_ot').checked;
+        const enable_versions = document.getElementById('enable_versions').checked;
+        const enable_screenshots = document.getElementById('enable_screenshots').checked;
+        const enable_source = document.getElementById('enable_source').checked;
+        const enable_vulns = document.getElementById('enable_vulns').checked;
+        
+        const estimateEl = document.getElementById('scan-estimate');
+        const estimateText = document.getElementById('estimate-text');
+        
+        if (!rango || !scanType) {
+            estimateEl.style.display = 'none';
+            return;
+        }
+        
+        try {
+            const params = new URLSearchParams({
+                rango: rango,
+                scan_type: scanType,
+                hostdiscovery: hostdiscovery,
+                enable_ot: enable_ot,
+                enable_versions: enable_versions,
+                enable_screenshots: enable_screenshots,
+                enable_source: enable_source,
+                enable_vulns: enable_vulns
+            });
+            
+            const response = await fetch(`/api/scan/estimate?${params.toString()}`);
+            const data = await response.json();
+            
+            if (data.estimated_formatted && data.estimated_formatted !== 'N/A') {
+                estimateEl.style.display = 'block';
+                estimateText.textContent = `Tiempo estimado: ~${data.estimated_formatted} (${data.estimated_hosts} hosts)`;
+            } else {
+                estimateEl.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error calculando estimación:', error);
+            estimateEl.style.display = 'none';
+        }
+    }
+
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    document.getElementById('scan-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            rango: document.getElementById('rango').value,
+            org: '{{ org }}',
+            desde: document.getElementById('desde').value.toUpperCase(),
+            scan_type: document.getElementById('scan_type').value,
+            hostdiscovery: document.getElementById('hostdiscovery').checked,
+            interfaz: document.getElementById('interfaz').value || 'eth0',
+            custom_args: document.getElementById('custom_args').value,
+            enable_ot: document.getElementById('enable_ot').checked,
+            enable_versions: document.getElementById('enable_versions').checked,
+            enable_screenshots: document.getElementById('enable_screenshots').checked,
+            enable_source: document.getElementById('enable_source').checked,
+            enable_vulns: document.getElementById('enable_vulns').checked
+        };
+
+        if (formData.scan_type === 'custom' && !formData.custom_args) {
+            alert('Debes proporcionar argumentos personalizados');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/scan/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                currentScanId = data.scan_id;
+                document.getElementById('scan-form').style.display = 'none';
+                document.getElementById('scan-status').style.display = 'block';
+                updateScanStatus({
+                    scan_id: data.scan_id,
+                    status: 'starting',
+                    progress: 0,
+                    message: 'Escaneo iniciado...'
+                });
+            } else {
+                alert('Error: ' + (data.error || 'Error desconocido'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al iniciar el escaneo: ' + error.message);
+        }
+    });
+
+    function updateScanStatus(data) {
+        const statusMessage = document.getElementById('status-message');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const scanDetails = document.getElementById('scan-details');
+
+        statusMessage.textContent = data.message || 'Procesando...';
+        progressFill.style.width = data.progress + '%';
+        progressText.textContent = data.progress + '%';
+
+        if (data.status === 'completed') {
+            statusMessage.innerHTML = '<i class="fas fa-check-circle"></i> Escaneo completado exitosamente';
+            scanDetails.innerHTML = `
+                <div class="success-message">
+                    <p><strong>Hosts encontrados:</strong> ${data.hosts_found || 0}</p>
+                    <p><strong>Puertos encontrados:</strong> ${data.ports_found || 0}</p>
+                    <a href="/pentesting/{{ org }}/reconocimiento/results" class="btn btn-primary">Ver Resultados</a>
+                </div>
+            `;
+        } else if (data.status === 'failed') {
+            statusMessage.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error en el escaneo';
+            scanDetails.innerHTML = `
+                <div class="error-message">
+                    <p>${data.message}</p>
+                    <button onclick="location.reload()" class="btn btn-secondary">Intentar de Nuevo</button>
+                </div>
+            `;
+        }
+    }
+
+    // Marcar tab activo según la URL
+    const currentPath = window.location.pathname;
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.getAttribute('href') === currentPath) {
+            tab.classList.add('active');
+        }
+    });
+</script>
+{% endblock %}
+

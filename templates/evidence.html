@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="evidence-page">
+    <div class="page-header">
+        <h1><i class="fas fa-file-code"></i> Fase 1: Reconocimiento - Evidencias</h1>
+        <p>Organización: <strong>{{ org }}</strong> - Visualiza y descarga las evidencias XML de los escaneos Nmap</p>
+    </div>
+
+    <div class="reconocimiento-nav">
+        <a href="/pentesting/{{ org }}/reconocimiento" class="nav-tab">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/scan" class="nav-tab">
+            <i class="fas fa-search"></i> Escanear
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/results" class="nav-tab">
+            <i class="fas fa-chart-bar"></i> Resultados
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/evidence" class="nav-tab active">
+            <i class="fas fa-file-code"></i> Evidencias
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/visualization" class="nav-tab">
+            <i class="fas fa-project-diagram"></i> Visualización
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/dashboard" class="nav-tab">
+            <i class="fas fa-chart-line"></i> Consultas
+        </a>
+    </div>
+
+    <div class="filters-section">
+        <div class="filter-group">
+            <label for="filter-org-evidence"><i class="fas fa-building"></i> Organización</label>
+            <select id="filter-org-evidence">
+                <option value="">Todas</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="filter-location-evidence"><i class="fas fa-map-marker-alt"></i> Ubicación</label>
+            <select id="filter-location-evidence">
+                <option value="">Todas</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" onclick="loadEvidence()">
+            <i class="fas fa-filter"></i> Filtrar
+        </button>
+    </div>
+
+    <div id="evidence-container" class="evidence-container">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Cargando evidencias...</p>
+        </div>
+    </div>
+
+    <!-- Modal para ver XML -->
+    <div id="xml-modal" class="modal">
+        <div class="modal-content modal-large">
+            <span class="close">&times;</span>
+            <h2 id="xml-modal-title">Contenido XML</h2>
+            <div id="xml-modal-body">
+                <pre id="xml-content" class="xml-content"></pre>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="downloadCurrentXML()">
+                    <i class="fas fa-download"></i> Descargar
+                </button>
+                <button class="btn btn-secondary" onclick="closeXMLModal()">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentEvidence = null;
+    let allEvidence = [];
+
+    async function loadEvidence() {
+        const org = document.getElementById('filter-org-evidence').value;
+        const location = document.getElementById('filter-location-evidence').value;
+        
+        const container = document.getElementById('evidence-container');
+        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><p>Cargando evidencias...</p></div>';
+
+        try {
+            let url = '/api/evidence';
+            if (org || location) {
+                url += `?org=${encodeURIComponent(org)}&location=${encodeURIComponent(location)}`;
+            }
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.evidence && data.evidence.length > 0) {
+                allEvidence = data.evidence;
+                displayEvidence(data.evidence);
+                populateFilters(data.evidence);
+            } else {
+                container.innerHTML = '<p class="empty-message">No se encontraron evidencias</p>';
+            }
+        } catch (error) {
+            console.error('Error cargando evidencias:', error);
+            container.innerHTML = '<p class="error-message">Error al cargar evidencias</p>';
+        }
+    }
+
+    function populateFilters(evidence) {
+        const orgSelect = document.getElementById('filter-org-evidence');
+        const locationSelect = document.getElementById('filter-location-evidence');
+        
+        const orgs = new Set();
+        const locations = new Set();
+
+        evidence.forEach(ev => {
+            orgs.add(ev.org);
+            locations.add(ev.location);
+        });
+
+        orgSelect.innerHTML = '<option value="">Todas</option>';
+        orgs.forEach(org => {
+            orgSelect.innerHTML += `<option value="${org}">${org}</option>`;
+        });
+
+        locationSelect.innerHTML = '<option value="">Todas</option>';
+        locations.forEach(loc => {
+            locationSelect.innerHTML += `<option value="${loc}">${loc}</option>`;
+        });
+    }
+
+    function displayEvidence(evidence) {
+        const container = document.getElementById('evidence-container');
+        
+        if (evidence.length === 0) {
+            container.innerHTML = '<p class="empty-message">No hay evidencias para mostrar</p>';
+            return;
+        }
+
+        let html = '<div class="evidence-grid">';
+
+        evidence.forEach(ev => {
+            const date = new Date(ev.modified);
+            const sizeKB = (ev.size / 1024).toFixed(2);
+            
+            html += `
+                <div class="evidence-card">
+                    <div class="evidence-header">
+                        <h3><i class="fas fa-file-code"></i> ${ev.filename}</h3>
+                        <span class="evidence-badge">${ev.org} - ${ev.location}</span>
+                    </div>
+                    <div class="evidence-info">
+                        <p><i class="fas fa-calendar"></i> ${date.toLocaleString('es-ES')}</p>
+                        <p><i class="fas fa-hdd"></i> ${sizeKB} KB</p>
+                        ${ev.rango ? `<p><i class="fas fa-network-wired"></i> ${ev.rango}</p>` : ''}
+                        ${ev.scan_type ? `<p><i class="fas fa-cog"></i> ${ev.scan_type}</p>` : ''}
+                    </div>
+                    <div class="evidence-actions">
+                        <button class="btn btn-primary" onclick="viewXML('${ev.file_path}')">
+                            <i class="fas fa-eye"></i> Ver
+                        </button>
+                        <button class="btn btn-secondary" onclick="downloadXML('${ev.file_path}', '${ev.filename}')">
+                            <i class="fas fa-download"></i> Descargar
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    async function viewXML(filePath) {
+        const modal = document.getElementById('xml-modal');
+        const modalTitle = document.getElementById('xml-modal-title');
+        const xmlContent = document.getElementById('xml-content');
+        
+        modalTitle.textContent = `Evidencia: ${filePath.split('/').pop()}`;
+        xmlContent.textContent = 'Cargando...';
+        modal.style.display = 'block';
+        
+        try {
+            const response = await fetch(`/api/evidence/view/${encodeURIComponent(filePath)}`);
+            const data = await response.json();
+            
+            if (response.ok) {
+                xmlContent.textContent = data.content;
+                currentEvidence = { filePath, filename: data.filename };
+            } else {
+                xmlContent.textContent = `Error: ${data.error || 'Error desconocido'}`;
+            }
+        } catch (error) {
+            xmlContent.textContent = `Error de conexión: ${error.message}`;
+        }
+    }
+
+    function downloadXML(filePath, filename) {
+        window.location.href = `/api/evidence/download/${encodeURIComponent(filePath)}`;
+    }
+
+    function downloadCurrentXML() {
+        if (currentEvidence) {
+            downloadXML(currentEvidence.filePath, currentEvidence.filename);
+        }
+    }
+
+    function closeXMLModal() {
+        document.getElementById('xml-modal').style.display = 'none';
+        currentEvidence = null;
+    }
+
+    // Cerrar modal
+    document.querySelector('.close').onclick = closeXMLModal;
+
+    window.onclick = function(event) {
+        const modal = document.getElementById('xml-modal');
+        if (event.target == modal) {
+            closeXMLModal();
+        }
+    };
+
+    // Marcar tab activo
+    const currentPath = window.location.pathname;
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.getAttribute('href') === currentPath) {
+            tab.classList.add('active');
+        }
+    });
+
+    loadEvidence();
+</script>
+
+<style>
+.evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+.evidence-card {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: all 0.3s;
+}
+
+.evidence-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+}
+
+.evidence-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.evidence-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.evidence-badge {
+    background: var(--primary-color);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    font-size: 0.875rem;
+}
+
+.evidence-info {
+    margin-bottom: 1rem;
+}
+
+.evidence-info p {
+    margin: 0.5rem 0;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.evidence-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.evidence-actions .btn {
+    flex: 1;
+    justify-content: center;
+}
+
+.modal-large {
+    max-width: 90%;
+    width: 90%;
+}
+
+.xml-content {
+    background: var(--dark-bg);
+    color: #10b981;
+    padding: 1.5rem;
+    border-radius: 5px;
+    overflow-x: auto;
+    max-height: 60vh;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    justify-content: flex-end;
+}
+</style>
+{% endblock %}
+

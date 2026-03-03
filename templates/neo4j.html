@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="neo4j-page">
+    <div class="page-header">
+        <h1><i class="fas fa-project-diagram"></i> Fase 1: Reconocimiento - Integración Neo4j</h1>
+        <p>Organización: <strong>{{ org }}</strong> - Conecta e importa resultados a Neo4j para visualización avanzada</p>
+    </div>
+
+    <div class="reconocimiento-nav">
+        <a href="/pentesting/{{ org }}/reconocimiento" class="nav-tab">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/scan" class="nav-tab">
+            <i class="fas fa-search"></i> Escanear
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/results" class="nav-tab">
+            <i class="fas fa-chart-bar"></i> Resultados
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/evidence" class="nav-tab">
+            <i class="fas fa-file-code"></i> Evidencias
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/neo4j" class="nav-tab active">
+            <i class="fas fa-project-diagram"></i> Neo4j
+        </a>
+    </div>
+
+    <div class="neo4j-container">
+        <div class="connection-section">
+            <h2><i class="fas fa-plug"></i> Conexión a Neo4j</h2>
+            <form id="connection-form" class="neo4j-form">
+                <div class="form-group">
+                    <label for="neo4j-ip"><i class="fas fa-server"></i> IP de Neo4j *</label>
+                    <input type="text" id="neo4j-ip" required placeholder="localhost o 192.168.1.100">
+                </div>
+
+                <div class="form-group">
+                    <label for="neo4j-username"><i class="fas fa-user"></i> Usuario</label>
+                    <input type="text" id="neo4j-username" placeholder="neo4j (por defecto)">
+                </div>
+
+                <div class="form-group">
+                    <label for="neo4j-password"><i class="fas fa-lock"></i> Contraseña</label>
+                    <input type="password" id="neo4j-password" placeholder="Tu contraseña de Neo4j">
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-link"></i> Probar Conexión
+                </button>
+            </form>
+
+            <div id="connection-status" class="status-message" style="display: none;"></div>
+        </div>
+
+        <div class="import-section">
+            <h2><i class="fas fa-upload"></i> Importar Resultados</h2>
+            <p>Importa todos los resultados de escaneos a Neo4j para su visualización en grafos.</p>
+            
+            <div id="import-status" class="status-message" style="display: none;"></div>
+            
+            <button id="import-btn" class="btn btn-success" onclick="importToNeo4j()" disabled>
+                <i class="fas fa-cloud-upload-alt"></i> Importar a Neo4j
+            </button>
+        </div>
+
+        <div class="info-section">
+            <h3><i class="fas fa-info-circle"></i> Información</h3>
+            <ul>
+                <li>Necesitas tener Neo4j ejecutándose en tu servidor</li>
+                <li>El puerto por defecto es 7687 (Bolt)</li>
+                <li>Los resultados se importarán creando nodos y relaciones</li>
+                <li>Puedes visualizar los grafos en Neo4j Browser o NeoDash</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let connectionData = null;
+
+    document.getElementById('connection-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const ip = document.getElementById('neo4j-ip').value;
+        const username = document.getElementById('neo4j-username').value || null;
+        const password = document.getElementById('neo4j-password').value || null;
+
+        if (!ip) {
+            alert('Debes proporcionar la IP de Neo4j');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/neo4j/connect', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ip, username, password })
+            });
+
+            const data = await response.json();
+            const statusDiv = document.getElementById('connection-status');
+            statusDiv.style.display = 'block';
+
+            if (response.ok && data.connected) {
+                statusDiv.className = 'status-message success';
+                statusDiv.innerHTML = '<i class="fas fa-check-circle"></i> Conexión exitosa';
+                connectionData = { ip, username, password };
+                document.getElementById('import-btn').disabled = false;
+            } else {
+                statusDiv.className = 'status-message error';
+                statusDiv.innerHTML = `<i class="fas fa-times-circle"></i> ${data.error || 'Error de conexión'}`;
+                document.getElementById('import-btn').disabled = true;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            const statusDiv = document.getElementById('connection-status');
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'status-message error';
+            statusDiv.innerHTML = '<i class="fas fa-times-circle"></i> Error al conectar: ' + error.message;
+        }
+    });
+
+    async function importToNeo4j() {
+        if (!connectionData) {
+            alert('Primero debes conectar a Neo4j');
+            return;
+        }
+
+        const importBtn = document.getElementById('import-btn');
+        const statusDiv = document.getElementById('import-status');
+        
+        importBtn.disabled = true;
+        importBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+        statusDiv.style.display = 'block';
+        statusDiv.className = 'status-message info';
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando resultados a Neo4j...';
+
+        try {
+            const response = await fetch('/api/neo4j/import', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(connectionData)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                statusDiv.className = 'status-message success';
+                statusDiv.innerHTML = `<i class="fas fa-check-circle"></i> Importación exitosa. ${data.ips_processed || 0} IPs procesadas.`;
+            } else {
+                statusDiv.className = 'status-message error';
+                statusDiv.innerHTML = `<i class="fas fa-times-circle"></i> ${data.error || 'Error en la importación'}`;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            statusDiv.className = 'status-message error';
+            statusDiv.innerHTML = '<i class="fas fa-times-circle"></i> Error al importar: ' + error.message;
+        } finally {
+            importBtn.disabled = false;
+            importBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Importar a Neo4j';
+        }
+    }
+
+    // Marcar tab activo según la URL
+    const currentPath = window.location.pathname;
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.getAttribute('href') === currentPath) {
+            tab.classList.add('active');
+        }
+    });
+</script>
+{% endblock %}
+

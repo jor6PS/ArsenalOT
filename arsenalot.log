@@ -1,0 +1,1696 @@
+2025-12-20 16:27:24,268 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:27:24,417 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-20 16:27:24,418 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-20 16:27:24,418 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:27:26,043 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:27:26,057 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:27:26,060 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:27:41,125 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "GET / HTTP/1.1" 200 -
+2025-12-20 16:27:41,426 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "GET /static/js/main.js HTTP/1.1" 200 -
+2025-12-20 16:27:41,434 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "GET /static/css/style.css HTTP/1.1" 200 -
+2025-12-20 16:27:41,484 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "GET /socket.io/?EIO=4&transport=polling&t=PiyNwkc HTTP/1.1" 200 -
+2025-12-20 16:27:41,485 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:27:41,499 - __main__ - INFO - Cliente conectado
+2025-12-20 16:27:41,500 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "POST /socket.io/?EIO=4&transport=polling&t=PiyNwkq&sid=3LG_mBmwOrwaO49hAAAA HTTP/1.1" 200 -
+2025-12-20 16:27:41,504 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "GET /socket.io/?EIO=4&transport=polling&t=PiyNwkr&sid=3LG_mBmwOrwaO49hAAAA HTTP/1.1" 200 -
+2025-12-20 16:27:41,507 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:27:41,516 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "GET /socket.io/?EIO=4&transport=polling&t=PiyNwl6&sid=3LG_mBmwOrwaO49hAAAA HTTP/1.1" 200 -
+2025-12-20 16:27:41,519 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:27:41,528 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:27:41,591 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:41] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-12-20 16:27:46,519 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:46] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:27:46,527 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:46] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:27:51,521 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:51] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:27:51,531 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:51] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:27:52,282 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:27:52,282 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:52] "GET /socket.io/?EIO=4&transport=websocket&sid=3LG_mBmwOrwaO49hAAAA HTTP/1.1" 200 -
+2025-12-20 16:27:52,306 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:52] "GET /neo4j HTTP/1.1" 200 -
+2025-12-20 16:27:52,350 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:52] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:27:52,359 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:52] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:27:52,375 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:52] "GET /static/js/main.js HTTP/1.1" 200 -
+2025-12-20 16:27:57,213 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:57] "GET /results HTTP/1.1" 200 -
+2025-12-20 16:27:57,265 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:57] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:27:57,269 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:57] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:27:57,285 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:57] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:27:57,296 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:57] "GET /api/results HTTP/1.1" 200 -
+2025-12-20 16:27:59,840 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:59] "GET /scan HTTP/1.1" 200 -
+2025-12-20 16:27:59,892 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:59] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:27:59,907 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:59] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:27:59,917 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:59] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:27:59,932 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:59] "GET /socket.io/?EIO=4&transport=polling&t=PiyN_Eq HTTP/1.1" 200 -
+2025-12-20 16:27:59,992 - __main__ - INFO - Cliente conectado
+2025-12-20 16:27:59,993 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:59] "POST /socket.io/?EIO=4&transport=polling&t=PiyN_FO&sid=kuS_TYZLuROaSM3iAAAC HTTP/1.1" 200 -
+2025-12-20 16:27:59,999 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:27:59] "GET /socket.io/?EIO=4&transport=polling&t=PiyN_FQ&sid=kuS_TYZLuROaSM3iAAAC HTTP/1.1" 200 -
+2025-12-20 16:28:00,742 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:28:00,742 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "GET /socket.io/?EIO=4&transport=websocket&sid=kuS_TYZLuROaSM3iAAAC HTTP/1.1" 200 -
+2025-12-20 16:28:00,757 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "GET / HTTP/1.1" 200 -
+2025-12-20 16:28:00,811 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:28:00,823 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:00,837 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:00,841 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "GET /socket.io/?EIO=4&transport=polling&t=PiyN_T2 HTTP/1.1" 200 -
+2025-12-20 16:28:00,846 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:28:00,903 - __main__ - INFO - Cliente conectado
+2025-12-20 16:28:00,903 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "POST /socket.io/?EIO=4&transport=polling&t=PiyN_Tr&sid=HzMGgeudzHgMRfMGAAAE HTTP/1.1" 200 -
+2025-12-20 16:28:00,909 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "GET /socket.io/?EIO=4&transport=polling&t=PiyN_Ts&sid=HzMGgeudzHgMRfMGAAAE HTTP/1.1" 200 -
+2025-12-20 16:28:00,915 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:28:00,926 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:28:00,935 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:00] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:28:03,854 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:28:03,855 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:03] "GET /socket.io/?EIO=4&transport=websocket&sid=HzMGgeudzHgMRfMGAAAE HTTP/1.1" 200 -
+2025-12-20 16:28:03,870 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:03] "GET / HTTP/1.1" 200 -
+2025-12-20 16:28:03,906 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:03] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:28:03,907 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:03] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:03,933 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:03] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:03,934 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:03] "GET /socket.io/?EIO=4&transport=polling&t=PiyO0DJ HTTP/1.1" 200 -
+2025-12-20 16:28:03,939 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:03] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:28:03,992 - __main__ - INFO - Cliente conectado
+2025-12-20 16:28:03,993 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:03] "POST /socket.io/?EIO=4&transport=polling&t=PiyO0D-&sid=LOqHj965aClnhJsYAAAG HTTP/1.1" 200 -
+2025-12-20 16:28:03,998 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:03] "GET /socket.io/?EIO=4&transport=polling&t=PiyO0D_&sid=LOqHj965aClnhJsYAAAG HTTP/1.1" 200 -
+2025-12-20 16:28:04,005 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:04] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:28:04,014 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:04] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:28:04,023 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:04] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:28:04,737 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:28:04,738 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:04] "GET /socket.io/?EIO=4&transport=websocket&sid=LOqHj965aClnhJsYAAAG HTTP/1.1" 200 -
+2025-12-20 16:28:04,754 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:04] "GET /scan HTTP/1.1" 200 -
+2025-12-20 16:28:04,811 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:04] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:28:04,815 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:04] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:04,830 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:04] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:04,837 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:04] "GET /socket.io/?EIO=4&transport=polling&t=PiyO0RS HTTP/1.1" 200 -
+2025-12-20 16:28:04,888 - __main__ - INFO - Cliente conectado
+2025-12-20 16:28:04,888 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:04] "POST /socket.io/?EIO=4&transport=polling&t=PiyO0SD&sid=TaCzHo3DaS-m6WZNAAAI HTTP/1.1" 200 -
+2025-12-20 16:28:04,893 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:04] "GET /socket.io/?EIO=4&transport=polling&t=PiyO0SE&sid=TaCzHo3DaS-m6WZNAAAI HTTP/1.1" 200 -
+2025-12-20 16:28:24,506 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:28:24,506 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:24] "GET /socket.io/?EIO=4&transport=websocket&sid=TaCzHo3DaS-m6WZNAAAI HTTP/1.1" 200 -
+2025-12-20 16:28:24,517 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:24] "GET /scan HTTP/1.1" 200 -
+2025-12-20 16:28:24,547 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:24] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:28:24,551 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:24] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:24,580 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:24] "GET /socket.io/?EIO=4&transport=polling&t=PiyO5Fz HTTP/1.1" 200 -
+2025-12-20 16:28:24,586 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:24] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:24,637 - __main__ - INFO - Cliente conectado
+2025-12-20 16:28:24,638 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:24] "POST /socket.io/?EIO=4&transport=polling&t=PiyO5GJ&sid=UD7Z_XGKQTsoFcESAAAK HTTP/1.1" 200 -
+2025-12-20 16:28:24,645 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:24] "GET /socket.io/?EIO=4&transport=polling&t=PiyO5GK&sid=UD7Z_XGKQTsoFcESAAAK HTTP/1.1" 200 -
+2025-12-20 16:28:25,021 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:28:25,023 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:25] "GET /socket.io/?EIO=4&transport=websocket&sid=UD7Z_XGKQTsoFcESAAAK HTTP/1.1" 200 -
+2025-12-20 16:28:25,043 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:25] "GET /results HTTP/1.1" 200 -
+2025-12-20 16:28:25,097 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:25] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:28:25,107 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:25] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:25,124 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:25] "GET /api/results HTTP/1.1" 200 -
+2025-12-20 16:28:25,133 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:25] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:26,321 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "GET /scan HTTP/1.1" 200 -
+2025-12-20 16:28:26,384 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:28:26,399 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:26,417 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "GET /socket.io/?EIO=4&transport=polling&t=PiyO5ih HTTP/1.1" 200 -
+2025-12-20 16:28:26,430 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:26,486 - __main__ - INFO - Cliente conectado
+2025-12-20 16:28:26,487 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "POST /socket.io/?EIO=4&transport=polling&t=PiyO5jI&sid=ehwqOcj1WCu7cLw4AAAM HTTP/1.1" 200 -
+2025-12-20 16:28:26,491 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "GET /socket.io/?EIO=4&transport=polling&t=PiyO5jI.0&sid=ehwqOcj1WCu7cLw4AAAM HTTP/1.1" 200 -
+2025-12-20 16:28:26,678 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:28:26,679 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "GET /socket.io/?EIO=4&transport=websocket&sid=ehwqOcj1WCu7cLw4AAAM HTTP/1.1" 200 -
+2025-12-20 16:28:26,696 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "GET / HTTP/1.1" 200 -
+2025-12-20 16:28:26,754 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:28:26,761 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:26,774 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:26,783 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "GET /socket.io/?EIO=4&transport=polling&t=PiyO5oK HTTP/1.1" 200 -
+2025-12-20 16:28:26,785 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:28:26,846 - __main__ - INFO - Cliente conectado
+2025-12-20 16:28:26,846 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "POST /socket.io/?EIO=4&transport=polling&t=PiyO5pF&sid=tdW2t7dzR40DN_oGAAAO HTTP/1.1" 200 -
+2025-12-20 16:28:26,850 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "GET /socket.io/?EIO=4&transport=polling&t=PiyO5pG&sid=tdW2t7dzR40DN_oGAAAO HTTP/1.1" 200 -
+2025-12-20 16:28:26,853 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:28:26,872 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:28:26,880 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:26] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:28:31,033 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:28:31,033 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:31] "GET /socket.io/?EIO=4&transport=websocket&sid=tdW2t7dzR40DN_oGAAAO HTTP/1.1" 200 -
+2025-12-20 16:28:31,054 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:31] "GET /scan HTTP/1.1" 200 -
+2025-12-20 16:28:31,112 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:31] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:28:31,116 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:31] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:31,134 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:31] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:28:31,137 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:31] "GET /socket.io/?EIO=4&transport=polling&t=PiyO6sN HTTP/1.1" 200 -
+2025-12-20 16:28:31,218 - __main__ - INFO - Cliente conectado
+2025-12-20 16:28:31,221 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:31] "POST /socket.io/?EIO=4&transport=polling&t=PiyO6tb&sid=yP9eCigEAwbL4WsmAAAQ HTTP/1.1" 200 -
+2025-12-20 16:28:31,223 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:31] "GET /socket.io/?EIO=4&transport=polling&t=PiyO6tc&sid=yP9eCigEAwbL4WsmAAAQ HTTP/1.1" 200 -
+2025-12-20 16:28:31,240 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:31] "GET /socket.io/?EIO=4&transport=polling&t=PiyO6t-&sid=yP9eCigEAwbL4WsmAAAQ HTTP/1.1" 200 -
+2025-12-20 16:28:50,624 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:28:50] "POST /api/scan/start HTTP/1.1" 200 -
+2025-12-20 16:28:50,629 - core.scanner - WARNING - Error en descubrimiento de hosts: 'bool' object has no attribute 'escanear_arp_scan'
+2025-12-20 16:28:50,633 - core.scanner - ERROR - Error en escaneo: 'nmap program was not found in path. PATH is : C:\\Program Files\\Google\\Chrome\\Application;C:\\Program Files (x86)\\VMware\\VMware Workstation\\bin\\;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Windows\\System32\\OpenSSH\\;C:\\Program Files\\PuTTY\\;C:\\Program Files\\Git\\cmd;C:\\Program Files\\WireGuard\\;C:\\Users\\jorGPS\\Documents\\ludus\\;;C:\\Program Files\\NVIDIA Corporation\\NVIDIA app\\NvDLISR;C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common;C:\\Users\\jorGPS\\AppData\\Local\\Microsoft\\WindowsApps;'
+2025-12-20 16:29:40,930 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 16:29:41,055 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:29:42,196 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:29:42,203 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:29:42,206 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:29:42,729 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:29:42] "GET /socket.io/?EIO=4&transport=polling&t=PiyOOKo HTTP/1.1" 200 -
+2025-12-20 16:29:42,741 - __main__ - INFO - Cliente conectado
+2025-12-20 16:29:42,742 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:29:42] "POST /socket.io/?EIO=4&transport=polling&t=PiyOOLC&sid=yqUsxI9-UManlW1EAAAA HTTP/1.1" 200 -
+2025-12-20 16:29:42,747 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:29:42] "GET /socket.io/?EIO=4&transport=polling&t=PiyOOLD&sid=yqUsxI9-UManlW1EAAAA HTTP/1.1" 200 -
+2025-12-20 16:29:44,729 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 16:29:44,855 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:29:46,079 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:29:46,091 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:29:46,095 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:29:46,530 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:29:46] "GET /socket.io/?EIO=4&transport=polling&t=PiyOPBh HTTP/1.1" 200 -
+2025-12-20 16:29:46,539 - __main__ - INFO - Cliente conectado
+2025-12-20 16:29:46,540 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:29:46] "POST /socket.io/?EIO=4&transport=polling&t=PiyOPGb&sid=CMUGcUTaeEmPHaJjAAAA HTTP/1.1" 200 -
+2025-12-20 16:29:46,545 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:29:46] "GET /socket.io/?EIO=4&transport=polling&t=PiyOPGc&sid=CMUGcUTaeEmPHaJjAAAA HTTP/1.1" 200 -
+2025-12-20 16:29:52,615 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 16:29:52,702 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:29:53,548 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:29:53,555 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:29:53,558 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:29:54,705 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:29:54] "GET /socket.io/?EIO=4&transport=polling&t=PiyORGD HTTP/1.1" 200 -
+2025-12-20 16:29:54,714 - __main__ - INFO - Cliente conectado
+2025-12-20 16:29:54,716 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:29:54] "POST /socket.io/?EIO=4&transport=polling&t=PiyORGL&sid=aNA7_bo1QiARUgoVAAAA HTTP/1.1" 200 -
+2025-12-20 16:29:54,718 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:29:54] "GET /socket.io/?EIO=4&transport=polling&t=PiyORGM&sid=aNA7_bo1QiARUgoVAAAA HTTP/1.1" 200 -
+2025-12-20 16:31:06,545 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 16:31:06,631 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:31:07,687 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:31:07,696 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:31:07,700 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:31:08,117 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:31:08] "GET /socket.io/?EIO=4&transport=polling&t=PiyOj4t HTTP/1.1" 200 -
+2025-12-20 16:31:08,130 - __main__ - INFO - Cliente conectado
+2025-12-20 16:31:08,131 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:31:08] "POST /socket.io/?EIO=4&transport=polling&t=PiyOjBP&sid=8AL18gr6u66uquxhAAAA HTTP/1.1" 200 -
+2025-12-20 16:31:08,136 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:31:08] "GET /socket.io/?EIO=4&transport=polling&t=PiyOjBR&sid=8AL18gr6u66uquxhAAAA HTTP/1.1" 200 -
+2025-12-20 16:32:19,292 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 16:32:19,340 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:32:20,091 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:32:20,096 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:32:20,099 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:32:20,705 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:20] "GET /socket.io/?EIO=4&transport=polling&t=PiyO-vT HTTP/1.1" 200 -
+2025-12-20 16:32:20,713 - __main__ - INFO - Cliente conectado
+2025-12-20 16:32:20,716 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:20] "POST /socket.io/?EIO=4&transport=polling&t=PiyO-vb&sid=0kfAnV-FXh1W0oPjAAAA HTTP/1.1" 200 -
+2025-12-20 16:32:20,716 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:20] "GET /socket.io/?EIO=4&transport=polling&t=PiyO-vb.0&sid=0kfAnV-FXh1W0oPjAAAA HTTP/1.1" 200 -
+2025-12-20 16:32:27,932 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 16:32:28,006 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:32:28,678 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:32:28,683 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:32:28,685 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:32:29,713 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:29] "GET /socket.io/?EIO=4&transport=polling&t=PiyP16C HTTP/1.1" 200 -
+2025-12-20 16:32:29,717 - __main__ - INFO - Cliente conectado
+2025-12-20 16:32:29,717 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:29] "POST /socket.io/?EIO=4&transport=polling&t=PiyP16J&sid=Sf3tTuDh6J0XtiBwAAAA HTTP/1.1" 200 -
+2025-12-20 16:32:29,721 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:29] "GET /socket.io/?EIO=4&transport=polling&t=PiyP16K&sid=Sf3tTuDh6J0XtiBwAAAA HTTP/1.1" 200 -
+2025-12-20 16:32:34,126 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 16:32:34,174 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:32:34,942 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:32:34,956 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:32:34,960 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:32:35,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:35] "GET /socket.io/?EIO=4&transport=polling&t=PiyP2Zu HTTP/1.1" 200 -
+2025-12-20 16:32:35,716 - __main__ - INFO - Cliente conectado
+2025-12-20 16:32:35,717 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:35] "POST /socket.io/?EIO=4&transport=polling&t=PiyP2a0&sid=-2dYdqhXcMyw-NP9AAAA HTTP/1.1" 200 -
+2025-12-20 16:32:35,720 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:35] "GET /socket.io/?EIO=4&transport=polling&t=PiyP2a0.0&sid=-2dYdqhXcMyw-NP9AAAA HTTP/1.1" 200 -
+2025-12-20 16:32:40,382 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:32:40,424 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-20 16:32:40,425 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-20 16:32:40,425 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:32:40,981 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:32:40,987 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:32:40,990 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:32:49,486 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:32:49,486 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:49] "GET /socket.io/?EIO=4&transport=websocket&sid=-2dYdqhXcMyw-NP9AAAA HTTP/1.1" 200 -
+2025-12-20 16:32:49,504 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:49] "GET /scan HTTP/1.1" 200 -
+2025-12-20 16:32:49,715 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:49] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:32:49,720 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:49] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:32:49,727 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:49] "GET /socket.io/?EIO=4&transport=polling&t=PiyP5-z HTTP/1.1" 200 -
+2025-12-20 16:32:49,740 - __main__ - INFO - Cliente conectado
+2025-12-20 16:32:49,740 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:49] "POST /socket.io/?EIO=4&transport=polling&t=PiyP5_5&sid=16Cop2x-F1GV27tSAAAC HTTP/1.1" 200 -
+2025-12-20 16:32:49,742 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:49] "GET /socket.io/?EIO=4&transport=polling&t=PiyP5_6&sid=16Cop2x-F1GV27tSAAAC HTTP/1.1" 200 -
+2025-12-20 16:32:49,758 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:49] "GET /socket.io/?EIO=4&transport=polling&t=PiyP5_M&sid=16Cop2x-F1GV27tSAAAC HTTP/1.1" 200 -
+2025-12-20 16:32:49,778 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:49] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:32:59,663 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:32:59] "POST /api/scan/start HTTP/1.1" 200 -
+2025-12-20 16:32:59,666 - hostdiscovery - WARNING - ARP scan solo está disponible en Linux
+2025-12-20 16:35:21,906 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:35:21,906 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:21] "GET /socket.io/?EIO=4&transport=websocket&sid=16Cop2x-F1GV27tSAAAC HTTP/1.1" 200 -
+2025-12-20 16:35:21,921 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:21] "GET / HTTP/1.1" 200 -
+2025-12-20 16:35:21,977 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:21] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:35:21,980 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:21] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:35:21,998 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:21] "GET /socket.io/?EIO=4&transport=polling&t=PiyPhAA HTTP/1.1" 200 -
+2025-12-20 16:35:22,002 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:22] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:35:22,033 - __main__ - INFO - Cliente conectado
+2025-12-20 16:35:22,034 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:22] "POST /socket.io/?EIO=4&transport=polling&t=PiyPhAP&sid=S5O_dSAZrRRjy0ibAAAE HTTP/1.1" 200 -
+2025-12-20 16:35:22,044 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:22] "GET /socket.io/?EIO=4&transport=polling&t=PiyPhAQ&sid=S5O_dSAZrRRjy0ibAAAE HTTP/1.1" 200 -
+2025-12-20 16:35:22,055 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:22] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:35:22,087 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:22] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:35:22,092 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:22] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:35:27,704 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:27] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:35:27,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:27] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:35:32,713 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:32] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:35:32,719 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:32] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:35:37,706 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:37] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:35:37,712 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:37] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:35:42,703 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:42] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:35:42,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:42] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:35:47,704 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:47] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:35:47,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:47] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:35:52,700 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:52] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:35:52,713 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:52] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:35:57,707 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:57] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:35:57,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:35:57] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:36:02,712 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:36:02] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:36:02,719 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:36:02] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:36:07,708 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:36:07] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:36:07,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:36:07] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:36:12,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:36:12] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:36:12,718 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:36:12] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:36:17,701 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:36:17] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:36:17,706 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:36:17] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:36:22,698 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:36:22] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:36:22,704 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:36:22] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:37:08,713 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:37:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:37:08,717 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:37:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:38:08,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:38:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:38:08,723 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:38:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:39:08,706 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:39:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:39:08,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:39:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:40:08,702 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:40:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:40:08,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:40:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:41:08,702 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:41:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:41:08,707 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:41:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:42:08,712 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:42:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:42:08,722 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:42:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:43:08,707 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:43:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:43:08,716 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:43:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:44:08,705 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:44:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:44:08,711 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:44:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:45:08,716 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:45:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:45:08,725 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:45:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:46:08,716 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:46:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:46:08,725 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:46:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:47:08,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:47:08,720 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:47:33,380 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:47:33,393 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:47:33,491 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:47:33,504 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:47:34,730 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:47:34,748 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:47:34,750 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:47:34,755 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:47:34,768 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:47:34,778 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:47:35,247 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:35] "GET /socket.io/?EIO=4&transport=polling&t=PiySU2m HTTP/1.1" 200 -
+2025-12-20 16:47:35,254 - __main__ - INFO - Cliente conectado
+2025-12-20 16:47:35,256 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:35] "POST /socket.io/?EIO=4&transport=polling&t=PiySUBJ&sid=9XCkHzUDsUPVwE8zAAAA HTTP/1.1" 200 -
+2025-12-20 16:47:35,258 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:35] "GET /socket.io/?EIO=4&transport=polling&t=PiySUBK&sid=9XCkHzUDsUPVwE8zAAAA HTTP/1.1" 200 -
+2025-12-20 16:47:35,268 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:35] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:47:35,273 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:35] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:47:40,702 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:40] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:47:40,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:40] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:47:45,706 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:45] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:47:45,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:45] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:47:50,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:50] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:47:50,716 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:50] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:47:55,703 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:55] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:47:55,711 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:47:55] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:48:00,707 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:00] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:48:00,713 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:00] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:48:05,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:05] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:48:05,716 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:05] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:48:07,735 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:48:07,809 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:48:07,863 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:48:07,940 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:48:08,622 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:48:08,628 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:48:08,633 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:48:08,839 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:48:08,847 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:48:08,850 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:48:09,198 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:09] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:48:09,202 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:09] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:48:09,711 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:09] "GET /socket.io/?EIO=4&transport=polling&t=PiyScbh HTTP/1.1" 200 -
+2025-12-20 16:48:09,717 - __main__ - INFO - Cliente conectado
+2025-12-20 16:48:09,718 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:09] "POST /socket.io/?EIO=4&transport=polling&t=PiyScbo&sid=rmHmZI9rLvrvSSMxAAAA HTTP/1.1" 200 -
+2025-12-20 16:48:09,720 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:09] "GET /socket.io/?EIO=4&transport=polling&t=PiyScbp&sid=rmHmZI9rLvrvSSMxAAAA HTTP/1.1" 200 -
+2025-12-20 16:48:09,729 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:09] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:48:09,733 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:09] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:48:15,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:15] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:48:15,715 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:15] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:48:18,627 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:48:18,645 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-20 16:48:18,645 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-20 16:48:18,646 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:48:19,320 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:48:19,328 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:48:19,332 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:48:20,704 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:20] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:48:20,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:20] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:48:22,155 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:22] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:48:22,160 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:22] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:48:22,164 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:22] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:48:22,169 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:22] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:48:23,452 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:48:23,453 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:23] "GET /socket.io/?EIO=4&transport=websocket&sid=rmHmZI9rLvrvSSMxAAAA HTTP/1.1" 200 -
+2025-12-20 16:48:23,471 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:23] "GET / HTTP/1.1" 200 -
+2025-12-20 16:48:23,690 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:23] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:48:23,696 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:48:23] "GET /static/css/style.css HTTP/1.1" 200 -
+2025-12-20 16:50:17,481 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:17] "GET /reconocimiento HTTP/1.1" 200 -
+2025-12-20 16:50:17,559 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:17] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:50:17,570 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:17] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:50:17,595 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:17] "GET /socket.io/?EIO=4&transport=polling&t=PiyT5pr HTTP/1.1" 200 -
+2025-12-20 16:50:17,602 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:17] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:50:17,635 - __main__ - INFO - Cliente conectado
+2025-12-20 16:50:17,636 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:17] "POST /socket.io/?EIO=4&transport=polling&t=PiyT5q8&sid=JsgBuAknRpiueky_AAAC HTTP/1.1" 200 -
+2025-12-20 16:50:17,652 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:17] "GET /socket.io/?EIO=4&transport=polling&t=PiyT5q9&sid=JsgBuAknRpiueky_AAAC HTTP/1.1" 200 -
+2025-12-20 16:50:17,672 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:17] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:50:17,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:17] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:50:17,720 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:17] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:50:22,708 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:22] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:50:22,716 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:22] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:50:26,249 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:50:26,249 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:26] "GET /socket.io/?EIO=4&transport=websocket&sid=JsgBuAknRpiueky_AAAC HTTP/1.1" 200 -
+2025-12-20 16:50:26,271 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:26] "GET /reconocimiento/scan HTTP/1.1" 200 -
+2025-12-20 16:50:26,342 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:26] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:50:26,350 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:26] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:50:26,378 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:26] "GET /socket.io/?EIO=4&transport=polling&t=PiyT7z5 HTTP/1.1" 200 -
+2025-12-20 16:50:26,415 - __main__ - INFO - Cliente conectado
+2025-12-20 16:50:26,416 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:26] "POST /socket.io/?EIO=4&transport=polling&t=PiyT7zI&sid=fbe1vYU0FK5lwrE3AAAE HTTP/1.1" 200 -
+2025-12-20 16:50:26,432 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:26] "GET /socket.io/?EIO=4&transport=polling&t=PiyT7zJ&sid=fbe1vYU0FK5lwrE3AAAE HTTP/1.1" 200 -
+2025-12-20 16:50:27,409 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:50:27,409 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:27] "GET /socket.io/?EIO=4&transport=websocket&sid=fbe1vYU0FK5lwrE3AAAE HTTP/1.1" 200 -
+2025-12-20 16:50:27,429 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:27] "GET /reconocimiento/results HTTP/1.1" 200 -
+2025-12-20 16:50:27,498 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:27] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:50:27,503 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:27] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:50:27,528 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:27] "GET /api/results HTTP/1.1" 200 -
+2025-12-20 16:50:28,126 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:28] "GET /reconocimiento/neo4j HTTP/1.1" 200 -
+2025-12-20 16:50:28,198 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:28] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:50:28,203 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:28] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:50:28,877 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:28] "GET /reconocimiento/results HTTP/1.1" 200 -
+2025-12-20 16:50:28,937 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:28] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:50:28,945 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:28] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:50:28,965 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:28] "GET /api/results HTTP/1.1" 200 -
+2025-12-20 16:50:29,315 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "GET /reconocimiento/scan HTTP/1.1" 200 -
+2025-12-20 16:50:29,383 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:50:29,392 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:50:29,421 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "GET /socket.io/?EIO=4&transport=polling&t=PiyT8iW HTTP/1.1" 200 -
+2025-12-20 16:50:29,491 - __main__ - INFO - Cliente conectado
+2025-12-20 16:50:29,492 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "POST /socket.io/?EIO=4&transport=polling&t=PiyT8ja&sid=jJmYhec_orABJ4xPAAAG HTTP/1.1" 200 -
+2025-12-20 16:50:29,497 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "GET /socket.io/?EIO=4&transport=polling&t=PiyT8jb&sid=jJmYhec_orABJ4xPAAAG HTTP/1.1" 200 -
+2025-12-20 16:50:29,722 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:50:29,723 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "GET /socket.io/?EIO=4&transport=websocket&sid=jJmYhec_orABJ4xPAAAG HTTP/1.1" 200 -
+2025-12-20 16:50:29,742 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "GET /reconocimiento HTTP/1.1" 200 -
+2025-12-20 16:50:29,802 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:50:29,811 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:50:29,824 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "GET /socket.io/?EIO=4&transport=polling&t=PiyT8ox HTTP/1.1" 200 -
+2025-12-20 16:50:29,837 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:50:29,889 - __main__ - INFO - Cliente conectado
+2025-12-20 16:50:29,890 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "POST /socket.io/?EIO=4&transport=polling&t=PiyT8pO&sid=gfTyMLDMUrQkV0BRAAAI HTTP/1.1" 200 -
+2025-12-20 16:50:29,895 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "GET /socket.io/?EIO=4&transport=polling&t=PiyT8pP&sid=gfTyMLDMUrQkV0BRAAAI HTTP/1.1" 200 -
+2025-12-20 16:50:29,898 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:50:29,918 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:50:29,925 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:29] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:50:34,926 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:34] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:50:34,933 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:34] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:50:39,925 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:39] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:50:39,929 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:39] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:50:44,922 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:44] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:50:44,926 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:44] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:50:49,925 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:49] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:50:49,931 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:49] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:50:54,927 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:54] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:50:54,931 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:54] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:50:59,924 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:59] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:50:59,929 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:50:59] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:51:04,931 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:04] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:51:04,936 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:04] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:51:09,922 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:09] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:51:09,927 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:09] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:51:14,930 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:14] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:51:14,935 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:14] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:51:19,921 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:19] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:51:19,925 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:19] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:51:24,926 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:24] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:51:24,933 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:24] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:51:29,915 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:29] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:51:29,920 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:29] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:51:34,933 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:34] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:51:34,940 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:34] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:51:40,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:40] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:51:40,713 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:40] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:51:45,705 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:45] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:51:45,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:45] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:51:50,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:50] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:51:50,717 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:50] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:51:55,708 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:55] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:51:55,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:51:55] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:52:00,701 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:00] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:52:00,706 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:00] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:52:05,712 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:05] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:52:05,717 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:05] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:52:10,700 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:10] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:52:10,705 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:10] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:52:15,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:15] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:52:15,720 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:15] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:52:20,711 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:20] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:52:20,718 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:20] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:52:25,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:25] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:52:25,712 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:25] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:52:30,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:30] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:52:30,718 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:52:30] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:53:08,711 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:53:08,724 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:53:29,852 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:53:29,937 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:53:30,548 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:53:30,739 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:53:31,179 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:53:31,191 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:53:31,196 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:53:31,747 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:31] "GET /socket.io/?EIO=4&transport=polling&t=PiyTqz9 HTTP/1.1" 200 -
+2025-12-20 16:53:31,758 - __main__ - INFO - Cliente conectado
+2025-12-20 16:53:31,759 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:31] "POST /socket.io/?EIO=4&transport=polling&t=PiyTrDe&sid=bv04fW0hMb0HVUXYAAAA HTTP/1.1" 200 -
+2025-12-20 16:53:31,764 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:31] "GET /socket.io/?EIO=4&transport=polling&t=PiyTrDf&sid=bv04fW0hMb0HVUXYAAAA HTTP/1.1" 200 -
+2025-12-20 16:53:31,777 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:31] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:53:31,787 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:31] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:53:32,563 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:53:32,576 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:53:32,582 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:53:37,711 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:37] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:53:37,718 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:37] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:53:42,712 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:42] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:53:42,721 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:42] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:53:47,702 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:47] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:53:47,713 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:47] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:53:47,937 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:53:48,075 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:53:48,117 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:53:48,284 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:53:49,885 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:53:49,901 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:53:49,910 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:53:50,053 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:53:50,066 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:53:50,071 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:53:50,787 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:50] "GET /socket.io/?EIO=4&transport=polling&t=PiyTvri HTTP/1.1" 200 -
+2025-12-20 16:53:50,797 - __main__ - INFO - Cliente conectado
+2025-12-20 16:53:50,798 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:50] "POST /socket.io/?EIO=4&transport=polling&t=PiyTvt7&sid=C-jFIRFj2-KnUV0ZAAAA HTTP/1.1" 200 -
+2025-12-20 16:53:50,805 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:50] "GET /socket.io/?EIO=4&transport=polling&t=PiyTvt8&sid=C-jFIRFj2-KnUV0ZAAAA HTTP/1.1" 200 -
+2025-12-20 16:53:50,828 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:50] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:53:50,842 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:50] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:53:52,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:52] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:53:52,724 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:52] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:53:56,718 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:56] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:53:56,737 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:56] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:53:57,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:57] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:53:57,719 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:53:57] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:53:58,438 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:53:58,539 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:53:59,834 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:53:59,960 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:54:00,032 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:54:00,047 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:54:00,054 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:54:00,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:00] "GET /socket.io/?EIO=4&transport=polling&t=PiyTyI0 HTTP/1.1" 200 -
+2025-12-20 16:54:00,723 - __main__ - INFO - Cliente conectado
+2025-12-20 16:54:00,725 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:00] "POST /socket.io/?EIO=4&transport=polling&t=PiyTyI9&sid=PT_FUtbFOvj72ipkAAAA HTTP/1.1" 200 -
+2025-12-20 16:54:00,727 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:00] "GET /socket.io/?EIO=4&transport=polling&t=PiyTyIA&sid=PT_FUtbFOvj72ipkAAAA HTTP/1.1" 200 -
+2025-12-20 16:54:00,745 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:00] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:00,753 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:00] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:01,418 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:54:01,430 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:54:01,435 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:54:01,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:01] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:01,718 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:01] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:02,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:02] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:02,717 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:02] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:06,709 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:06] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:06,717 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:06] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:06,720 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:06] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:06,727 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:06] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:08,717 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:08,727 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:08,728 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:08,739 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:11,706 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:11] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:11,712 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:11] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:11,717 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:11] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:11,722 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:11] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:16,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:16] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:16,715 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:16] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:16,719 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:16] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:16,726 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:16] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:18,079 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 16:54:18,129 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 16:54:18,177 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:54:18,203 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:54:19,256 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:54:19,266 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:54:19,268 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:54:19,315 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:54:19,326 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:54:19,334 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:54:19,774 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:19] "GET /socket.io/?EIO=4&transport=polling&t=PiyU0wr HTTP/1.1" 200 -
+2025-12-20 16:54:19,782 - __main__ - INFO - Cliente conectado
+2025-12-20 16:54:19,783 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:19] "POST /socket.io/?EIO=4&transport=polling&t=PiyU0y1&sid=fsA9yQFMRaOYmu42AAAA HTTP/1.1" 200 -
+2025-12-20 16:54:19,787 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:19] "GET /socket.io/?EIO=4&transport=polling&t=PiyU0y3&sid=fsA9yQFMRaOYmu42AAAA HTTP/1.1" 200 -
+2025-12-20 16:54:19,800 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:19] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:19,808 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:19] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:21,706 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:21] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:21,713 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:21] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:21,716 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:21] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:21,724 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:21] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:25,715 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:25] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:25,725 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:25] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:26,701 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:26] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:26,713 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:26] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:30,717 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:30] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:30,725 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:30] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:31,721 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:31] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:31,731 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:31] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:35,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:35] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:35,722 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:35] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:40,711 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:40] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:40,719 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:40] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:45,702 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:45] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:45,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:45] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:54:50,708 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:50] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:54:50,715 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:54:50] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:55:09,230 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:55:09] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:55:09,267 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:55:09] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:55:09,456 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:55:09] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:55:09,466 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:55:09] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:55:09,477 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:55:09] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:55:09,505 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:55:09] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:55:09,518 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:55:09] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:55:09,524 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:55:09] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:55:09,533 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:55:09] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:55:09,550 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:55:09] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:55:50,618 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:55:50,997 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:55:53,687 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 16:55:54,040 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:55:58,103 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:55:58,157 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:55:58,171 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:56:02,984 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:02] "GET /socket.io/?EIO=4&transport=polling&t=PiyUNdz HTTP/1.1" 200 -
+2025-12-20 16:56:02,998 - __main__ - INFO - Cliente conectado
+2025-12-20 16:56:03,000 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:03] "POST /socket.io/?EIO=4&transport=polling&t=PiyUQ8k&sid=t9IwhyIWTFE0Uxa2AAAA HTTP/1.1" 200 -
+2025-12-20 16:56:03,005 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:56:03,005 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:03] "GET /socket.io/?EIO=4&transport=polling&t=PiyUQ8m&sid=t9IwhyIWTFE0Uxa2AAAA HTTP/1.1" 200 -
+2025-12-20 16:56:03,026 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:56:03,026 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:03] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:03,036 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:56:03,074 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:03] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:08,745 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:08,810 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:08,827 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:08,852 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:08,858 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:08,878 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:08,882 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:08,910 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:08,916 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:08,925 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:08,936 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:08,947 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:13,730 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:13] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:13,777 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:13] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:14,062 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:56:14,084 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-20 16:56:14,084 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-20 16:56:14,086 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 16:56:15,194 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 16:56:15,202 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 16:56:15,207 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 16:56:18,703 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:18] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:18,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:18] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:21,518 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:21,529 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:21,542 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:21,553 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:21,573 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:21,574 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:21,584 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:21,602 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:21,612 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:21,629 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:21,806 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:21,843 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:21] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:22,913 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:56:22,914 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:22] "GET /socket.io/?EIO=4&transport=websocket&sid=t9IwhyIWTFE0Uxa2AAAA HTTP/1.1" 200 -
+2025-12-20 16:56:22,995 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:22] "GET /reconocimiento HTTP/1.1" 200 -
+2025-12-20 16:56:23,749 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:23] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:56:23,763 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:23] "GET /static/css/style.css HTTP/1.1" 200 -
+2025-12-20 16:56:23,840 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:23] "GET /socket.io/?EIO=4&transport=polling&t=PiyUVE5 HTTP/1.1" 200 -
+2025-12-20 16:56:23,873 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:23] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:24,006 - __main__ - INFO - Cliente conectado
+2025-12-20 16:56:24,007 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:24] "POST /socket.io/?EIO=4&transport=polling&t=PiyUVG0&sid=5uPF9NsZnFWA0ma8AAAC HTTP/1.1" 200 -
+2025-12-20 16:56:24,023 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:24] "GET /socket.io/?EIO=4&transport=polling&t=PiyUVG2&sid=5uPF9NsZnFWA0ma8AAAC HTTP/1.1" 200 -
+2025-12-20 16:56:24,041 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:24] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:24,104 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:24] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:24,132 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:24] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:28,697 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:56:28,697 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:28] "GET /socket.io/?EIO=4&transport=websocket&sid=5uPF9NsZnFWA0ma8AAAC HTTP/1.1" 200 -
+2025-12-20 16:56:28,718 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:28] "GET / HTTP/1.1" 200 -
+2025-12-20 16:56:28,763 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:28] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:56:28,772 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:28] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:56:43,358 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:43] "GET /reconocimiento HTTP/1.1" 200 -
+2025-12-20 16:56:43,408 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:43] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:56:43,411 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:43] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:56:43,423 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:43] "GET /socket.io/?EIO=4&transport=polling&t=PiyUa0Q HTTP/1.1" 200 -
+2025-12-20 16:56:43,427 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:43] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:43,472 - __main__ - INFO - Cliente conectado
+2025-12-20 16:56:43,473 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:43] "POST /socket.io/?EIO=4&transport=polling&t=PiyUa0_&sid=p1kTeij1ish5zhX2AAAE HTTP/1.1" 200 -
+2025-12-20 16:56:43,478 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:43] "GET /socket.io/?EIO=4&transport=polling&t=PiyUa10&sid=p1kTeij1ish5zhX2AAAE HTTP/1.1" 200 -
+2025-12-20 16:56:43,481 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:43] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:43,496 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:43] "GET /api/stats HTTP/1.1" 200 -
+2025-12-20 16:56:43,502 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:43] "GET /api/scans HTTP/1.1" 200 -
+2025-12-20 16:56:45,804 - __main__ - INFO - Cliente desconectado
+2025-12-20 16:56:45,805 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:45] "GET /socket.io/?EIO=4&transport=websocket&sid=p1kTeij1ish5zhX2AAAE HTTP/1.1" 200 -
+2025-12-20 16:56:45,833 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:45] "GET /reconocimiento/results HTTP/1.1" 200 -
+2025-12-20 16:56:45,876 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:45] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:56:45,882 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:45] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:56:45,908 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:45] "GET /api/results HTTP/1.1" 200 -
+2025-12-20 16:56:54,533 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:54] "GET /reconocimiento/scan HTTP/1.1" 200 -
+2025-12-20 16:56:54,706 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:54] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 16:56:54,727 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:54] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 16:56:54,839 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:54] "GET /socket.io/?EIO=4&transport=polling&t=PiyUcod HTTP/1.1" 200 -
+2025-12-20 16:56:54,887 - __main__ - INFO - Cliente conectado
+2025-12-20 16:56:54,888 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:54] "POST /socket.io/?EIO=4&transport=polling&t=PiyUcpE&sid=6kTjck_mxgncnh2VAAAG HTTP/1.1" 200 -
+2025-12-20 16:56:54,894 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 16:56:54] "GET /socket.io/?EIO=4&transport=polling&t=PiyUcpG&sid=6kTjck_mxgncnh2VAAAG HTTP/1.1" 200 -
+2025-12-20 17:02:43,330 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 17:02:43,603 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:02:45,501 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:02:45,510 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:02:45,515 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:02:46,067 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:02:46] "GET /socket.io/?EIO=4&transport=polling&t=PiyVyDk HTTP/1.1" 200 -
+2025-12-20 17:02:46,103 - __main__ - INFO - Cliente conectado
+2025-12-20 17:02:46,104 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:02:46] "POST /socket.io/?EIO=4&transport=polling&t=PiyVyZ7&sid=YXJFeTwERuB_qVhCAAAA HTTP/1.1" 200 -
+2025-12-20 17:02:46,147 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:02:46] "GET /socket.io/?EIO=4&transport=polling&t=PiyVyZg&sid=YXJFeTwERuB_qVhCAAAA HTTP/1.1" 200 -
+2025-12-20 17:02:46,242 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 17:02:46,747 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:02:54,938 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:02:55,020 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:02:55,078 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:03:05,958 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 17:03:06,178 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:03:08,616 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:03:08,623 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:03:08,628 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:03:09,305 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:09] "GET /socket.io/?EIO=4&transport=polling&t=PiyW1r1 HTTP/1.1" 200 -
+2025-12-20 17:03:09,339 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 17:03:09,342 - __main__ - INFO - Cliente conectado
+2025-12-20 17:03:09,344 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:09] "POST /socket.io/?EIO=4&transport=polling&t=PiyW2EC&sid=ssiFeTRU98TAvUAmAAAA HTTP/1.1" 200 -
+2025-12-20 17:03:09,402 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:09] "GET /socket.io/?EIO=4&transport=polling&t=PiyW2F3&sid=ssiFeTRU98TAvUAmAAAA HTTP/1.1" 200 -
+2025-12-20 17:03:09,861 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:03:18,024 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 17:03:18,126 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:03:18,420 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:03:18,501 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:03:18,554 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:03:20,010 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:03:20,026 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:03:20,037 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:03:20,920 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:20] "GET /socket.io/?EIO=4&transport=polling&t=PiyW4mJ HTTP/1.1" 200 -
+2025-12-20 17:03:20,975 - __main__ - INFO - Cliente conectado
+2025-12-20 17:03:20,976 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:20] "POST /socket.io/?EIO=4&transport=polling&t=PiyW53j&sid=_k6EJEdKhjXbB57ZAAAA HTTP/1.1" 200 -
+2025-12-20 17:03:20,999 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:20] "GET /socket.io/?EIO=4&transport=polling&t=PiyW54A&sid=_k6EJEdKhjXbB57ZAAAA HTTP/1.1" 200 -
+2025-12-20 17:03:32,289 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 17:03:32,367 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:03:32,554 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 17:03:32,882 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:03:34,213 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:03:34,226 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:03:34,237 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:03:34,983 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:34] "GET /socket.io/?EIO=4&transport=polling&t=PiyW8BD HTTP/1.1" 200 -
+2025-12-20 17:03:35,010 - __main__ - INFO - Cliente conectado
+2025-12-20 17:03:35,011 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:35] "POST /socket.io/?EIO=4&transport=polling&t=PiyW8VN&sid=zrC9yNe75PqoEQNvAAAA HTTP/1.1" 200 -
+2025-12-20 17:03:35,062 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:35] "GET /socket.io/?EIO=4&transport=polling&t=PiyW8Vn&sid=zrC9yNe75PqoEQNvAAAA HTTP/1.1" 200 -
+2025-12-20 17:03:41,590 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:03:41,647 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:03:41,709 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:03:53,063 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 17:03:53,216 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:03:55,216 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:03:55,226 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:03:55,232 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:03:55,667 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 17:03:55,980 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:55] "GET /socket.io/?EIO=4&transport=polling&t=PiyWDJN HTTP/1.1" 200 -
+2025-12-20 17:03:56,022 - __main__ - INFO - Cliente conectado
+2025-12-20 17:03:56,026 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:56] "POST /socket.io/?EIO=4&transport=polling&t=PiyWDdU&sid=1K80lRTbyg39UWaIAAAA HTTP/1.1" 200 -
+2025-12-20 17:03:56,042 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:03:56] "GET /socket.io/?EIO=4&transport=polling&t=PiyWDdl&sid=1K80lRTbyg39UWaIAAAA HTTP/1.1" 200 -
+2025-12-20 17:03:56,213 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:04:04,847 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:04:04,937 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:04:04,992 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:04:29,164 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 17:04:29,245 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:04:31,175 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:04:31,212 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:04:31,217 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:04:31,804 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:04:31] "GET /socket.io/?EIO=4&transport=polling&t=PiyWM5m HTTP/1.1" 200 -
+2025-12-20 17:04:31,829 - __main__ - INFO - Cliente conectado
+2025-12-20 17:04:31,830 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:04:31] "POST /socket.io/?EIO=4&transport=polling&t=PiyWMNA&sid=m92R_qiPLdVDBUu5AAAA HTTP/1.1" 200 -
+2025-12-20 17:04:31,850 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:04:31] "GET /socket.io/?EIO=4&transport=polling&t=PiyWMNJ&sid=m92R_qiPLdVDBUu5AAAA HTTP/1.1" 200 -
+2025-12-20 17:04:31,902 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:04:31] "GET /socket.io/?EIO=4&transport=polling&t=PiyWMO5&sid=m92R_qiPLdVDBUu5AAAA HTTP/1.1" 200 -
+2025-12-20 17:04:32,175 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 17:04:32,638 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:04:36,805 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 17:04:36,890 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:04:38,337 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:04:38,345 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:04:38,349 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:04:38,828 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:04:38] "GET /socket.io/?EIO=4&transport=polling&t=PiyWO2j HTTP/1.1" 200 -
+2025-12-20 17:04:38,901 - __main__ - INFO - Cliente conectado
+2025-12-20 17:04:38,910 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:04:38] "POST /socket.io/?EIO=4&transport=polling&t=PiyWO54&sid=ptlUQDxwFgKDMFUwAAAA HTTP/1.1" 200 -
+2025-12-20 17:04:38,916 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:04:38] "GET /socket.io/?EIO=4&transport=polling&t=PiyWO5S&sid=ptlUQDxwFgKDMFUwAAAA HTTP/1.1" 200 -
+2025-12-20 17:04:40,962 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:04:41,025 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:04:41,072 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:04:44,071 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 17:04:44,165 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:04:45,841 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:04:45,850 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:04:45,857 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:04:46,474 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:04:46] "GET /socket.io/?EIO=4&transport=polling&t=PiyWPmH HTTP/1.1" 200 -
+2025-12-20 17:04:46,501 - __main__ - INFO - Cliente conectado
+2025-12-20 17:04:46,502 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:04:46] "POST /socket.io/?EIO=4&transport=polling&t=PiyWPyK&sid=J30MelDTTIbNPQwhAAAA HTTP/1.1" 200 -
+2025-12-20 17:04:46,522 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:04:46] "GET /socket.io/?EIO=4&transport=polling&t=PiyWPyW&sid=J30MelDTTIbNPQwhAAAA HTTP/1.1" 200 -
+2025-12-20 17:05:31,026 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 17:05:31,125 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:05:32,181 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 17:05:32,421 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:05:32,429 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:05:32,433 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:05:32,658 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:05:32,807 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:05:32] "GET /socket.io/?EIO=4&transport=polling&t=PiyWbES HTTP/1.1" 200 -
+2025-12-20 17:05:32,855 - __main__ - INFO - Cliente conectado
+2025-12-20 17:05:32,856 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:05:32] "POST /socket.io/?EIO=4&transport=polling&t=PiyWbGI&sid=iiuj860Hve7LRiO6AAAA HTTP/1.1" 200 -
+2025-12-20 17:05:32,882 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:05:32] "GET /socket.io/?EIO=4&transport=polling&t=PiyWbGr&sid=iiuj860Hve7LRiO6AAAA HTTP/1.1" 200 -
+2025-12-20 17:05:37,824 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:05:37,886 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:05:37,900 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:06:01,223 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 17:06:01,644 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:06:01,814 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 17:06:01,995 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:06:03,784 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:06:03,795 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:06:03,802 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:06:04,183 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:06:04] "GET /socket.io/?EIO=4&transport=polling&t=PiyWiou HTTP/1.1" 200 -
+2025-12-20 17:06:04,198 - __main__ - INFO - Cliente conectado
+2025-12-20 17:06:04,198 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:06:04] "POST /socket.io/?EIO=4&transport=polling&t=PiyWiwV&sid=6Hhm-qTKrjU2cGktAAAA HTTP/1.1" 200 -
+2025-12-20 17:06:04,215 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:06:04] "GET /socket.io/?EIO=4&transport=polling&t=PiyWiwh&sid=6Hhm-qTKrjU2cGktAAAA HTTP/1.1" 200 -
+2025-12-20 17:06:10,123 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:06:10,209 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:06:10,263 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:06:31,197 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\scanner.py', reloading
+2025-12-20 17:06:31,335 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:06:32,345 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-20 17:06:32,404 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:06:32,411 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:06:32,415 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:06:32,482 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:06:32,724 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:06:32] "GET /socket.io/?EIO=4&transport=polling&t=PiyWpu2 HTTP/1.1" 200 -
+2025-12-20 17:06:32,748 - __main__ - INFO - Cliente conectado
+2025-12-20 17:06:32,749 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:06:32] "POST /socket.io/?EIO=4&transport=polling&t=PiyWpuY&sid=fHIwgwtX8sD-TxMLAAAA HTTP/1.1" 200 -
+2025-12-20 17:06:32,768 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:06:32] "GET /socket.io/?EIO=4&transport=polling&t=PiyWpuf&sid=fHIwgwtX8sD-TxMLAAAA HTTP/1.1" 200 -
+2025-12-20 17:06:38,918 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:06:38,955 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:06:38,987 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:07:08,890 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:07:08,911 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-20 17:07:08,911 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-20 17:07:08,912 - werkzeug - INFO -  * Restarting with stat
+2025-12-20 17:07:09,877 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-20 17:07:09,886 - werkzeug - WARNING -  * Debugger is active!
+2025-12-20 17:07:09,890 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-20 17:07:15,875 - __main__ - INFO - Cliente desconectado
+2025-12-20 17:07:15,876 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:15] "GET /socket.io/?EIO=4&transport=websocket&sid=fHIwgwtX8sD-TxMLAAAA HTTP/1.1" 200 -
+2025-12-20 17:07:15,945 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:15] "GET /reconocimiento/scan HTTP/1.1" 200 -
+2025-12-20 17:07:16,689 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:16] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 17:07:16,725 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:16] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 17:07:16,843 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:16] "GET /socket.io/?EIO=4&transport=polling&t=PiyW-eo HTTP/1.1" 200 -
+2025-12-20 17:07:16,862 - __main__ - INFO - Cliente conectado
+2025-12-20 17:07:16,866 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:16] "POST /socket.io/?EIO=4&transport=polling&t=PiyW-fr&sid=tZS-0l4ilnr-mIk6AAAC HTTP/1.1" 200 -
+2025-12-20 17:07:16,874 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:16] "GET /socket.io/?EIO=4&transport=polling&t=PiyW-fu&sid=tZS-0l4ilnr-mIk6AAAC HTTP/1.1" 200 -
+2025-12-20 17:07:19,242 - __main__ - INFO - Cliente desconectado
+2025-12-20 17:07:19,245 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:19] "GET /socket.io/?EIO=4&transport=websocket&sid=tZS-0l4ilnr-mIk6AAAC HTTP/1.1" 200 -
+2025-12-20 17:07:19,349 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:19] "GET /reconocimiento/evidence HTTP/1.1" 200 -
+2025-12-20 17:07:19,522 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:19] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 17:07:19,549 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:19] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 17:07:19,619 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:19] "GET /api/evidence HTTP/1.1" 200 -
+2025-12-20 17:07:21,390 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:21] "GET /reconocimiento/results HTTP/1.1" 200 -
+2025-12-20 17:07:21,635 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:21] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 17:07:21,648 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:21] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 17:07:21,765 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:21] "GET /api/results HTTP/1.1" 200 -
+2025-12-20 17:07:23,260 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:23] "GET /reconocimiento/scan HTTP/1.1" 200 -
+2025-12-20 17:07:23,346 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:23] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-20 17:07:23,359 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:23] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-20 17:07:23,382 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:23] "GET /socket.io/?EIO=4&transport=polling&t=PiyX0Ff HTTP/1.1" 200 -
+2025-12-20 17:07:23,400 - __main__ - INFO - Cliente conectado
+2025-12-20 17:07:23,402 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:23] "POST /socket.io/?EIO=4&transport=polling&t=PiyX0G0&sid=Jp8ibPzJzhKDPNbjAAAE HTTP/1.1" 200 -
+2025-12-20 17:07:23,410 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:07:23] "GET /socket.io/?EIO=4&transport=polling&t=PiyX0G1&sid=Jp8ibPzJzhKDPNbjAAAE HTTP/1.1" 200 -
+2025-12-20 17:08:12,754 - __main__ - INFO - Cliente desconectado
+2025-12-20 17:08:12,754 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:08:12] "GET /socket.io/?EIO=4&transport=websocket&sid=Jp8ibPzJzhKDPNbjAAAE HTTP/1.1" 200 -
+2025-12-20 17:08:14,710 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:08:14] "GET /socket.io/?EIO=4&transport=polling&t=PiyXCnq HTTP/1.1" 200 -
+2025-12-20 17:08:14,714 - __main__ - INFO - Cliente conectado
+2025-12-20 17:08:14,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:08:14] "POST /socket.io/?EIO=4&transport=polling&t=PiyXCnu&sid=7IwrSOe1QQx1jFsnAAAG HTTP/1.1" 200 -
+2025-12-20 17:08:14,716 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:08:14] "GET /socket.io/?EIO=4&transport=polling&t=PiyXCnv&sid=7IwrSOe1QQx1jFsnAAAG HTTP/1.1" 200 -
+2025-12-20 17:16:05,680 - __main__ - INFO - Cliente desconectado
+2025-12-20 17:16:05,680 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:16:05] "GET /socket.io/?EIO=4&transport=websocket&sid=7IwrSOe1QQx1jFsnAAAG HTTP/1.1" 200 -
+2025-12-20 17:16:07,714 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:16:07] "GET /socket.io/?EIO=4&transport=polling&t=PiyZ0GV HTTP/1.1" 200 -
+2025-12-20 17:16:07,717 - __main__ - INFO - Cliente conectado
+2025-12-20 17:16:07,718 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:16:07] "POST /socket.io/?EIO=4&transport=polling&t=PiyZ0Ga&sid=8Ke2bnDqApJg6xu4AAAI HTTP/1.1" 200 -
+2025-12-20 17:16:07,720 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:16:07] "GET /socket.io/?EIO=4&transport=polling&t=PiyZ0Ga.0&sid=8Ke2bnDqApJg6xu4AAAI HTTP/1.1" 200 -
+2025-12-20 17:16:07,830 - __main__ - INFO - Cliente desconectado
+2025-12-20 17:16:07,830 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:16:07] "GET /socket.io/?EIO=4&transport=websocket&sid=8Ke2bnDqApJg6xu4AAAI HTTP/1.1" 200 -
+2025-12-20 17:16:09,699 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:16:09] "GET /socket.io/?EIO=4&transport=polling&t=PiyZ0lX HTTP/1.1" 200 -
+2025-12-20 17:16:09,704 - __main__ - INFO - Cliente conectado
+2025-12-20 17:16:09,704 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:16:09] "POST /socket.io/?EIO=4&transport=polling&t=PiyZ0lc&sid=OT-JdVx4wlb4F9uHAAAK HTTP/1.1" 200 -
+2025-12-20 17:16:09,708 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:16:09] "GET /socket.io/?EIO=4&transport=polling&t=PiyZ0ld&sid=OT-JdVx4wlb4F9uHAAAK HTTP/1.1" 200 -
+2025-12-20 17:17:16,199 - __main__ - INFO - Cliente desconectado
+2025-12-20 17:17:16,199 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:17:16] "GET /socket.io/?EIO=4&transport=websocket&sid=OT-JdVx4wlb4F9uHAAAK HTTP/1.1" 200 -
+2025-12-20 17:56:59,370 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:56:59] "GET /socket.io/?EIO=4&transport=polling&t=PiyiMQB HTTP/1.1" 200 -
+2025-12-20 17:56:59,400 - __main__ - INFO - Cliente conectado
+2025-12-20 17:56:59,400 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:56:59] "POST /socket.io/?EIO=4&transport=polling&t=PiyiMq4&sid=AZQCDFuo-VyQNHlAAAAM HTTP/1.1" 200 -
+2025-12-20 17:56:59,405 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:56:59] "GET /socket.io/?EIO=4&transport=polling&t=PiyiMq5&sid=AZQCDFuo-VyQNHlAAAAM HTTP/1.1" 200 -
+2025-12-20 17:56:59,711 - __main__ - INFO - Cliente desconectado
+2025-12-20 17:56:59,711 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 17:56:59] "GET /socket.io/?EIO=4&transport=websocket&sid=AZQCDFuo-VyQNHlAAAAM HTTP/1.1" 200 -
+2025-12-20 18:25:10,598 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 18:25:10] "GET /socket.io/?EIO=4&transport=polling&t=PiyopKw HTTP/1.1" 200 -
+2025-12-20 18:25:10,612 - __main__ - INFO - Cliente conectado
+2025-12-20 18:25:10,612 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 18:25:10] "POST /socket.io/?EIO=4&transport=polling&t=PiyopjB&sid=BacWygQ4eat_JFpVAAAO HTTP/1.1" 200 -
+2025-12-20 18:25:10,615 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 18:25:10] "GET /socket.io/?EIO=4&transport=polling&t=PiyopjC&sid=BacWygQ4eat_JFpVAAAO HTTP/1.1" 200 -
+2025-12-20 18:25:10,635 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 18:25:10] "GET /socket.io/?EIO=4&transport=polling&t=PiyopjS&sid=BacWygQ4eat_JFpVAAAO HTTP/1.1" 200 -
+2025-12-20 18:25:15,355 - __main__ - INFO - Cliente desconectado
+2025-12-20 18:25:15,355 - werkzeug - INFO - 127.0.0.1 - - [20/Dec/2025 18:25:15] "GET /socket.io/?EIO=4&transport=websocket&sid=BacWygQ4eat_JFpVAAAO HTTP/1.1" 200 -
+2025-12-21 00:15:04,269 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:15:04] "GET /socket.io/?EIO=4&transport=polling&t=Pi-2ucu HTTP/1.1" 200 -
+2025-12-21 00:15:04,410 - __main__ - INFO - Cliente conectado
+2025-12-21 00:15:04,411 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:15:04] "POST /socket.io/?EIO=4&transport=polling&t=Pi-2v9O&sid=_XrX-tbvR69i1g0XAAAQ HTTP/1.1" 200 -
+2025-12-21 00:15:04,529 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:15:04] "GET /socket.io/?EIO=4&transport=polling&t=Pi-2v9O.0&sid=_XrX-tbvR69i1g0XAAAQ HTTP/1.1" 200 -
+2025-12-21 00:15:58,134 - __main__ - INFO - Cliente desconectado
+2025-12-21 00:15:58,134 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:15:58] "GET /socket.io/?EIO=4&transport=websocket&sid=_XrX-tbvR69i1g0XAAAQ HTTP/1.1" 200 -
+2025-12-21 00:15:59,956 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:15:59] "GET /socket.io/?EIO=4&transport=polling&t=Pi-36A6 HTTP/1.1" 200 -
+2025-12-21 00:15:59,963 - __main__ - INFO - Cliente conectado
+2025-12-21 00:15:59,964 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:15:59] "POST /socket.io/?EIO=4&transport=polling&t=Pi-36AC&sid=2bdnqxnGRQxD0YfBAAAS HTTP/1.1" 200 -
+2025-12-21 00:15:59,965 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:15:59] "GET /socket.io/?EIO=4&transport=polling&t=Pi-36AD&sid=2bdnqxnGRQxD0YfBAAAS HTTP/1.1" 200 -
+2025-12-21 00:17:06,826 - __main__ - INFO - Cliente desconectado
+2025-12-21 00:17:06,826 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:17:06] "GET /socket.io/?EIO=4&transport=websocket&sid=2bdnqxnGRQxD0YfBAAAS HTTP/1.1" 200 -
+2025-12-21 00:17:07,950 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:17:07] "GET /socket.io/?EIO=4&transport=polling&t=Pi-3NJh HTTP/1.1" 200 -
+2025-12-21 00:17:07,958 - __main__ - INFO - Cliente conectado
+2025-12-21 00:17:07,958 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:17:07] "POST /socket.io/?EIO=4&transport=polling&t=Pi-3NJn&sid=CLSNkLlSifj5nLk_AAAU HTTP/1.1" 200 -
+2025-12-21 00:17:07,959 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:17:07] "GET /socket.io/?EIO=4&transport=polling&t=Pi-3NJo&sid=CLSNkLlSifj5nLk_AAAU HTTP/1.1" 200 -
+2025-12-21 00:17:07,964 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:17:07] "GET /socket.io/?EIO=4&transport=polling&t=Pi-3NJv&sid=CLSNkLlSifj5nLk_AAAU HTTP/1.1" 200 -
+2025-12-21 00:18:14,027 - __main__ - INFO - Cliente desconectado
+2025-12-21 00:18:14,027 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 00:18:14] "GET /socket.io/?EIO=4&transport=websocket&sid=CLSNkLlSifj5nLk_AAAU HTTP/1.1" 200 -
+2025-12-21 01:15:31,657 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:15:31] "GET /socket.io/?EIO=4&transport=polling&t=Pi-GkQY HTTP/1.1" 200 -
+2025-12-21 01:15:31,676 - __main__ - INFO - Cliente conectado
+2025-12-21 01:15:31,676 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:15:31] "POST /socket.io/?EIO=4&transport=polling&t=Pi-GkjJ&sid=m2_K3tCDDCfz_GRVAAAW HTTP/1.1" 200 -
+2025-12-21 01:15:31,683 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:15:31] "GET /socket.io/?EIO=4&transport=polling&t=Pi-GkjM&sid=m2_K3tCDDCfz_GRVAAAW HTTP/1.1" 200 -
+2025-12-21 01:15:35,365 - __main__ - INFO - Cliente desconectado
+2025-12-21 01:15:35,365 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:15:35] "GET /socket.io/?EIO=4&transport=websocket&sid=m2_K3tCDDCfz_GRVAAAW HTTP/1.1" 200 -
+2025-12-21 01:16:05,546 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:16:05] "GET /socket.io/?EIO=4&transport=polling&t=Pi-GshC HTTP/1.1" 200 -
+2025-12-21 01:16:05,736 - __main__ - INFO - Cliente conectado
+2025-12-21 01:16:05,736 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:16:05] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Gs_C&sid=9MCtsqFjJEsdoeKDAAAY HTTP/1.1" 200 -
+2025-12-21 01:16:05,736 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:16:05] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Gs_E&sid=9MCtsqFjJEsdoeKDAAAY HTTP/1.1" 200 -
+2025-12-21 01:16:08,837 - __main__ - INFO - Cliente desconectado
+2025-12-21 01:16:08,837 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:16:08] "GET /socket.io/?EIO=4&transport=websocket&sid=9MCtsqFjJEsdoeKDAAAY HTTP/1.1" 200 -
+2025-12-21 01:16:29,821 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:16:29] "GET /socket.io/?EIO=4&transport=polling&t=Pi-GyTO HTTP/1.1" 200 -
+2025-12-21 01:16:29,830 - __main__ - INFO - Cliente conectado
+2025-12-21 01:16:29,831 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:16:29] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Gyw1&sid=2d_1MINr5qPDK6Q1AAAa HTTP/1.1" 200 -
+2025-12-21 01:16:29,836 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:16:29] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Gyw1.0&sid=2d_1MINr5qPDK6Q1AAAa HTTP/1.1" 200 -
+2025-12-21 01:17:32,219 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:17:32,579 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-21 01:17:32,580 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-21 01:17:32,581 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:17:33,192 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:17:33,199 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:17:33,202 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:18:25,590 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:18:25] "GET / HTTP/1.1" 200 -
+2025-12-21 01:18:25,769 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:18:25] "GET /static/css/style.css HTTP/1.1" 200 -
+2025-12-21 01:18:25,782 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:18:25] "GET /static/js/main.js HTTP/1.1" 200 -
+2025-12-21 01:21:48,018 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:21:48,079 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:21:48,388 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:21:48,446 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:21:48,885 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:21:48,893 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:21:48,896 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:21:49,222 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:21:49] "GET /socket.io/?EIO=4&transport=polling&t=Pi-IAqW HTTP/1.1" 200 -
+2025-12-21 01:21:49,231 - __main__ - INFO - Cliente conectado
+2025-12-21 01:21:49,232 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:21:49] "POST /socket.io/?EIO=4&transport=polling&t=Pi-IAuf&sid=llhJ9yk9BN_8omBaAAAA HTTP/1.1" 200 -
+2025-12-21 01:21:49,236 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:21:49] "GET /socket.io/?EIO=4&transport=polling&t=Pi-IAug&sid=llhJ9yk9BN_8omBaAAAA HTTP/1.1" 200 -
+2025-12-21 01:21:49,281 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:21:49,291 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:21:49,296 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:23:44,202 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:23:44,312 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:23:44,445 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:23:44,527 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:23:45,135 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:23:45,141 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:23:45,144 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:23:45,286 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:23:45,291 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:23:45,294 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:23:45,953 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:23:45] "GET /socket.io/?EIO=4&transport=polling&t=Pi-IdOU HTTP/1.1" 200 -
+2025-12-21 01:23:45,962 - __main__ - INFO - Cliente conectado
+2025-12-21 01:23:45,962 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:23:45] "POST /socket.io/?EIO=4&transport=polling&t=Pi-IdOa&sid=YucaWfzaQ8IXxSYoAAAA HTTP/1.1" 200 -
+2025-12-21 01:23:45,966 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:23:45] "GET /socket.io/?EIO=4&transport=polling&t=Pi-IdOb&sid=YucaWfzaQ8IXxSYoAAAA HTTP/1.1" 200 -
+2025-12-21 01:26:12,302 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\simulators\\modbus_simulator.py', reloading
+2025-12-21 01:26:12,355 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:26:12,679 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\simulators\\modbus_simulator.py', reloading
+2025-12-21 01:26:12,759 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:26:13,373 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:26:13,381 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:26:13,386 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:26:13,736 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:26:13] "GET /socket.io/?EIO=4&transport=polling&t=Pi-JBHJ HTTP/1.1" 200 -
+2025-12-21 01:26:13,746 - __main__ - INFO - Cliente conectado
+2025-12-21 01:26:13,747 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:26:13] "POST /socket.io/?EIO=4&transport=polling&t=Pi-JBTj&sid=l-ft9ICfRw5JpzeGAAAA HTTP/1.1" 200 -
+2025-12-21 01:26:13,750 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:26:13] "GET /socket.io/?EIO=4&transport=polling&t=Pi-JBTj.0&sid=l-ft9ICfRw5JpzeGAAAA HTTP/1.1" 200 -
+2025-12-21 01:26:13,796 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:26:13,806 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:26:13,810 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:28:09,581 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:28:09,641 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:28:10,485 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:28:10,556 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:33:12,460 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:33:12,461 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:33:12,461 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:33:12,461 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:33:12,487 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-21 01:33:12,488 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-21 01:33:12,488 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:33:13,413 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:33:13,413 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:33:13,413 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:33:13,413 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:33:13,419 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:33:13,422 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:33:13,743 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:13] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Knpq HTTP/1.1" 200 -
+2025-12-21 01:33:13,754 - __main__ - INFO - Cliente conectado
+2025-12-21 01:33:13,756 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:13] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Ko0J&sid=gCOel_574zyI-K3cAAAA HTTP/1.1" 200 -
+2025-12-21 01:33:13,759 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:13] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Ko0J.0&sid=gCOel_574zyI-K3cAAAA HTTP/1.1" 200 -
+2025-12-21 01:33:22,145 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:22] "GET / HTTP/1.1" 200 -
+2025-12-21 01:33:22,296 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:22] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:33:22,302 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:22] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:33:26,925 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:26] "[33mGET /simulacion HTTP/1.1[0m" 404 -
+2025-12-21 01:33:35,849 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:33:35,907 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:33:36,790 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:33:36,790 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:33:36,791 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:33:36,791 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:33:36,797 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:33:36,801 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:33:37,060 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:37] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Ktgp HTTP/1.1" 200 -
+2025-12-21 01:33:37,067 - __main__ - INFO - Cliente conectado
+2025-12-21 01:33:37,068 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:37] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Ktie&sid=VTFwPI6z3Cr8Wb2xAAAA HTTP/1.1" 200 -
+2025-12-21 01:33:37,070 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:37] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Ktif&sid=VTFwPI6z3Cr8Wb2xAAAA HTTP/1.1" 200 -
+2025-12-21 01:33:37,304 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:37] "GET / HTTP/1.1" 200 -
+2025-12-21 01:33:37,433 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:37] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:33:37,437 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:37] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:33:40,607 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:40] "GET /pentesting HTTP/1.1" 200 -
+2025-12-21 01:33:40,621 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:40] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:33:40,624 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:40] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:33:40,634 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:40] "GET /api/stats HTTP/1.1" 200 -
+2025-12-21 01:33:56,229 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:56] "GET / HTTP/1.1" 200 -
+2025-12-21 01:33:56,248 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:56] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:33:56,249 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:56] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:33:57,425 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:57] "GET /pentesting HTTP/1.1" 200 -
+2025-12-21 01:33:57,434 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:57] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:33:57,436 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:57] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:33:57,448 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:57] "GET /api/stats HTTP/1.1" 200 -
+2025-12-21 01:33:58,934 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:58] "GET / HTTP/1.1" 200 -
+2025-12-21 01:33:58,947 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:58] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:33:58,948 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:33:58] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:34:03,998 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:34:03] "[33mGET /simulacion HTTP/1.1[0m" 404 -
+2025-12-21 01:35:20,250 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:35:20,339 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:35:21,105 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:35:21,106 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:35:21,106 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:35:21,106 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:35:21,111 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:35:21,116 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:35:21,954 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:21] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LHJT HTTP/1.1" 200 -
+2025-12-21 01:35:21,962 - __main__ - INFO - Cliente conectado
+2025-12-21 01:35:21,966 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:21] "POST /socket.io/?EIO=4&transport=polling&t=Pi-LHJb&sid=JYbQHollUB1lUq0JAAAA HTTP/1.1" 200 -
+2025-12-21 01:35:21,968 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:21] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LHJd&sid=JYbQHollUB1lUq0JAAAA HTTP/1.1" 200 -
+2025-12-21 01:35:40,464 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:35:40,542 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:35:41,299 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:35:41,299 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:35:41,299 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:35:41,300 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:35:41,306 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:35:41,310 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:35:41,961 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:41] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LMC3 HTTP/1.1" 200 -
+2025-12-21 01:35:41,965 - __main__ - INFO - Cliente conectado
+2025-12-21 01:35:41,966 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:41] "POST /socket.io/?EIO=4&transport=polling&t=Pi-LMCB&sid=cjpmUca1LW-7B6jNAAAA HTTP/1.1" 200 -
+2025-12-21 01:35:41,968 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:41] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LMCB.0&sid=cjpmUca1LW-7B6jNAAAA HTTP/1.1" 200 -
+2025-12-21 01:35:50,520 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:35:50,598 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:35:51,332 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:35:51,333 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:35:51,333 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:35:51,333 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:35:51,338 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:35:51,341 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:35:51,954 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:51] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LOeD HTTP/1.1" 200 -
+2025-12-21 01:35:51,961 - __main__ - INFO - Cliente conectado
+2025-12-21 01:35:51,962 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:51] "POST /socket.io/?EIO=4&transport=polling&t=Pi-LOeM&sid=iqGYJOohF_v9ZURFAAAA HTTP/1.1" 200 -
+2025-12-21 01:35:51,965 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:51] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LOeM.0&sid=iqGYJOohF_v9ZURFAAAA HTTP/1.1" 200 -
+2025-12-21 01:35:58,019 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:35:58,019 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:35:58,020 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:35:58,020 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:35:58,044 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-21 01:35:58,044 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-21 01:35:58,044 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:35:58,746 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:35:58,747 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:35:58,747 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:35:58,747 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:35:58,751 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:35:58,754 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:35:59,012 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:59] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LPsN HTTP/1.1" 200 -
+2025-12-21 01:35:59,017 - __main__ - INFO - Cliente conectado
+2025-12-21 01:35:59,017 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:59] "POST /socket.io/?EIO=4&transport=polling&t=Pi-LQMc&sid=bW2XSVWPGwCHM_EvAAAA HTTP/1.1" 200 -
+2025-12-21 01:35:59,020 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:35:59] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LQMd&sid=bW2XSVWPGwCHM_EvAAAA HTTP/1.1" 200 -
+2025-12-21 01:36:00,900 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:00] "GET / HTTP/1.1" 200 -
+2025-12-21 01:36:01,052 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:01] "GET /static/css/style.css HTTP/1.1" 200 -
+2025-12-21 01:36:01,053 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:01] "GET /static/js/main.js HTTP/1.1" 200 -
+2025-12-21 01:36:03,601 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:03] "GET / HTTP/1.1" 200 -
+2025-12-21 01:36:03,619 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:03] "GET /static/css/style.css HTTP/1.1" 200 -
+2025-12-21 01:36:03,619 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:03] "GET /static/js/main.js HTTP/1.1" 200 -
+2025-12-21 01:36:04,947 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:04] "[33mGET /simulacion HTTP/1.1[0m" 404 -
+2025-12-21 01:36:24,286 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:24] "GET /pentesting HTTP/1.1" 200 -
+2025-12-21 01:36:24,295 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:24] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:36:24,296 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:24] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:36:24,314 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:24] "GET /api/stats HTTP/1.1" 200 -
+2025-12-21 01:36:58,244 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:36:58,314 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:36:59,260 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:36:59,260 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:36:59,260 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:36:59,260 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:36:59,268 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:36:59,271 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:36:59,959 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:59] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LfEp HTTP/1.1" 200 -
+2025-12-21 01:36:59,971 - __main__ - INFO - Cliente conectado
+2025-12-21 01:36:59,973 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:59] "POST /socket.io/?EIO=4&transport=polling&t=Pi-LfEx&sid=iwemHOtWikIg2lO7AAAA HTTP/1.1" 200 -
+2025-12-21 01:36:59,974 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:36:59] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LfEx.0&sid=iwemHOtWikIg2lO7AAAA HTTP/1.1" 200 -
+2025-12-21 01:37:08,457 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:37:08,526 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:37:09,261 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:37:09,262 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:37:09,262 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:37:09,262 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:37:09,270 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:37:09,273 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:37:09,956 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:09] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Lhg_ HTTP/1.1" 200 -
+2025-12-21 01:37:09,961 - __main__ - INFO - Cliente conectado
+2025-12-21 01:37:09,962 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:09] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Lhh7&sid=HS_GabkJ0mrsv9tSAAAA HTTP/1.1" 200 -
+2025-12-21 01:37:09,964 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:09] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Lhh7.0&sid=HS_GabkJ0mrsv9tSAAAA HTTP/1.1" 200 -
+2025-12-21 01:37:22,289 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:37:22,375 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:37:23,253 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:37:23,253 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:37:23,253 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:37:23,254 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:37:23,263 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:37:23,266 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:37:23,948 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:23] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Ll5f HTTP/1.1" 200 -
+2025-12-21 01:37:23,954 - __main__ - INFO - Cliente conectado
+2025-12-21 01:37:23,955 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:23] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Ll5k&sid=geBRkWAbSB7vDhWpAAAA HTTP/1.1" 200 -
+2025-12-21 01:37:23,955 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:23] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Ll5k.0&sid=geBRkWAbSB7vDhWpAAAA HTTP/1.1" 200 -
+2025-12-21 01:37:23,965 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:23] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Ll5v&sid=geBRkWAbSB7vDhWpAAAA HTTP/1.1" 200 -
+2025-12-21 01:37:36,388 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:37:36,458 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:37:37,092 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:37:37,092 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:37:37,092 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:37:37,092 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:37:37,096 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:37:37,098 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:37:37,953 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:37] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LoWR HTTP/1.1" 200 -
+2025-12-21 01:37:37,958 - __main__ - INFO - Cliente conectado
+2025-12-21 01:37:37,959 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:37] "POST /socket.io/?EIO=4&transport=polling&t=Pi-LoWZ&sid=_lC4elNca88MLcozAAAA HTTP/1.1" 200 -
+2025-12-21 01:37:37,961 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:37] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LoWa&sid=_lC4elNca88MLcozAAAA HTTP/1.1" 200 -
+2025-12-21 01:37:54,442 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:37:54,442 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:37:54,442 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:37:54,442 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:37:54,459 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-21 01:37:54,460 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-21 01:37:54,460 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:37:55,091 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:37:55,092 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:37:55,092 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:37:55,092 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:37:55,098 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:37:55,103 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:37:55,306 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:55] "GET /socket.io/?EIO=4&transport=polling&t=Pi-LsQW HTTP/1.1" 200 -
+2025-12-21 01:37:55,311 - __main__ - INFO - Cliente conectado
+2025-12-21 01:37:55,311 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:55] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Lslj&sid=iXYMwsDLkZEpfQE6AAAA HTTP/1.1" 200 -
+2025-12-21 01:37:55,315 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:37:55] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Lslk&sid=iXYMwsDLkZEpfQE6AAAA HTTP/1.1" 200 -
+2025-12-21 01:38:01,182 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:01] "GET / HTTP/1.1" 200 -
+2025-12-21 01:38:01,313 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:01] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:38:01,320 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:01] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:38:03,120 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:03] "GET /pentesting HTTP/1.1" 200 -
+2025-12-21 01:38:03,132 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:03] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:38:03,133 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:03] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:38:03,146 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:03] "GET /api/organizations HTTP/1.1" 200 -
+2025-12-21 01:38:13,015 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:13] "GET /api/stats HTTP/1.1" 200 -
+2025-12-21 01:38:13,029 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:13] "GET /api/scans HTTP/1.1" 200 -
+2025-12-21 01:38:35,740 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:35] "GET / HTTP/1.1" 200 -
+2025-12-21 01:38:35,759 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:35] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:38:35,760 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:35] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:38:37,561 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:37] "GET /simulacion HTTP/1.1" 200 -
+2025-12-21 01:38:37,575 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:37] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:38:37,576 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:37] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:38:37,589 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:37] "GET /socket.io/?EIO=4&transport=polling&t=Pi-M14H HTTP/1.1" 200 -
+2025-12-21 01:38:37,590 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:37] "GET /api/simulators/protocols HTTP/1.1" 200 -
+2025-12-21 01:38:37,600 - __main__ - INFO - Cliente conectado
+2025-12-21 01:38:37,603 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:37] "POST /socket.io/?EIO=4&transport=polling&t=Pi-M14Q&sid=2k2ryuuM89YTKfixAAAC HTTP/1.1" 200 -
+2025-12-21 01:38:37,605 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:37] "GET /socket.io/?EIO=4&transport=polling&t=Pi-M14S&sid=2k2ryuuM89YTKfixAAAC HTTP/1.1" 200 -
+2025-12-21 01:38:37,619 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:37] "GET /socket.io/?EIO=4&transport=polling&t=Pi-M14i&sid=2k2ryuuM89YTKfixAAAC HTTP/1.1" 200 -
+2025-12-21 01:38:37,621 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:37] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:38:37,625 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:37] "GET /api/simulators/protocols HTTP/1.1" 200 -
+2025-12-21 01:38:40,619 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:40] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:38:43,619 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:43] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:38:46,619 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:46] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:38:48,379 - simulators.manager - INFO - Simulador modbus_502 creado
+2025-12-21 01:38:48,380 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:48] "POST /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:38:48,386 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:48] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:38:49,624 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:49] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:38:52,633 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:52] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:38:53,290 - pymodbus.logging - INFO - Server listening.
+2025-12-21 01:38:53,800 - simulators.base - INFO - [Modbus] Servidor Modbus iniciado en puerto 502
+2025-12-21 01:38:53,801 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:53] "POST /api/simulators/modbus_502/start HTTP/1.1" 200 -
+2025-12-21 01:38:53,806 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:53] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:38:55,618 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:55] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:38:58,491 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:58] "GET /api/simulators/modbus_502/logs?limit=200 HTTP/1.1" 200 -
+2025-12-21 01:38:58,619 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:38:58] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:01,620 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:01] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:02,243 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:02] "GET /api/simulators/modbus_502/logs?limit=200 HTTP/1.1" 200 -
+2025-12-21 01:39:04,617 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:04] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:05,152 - simulators.base - ERROR - Error en callback de log: 'Request' object has no attribute 'namespace'
+2025-12-21 01:39:05,152 - simulators.base - INFO - [Modbus] Servidor Modbus detenido
+2025-12-21 01:39:05,152 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:05] "POST /api/simulators/modbus_502/stop HTTP/1.1" 200 -
+2025-12-21 01:39:05,158 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:05] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:07,787 - simulators.manager - INFO - Simulador modbus_502 eliminado
+2025-12-21 01:39:07,787 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:07] "DELETE /api/simulators/modbus_502 HTTP/1.1" 200 -
+2025-12-21 01:39:07,789 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:07] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:07,796 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:07] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:10,622 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:10] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:13,628 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:13] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:16,626 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:16] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:19,621 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:19] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:22,626 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:22] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:25,628 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:25] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:28,632 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:28] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:31,624 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:31] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:34,628 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:34] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:37,635 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:37] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:40,632 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:40] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:43,622 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:43] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:46,626 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:46] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:49,636 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:49] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:52,627 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:52] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:55,631 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:55] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:39:58,630 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:39:58] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:01,622 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:01] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:04,625 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:04] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:07,628 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:07] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:10,623 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:10] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:13,626 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:13] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:16,621 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:16] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:19,624 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:19] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:22,623 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:22] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:25,631 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:25] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:28,622 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:28] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:31,624 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:31] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:34,631 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:34] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:37,625 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:37] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:40,630 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:40] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:43,624 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:43] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:46,627 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:46] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:49,621 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:49] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:52,626 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:52] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:55,620 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:55] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:40:58,628 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:40:58] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:01,618 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:01] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:04,636 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:04] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:07,621 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:07] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:10,627 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:10] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:13,625 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:13] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:16,624 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:16] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:19,620 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:19] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:22,620 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:22] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:25,625 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:25] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:28,620 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:28] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:31,625 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:31] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:34,630 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:34] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:37,624 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:37] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:40,631 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:40] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:43,622 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:43] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:46,625 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:46] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:49,624 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:49] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:52,622 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:52] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:55,628 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:55] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:41:58,619 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:41:58] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:01,625 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:01] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:04,623 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:04] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:07,625 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:07] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:10,630 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:10] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:13,635 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:13] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:16,626 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:16] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:19,632 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:19] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:22,631 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:22] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:25,632 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:25] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:28,618 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:28] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:32,248 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:42:32,248 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:42:32,248 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:42:32,248 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:42:32,264 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-21 01:42:32,265 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-21 01:42:32,265 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:42:32,894 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:42:32,895 - __main__ - ERROR - Error iniciando Neo4j: name 'subprocess' is not defined
+2025-12-21 01:42:32,895 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:42:32,895 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:42:32,900 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:42:32,903 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:42:33,201 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:33] "GET /socket.io/?EIO=4&transport=polling&t=Pi-MwBM HTTP/1.1" 200 -
+2025-12-21 01:42:33,201 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:33] "GET /socket.io/?EIO=4&transport=polling&t=Pi-MwIE HTTP/1.1" 200 -
+2025-12-21 01:42:33,203 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:33] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:33,207 - __main__ - INFO - Cliente conectado
+2025-12-21 01:42:33,212 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:33] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Mwbr&sid=Id4ASB-Xi0lRg8-NAAAA HTTP/1.1" 200 -
+2025-12-21 01:42:33,214 - __main__ - INFO - Cliente conectado
+2025-12-21 01:42:33,216 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:33] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Mwbv&sid=eAvUnpb2KCG_pDVXAAAB HTTP/1.1" 200 -
+2025-12-21 01:42:33,220 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:33] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Mwbs&sid=Id4ASB-Xi0lRg8-NAAAA HTTP/1.1" 200 -
+2025-12-21 01:42:33,230 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:33] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Mwbw&sid=eAvUnpb2KCG_pDVXAAAB HTTP/1.1" 200 -
+2025-12-21 01:42:33,232 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:33] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Mwc8&sid=Id4ASB-Xi0lRg8-NAAAA HTTP/1.1" 200 -
+2025-12-21 01:42:33,244 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:33] "GET /api/simulators/protocols HTTP/1.1" 200 -
+2025-12-21 01:42:33,247 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:33] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:34,630 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:34] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:36,252 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:36] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:42:37,587 - __main__ - INFO - Cliente desconectado
+2025-12-21 01:42:37,587 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:37] "GET /socket.io/?EIO=4&transport=websocket&sid=Id4ASB-Xi0lRg8-NAAAA HTTP/1.1" 200 -
+2025-12-21 01:42:37,600 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:37] "GET / HTTP/1.1" 200 -
+2025-12-21 01:42:37,746 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:37] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:42:37,749 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:37] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:42:39,654 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:39] "GET /pentesting HTTP/1.1" 200 -
+2025-12-21 01:42:39,664 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:39] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:42:39,665 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:39] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:42:39,679 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:42:39] "GET /api/organizations HTTP/1.1" 200 -
+2025-12-21 01:43:51,524 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:51] "GET / HTTP/1.1" 200 -
+2025-12-21 01:43:51,535 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:51] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:43:51,536 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:51] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:43:53,050 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:53] "GET /simulacion HTTP/1.1" 200 -
+2025-12-21 01:43:53,062 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:53] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:43:53,065 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:53] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:43:53,078 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:53] "GET /socket.io/?EIO=4&transport=polling&t=Pi-NE5m HTTP/1.1" 200 -
+2025-12-21 01:43:53,079 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:53] "GET /api/simulators/protocols HTTP/1.1" 200 -
+2025-12-21 01:43:53,088 - __main__ - INFO - Cliente conectado
+2025-12-21 01:43:53,090 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:53] "POST /socket.io/?EIO=4&transport=polling&t=Pi-NE5x&sid=da3jSV4W1wPuNvtSAAAE HTTP/1.1" 200 -
+2025-12-21 01:43:53,093 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:53] "GET /socket.io/?EIO=4&transport=polling&t=Pi-NE5y&sid=da3jSV4W1wPuNvtSAAAE HTTP/1.1" 200 -
+2025-12-21 01:43:53,111 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:53] "GET /api/simulators/protocols HTTP/1.1" 200 -
+2025-12-21 01:43:53,113 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:53] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:43:55,919 - simulators.manager - INFO - Simulador modbus_502 creado
+2025-12-21 01:43:55,920 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:55] "POST /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:43:55,925 - pymodbus.logging - INFO - Server listening.
+2025-12-21 01:43:56,117 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:56] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:43:56,440 - simulators.base - INFO - [Modbus] Servidor Modbus iniciado en puerto 502
+2025-12-21 01:43:56,441 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:56] "POST /api/simulators/modbus_502/start HTTP/1.1" 200 -
+2025-12-21 01:43:56,447 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:56] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:43:58,750 - simulators.manager - INFO - Simulador fins_9600 creado
+2025-12-21 01:43:58,751 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:58] "POST /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:43:58,756 - simulators.base - INFO - [FINS] Servidor FINS iniciado en puerto 9600
+2025-12-21 01:43:58,756 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:58] "POST /api/simulators/fins_9600/start HTTP/1.1" 200 -
+2025-12-21 01:43:58,760 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:58] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:43:59,125 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:43:59] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:00,407 - simulators.manager - INFO - Simulador dnp3_20000 creado
+2025-12-21 01:44:00,408 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:00] "POST /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:00,420 - simulators.base - INFO - [DNP3] Servidor DNP3 iniciado en puerto 20000
+2025-12-21 01:44:00,420 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:00] "POST /api/simulators/dnp3_20000/start HTTP/1.1" 200 -
+2025-12-21 01:44:00,425 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:00] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:02,119 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:02] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:02,750 - simulators.manager - ERROR - Puerto 502 ya está en uso
+2025-12-21 01:44:02,751 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:02] "[35m[1mPOST /api/simulators HTTP/1.1[0m" 500 -
+2025-12-21 01:44:05,117 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:05] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:06,791 - simulators.base - INFO - [DNP3] Servidor DNP3 detenido
+2025-12-21 01:44:06,792 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:06] "POST /api/simulators/dnp3_20000/stop HTTP/1.1" 200 -
+2025-12-21 01:44:06,798 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:06] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:08,108 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:08] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:09,966 - simulators.base - INFO - [Modbus] Servidor Modbus detenido
+2025-12-21 01:44:09,967 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:09] "POST /api/simulators/modbus_502/stop HTTP/1.1" 200 -
+2025-12-21 01:44:09,984 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:09] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:10,888 - simulators.base - INFO - [FINS] Servidor FINS detenido
+2025-12-21 01:44:10,888 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:10] "POST /api/simulators/fins_9600/stop HTTP/1.1" 200 -
+2025-12-21 01:44:10,898 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:10] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:11,117 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:11] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:15,210 - simulators.manager - INFO - Simulador fins_9600 eliminado
+2025-12-21 01:44:15,212 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:15] "DELETE /api/simulators/fins_9600 HTTP/1.1" 200 -
+2025-12-21 01:44:15,214 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:15] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:15,223 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:15] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:17,428 - simulators.manager - INFO - Simulador modbus_502 eliminado
+2025-12-21 01:44:17,429 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:17] "DELETE /api/simulators/modbus_502 HTTP/1.1" 200 -
+2025-12-21 01:44:17,436 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:17] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:17,438 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:17] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:19,822 - simulators.manager - INFO - Simulador dnp3_20000 eliminado
+2025-12-21 01:44:19,824 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:19] "DELETE /api/simulators/dnp3_20000 HTTP/1.1" 200 -
+2025-12-21 01:44:19,836 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:19] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:20,110 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:20] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:23,112 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:23] "GET /api/simulators HTTP/1.1" 200 -
+2025-12-21 01:44:24,839 - __main__ - INFO - Cliente desconectado
+2025-12-21 01:44:24,841 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:24] "GET /socket.io/?EIO=4&transport=websocket&sid=da3jSV4W1wPuNvtSAAAE HTTP/1.1" 200 -
+2025-12-21 01:44:24,845 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:24] "GET / HTTP/1.1" 200 -
+2025-12-21 01:44:24,857 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:24] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:44:24,859 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:24] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:44:26,404 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:26] "GET /pentesting HTTP/1.1" 200 -
+2025-12-21 01:44:26,416 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:26] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:44:26,418 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:26] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:44:26,428 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:26] "GET /api/organizations HTTP/1.1" 200 -
+2025-12-21 01:44:29,440 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:29] "GET /api/stats HTTP/1.1" 200 -
+2025-12-21 01:44:29,445 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:29] "GET /api/scans HTTP/1.1" 200 -
+2025-12-21 01:44:32,524 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:32] "GET /pentesting/CASA/reconocimiento HTTP/1.1" 200 -
+2025-12-21 01:44:32,540 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:32] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:44:32,544 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:32] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:44:36,682 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:36] "GET /pentesting/CASA/reconocimiento/results HTTP/1.1" 200 -
+2025-12-21 01:44:36,693 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:36] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:44:36,696 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:36] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:44:50,938 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:50] "GET /pentesting/CASA/reconocimiento/visualization HTTP/1.1" 200 -
+2025-12-21 01:44:50,950 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:50] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:44:50,951 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:50] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:44:51,726 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:51] "GET /api/neo4j/info HTTP/1.1" 200 -
+2025-12-21 01:44:51,729 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:51] "[35m[1mGET /api/neo4j/stats?org=CASA HTTP/1.1[0m" 503 -
+2025-12-21 01:44:51,730 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:44:51] "[35m[1mGET /api/neo4j/graph?org=CASA HTTP/1.1[0m" 503 -
+2025-12-21 01:45:09,090 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:09] "GET /pentesting/CASA/reconocimiento/evidence HTTP/1.1" 200 -
+2025-12-21 01:45:09,103 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:09] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:45:09,104 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:09] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:45:09,117 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:09] "GET /api/evidence HTTP/1.1" 200 -
+2025-12-21 01:45:14,948 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:14] "GET /pentesting/CASA/reconocimiento/results HTTP/1.1" 200 -
+2025-12-21 01:45:14,959 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:14] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:45:14,965 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:14] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:45:20,382 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:20] "GET /pentesting/CASA/reconocimiento/scan HTTP/1.1" 200 -
+2025-12-21 01:45:20,393 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:20] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:45:20,395 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:20] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:45:20,412 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:20] "GET /socket.io/?EIO=4&transport=polling&t=Pi-NZQJ HTTP/1.1" 200 -
+2025-12-21 01:45:20,420 - __main__ - INFO - Cliente conectado
+2025-12-21 01:45:20,421 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:20] "POST /socket.io/?EIO=4&transport=polling&t=Pi-NZQW&sid=y-8BCEQL4PNX1emXAAAG HTTP/1.1" 200 -
+2025-12-21 01:45:20,425 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:20] "GET /socket.io/?EIO=4&transport=polling&t=Pi-NZQW.0&sid=y-8BCEQL4PNX1emXAAAG HTTP/1.1" 200 -
+2025-12-21 01:45:21,876 - __main__ - INFO - Cliente desconectado
+2025-12-21 01:45:21,876 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:21] "GET /socket.io/?EIO=4&transport=websocket&sid=y-8BCEQL4PNX1emXAAAG HTTP/1.1" 200 -
+2025-12-21 01:45:21,880 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:21] "GET /pentesting/CASA/reconocimiento HTTP/1.1" 200 -
+2025-12-21 01:45:21,893 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:21] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:45:21,893 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:45:21] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:46:13,860 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:46:13,947 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:48:26,312 - core.database - INFO - Base de datos inicializada correctamente
+2025-12-21 01:48:26,324 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:48:26,326 - __main__ - WARNING - Docker no está instalado o no está en el PATH
+2025-12-21 01:48:26,326 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:48:26,326 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:48:26,345 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-21 01:48:26,346 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-21 01:48:26,347 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:48:27,040 - core.database - INFO - Base de datos inicializada correctamente
+2025-12-21 01:48:27,050 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:48:27,051 - __main__ - WARNING - Docker no está instalado o no está en el PATH
+2025-12-21 01:48:27,051 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:48:27,051 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:48:27,056 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:48:27,059 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:48:28,962 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:48:28] "GET /socket.io/?EIO=4&transport=polling&t=Pi-OHSU HTTP/1.1" 200 -
+2025-12-21 01:48:28,973 - __main__ - INFO - Cliente conectado
+2025-12-21 01:48:28,976 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:48:28] "POST /socket.io/?EIO=4&transport=polling&t=Pi-OHSb&sid=ebACDHttBrYG9cXiAAAA HTTP/1.1" 200 -
+2025-12-21 01:48:28,977 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:48:28] "GET /socket.io/?EIO=4&transport=polling&t=Pi-OHSb.0&sid=ebACDHttBrYG9cXiAAAA HTTP/1.1" 200 -
+2025-12-21 01:48:33,388 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:48:33] "GET / HTTP/1.1" 200 -
+2025-12-21 01:48:33,535 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:48:33] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:48:33,540 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:48:33] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:48:35,544 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:48:35] "GET /pentesting HTTP/1.1" 200 -
+2025-12-21 01:48:35,560 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:48:35] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:48:35,561 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:48:35] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:48:35,573 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:48:35] "GET /api/organizations HTTP/1.1" 200 -
+2025-12-21 01:49:53,733 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\database.py', reloading
+2025-12-21 01:49:53,829 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:49:54,666 - core.database - INFO - Base de datos inicializada correctamente
+2025-12-21 01:49:54,682 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:49:54,683 - __main__ - WARNING - Docker no está instalado o no está en el PATH
+2025-12-21 01:49:54,684 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:49:54,684 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:49:54,693 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:49:54,696 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:49:55,960 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:49:55] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Ochq HTTP/1.1" 200 -
+2025-12-21 01:49:55,971 - __main__ - INFO - Cliente conectado
+2025-12-21 01:49:55,973 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:49:55] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Ochy&sid=humV3ejAgXvuD5VqAAAA HTTP/1.1" 200 -
+2025-12-21 01:49:55,977 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:49:55] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Och-&sid=humV3ejAgXvuD5VqAAAA HTTP/1.1" 200 -
+2025-12-21 01:49:59,141 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\core\\database.py', reloading
+2025-12-21 01:49:59,217 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:49:59,961 - core.database - INFO - Base de datos inicializada correctamente
+2025-12-21 01:49:59,978 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:49:59,980 - __main__ - WARNING - Docker no está instalado o no está en el PATH
+2025-12-21 01:49:59,981 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:49:59,981 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:49:59,990 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:49:59,993 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:50:00,957 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:50:00] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Odvv HTTP/1.1" 200 -
+2025-12-21 01:50:00,962 - __main__ - INFO - Cliente conectado
+2025-12-21 01:50:00,962 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:50:00] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Odv_&sid=OTP5B4wqSMKcBsyyAAAA HTTP/1.1" 200 -
+2025-12-21 01:50:00,964 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:50:00] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Odw0&sid=OTP5B4wqSMKcBsyyAAAA HTTP/1.1" 200 -
+2025-12-21 01:50:20,373 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:50:20,437 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:52:06,225 - core.database - INFO - Base de datos inicializada correctamente
+2025-12-21 01:52:06,233 - __main__ - INFO - Sincronizando organizaciones existentes...
+2025-12-21 01:52:06,287 - core.database - ERROR - Error sincronizando con sistema de archivos: maximum recursion depth exceeded while calling a Python object
+2025-12-21 01:52:06,288 - core.database - INFO - Sincronizando organización desde sistema de archivos: CASA
+2025-12-21 01:52:06,299 - core.database - INFO - Organización creada: CASA en results\CASA
+2025-12-21 01:52:06,441 - __main__ - INFO - Sincronización completada
+2025-12-21 01:52:06,442 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:52:06,444 - __main__ - WARNING - Docker no está instalado o no está en el PATH
+2025-12-21 01:52:06,444 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:52:06,444 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:52:06,463 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-21 01:52:06,463 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-21 01:52:06,463 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:52:07,204 - core.database - INFO - Base de datos inicializada correctamente
+2025-12-21 01:52:07,216 - __main__ - INFO - Sincronizando organizaciones existentes...
+2025-12-21 01:52:07,292 - core.database - ERROR - Error sincronizando con sistema de archivos: maximum recursion depth exceeded while calling a Python object
+2025-12-21 01:52:07,448 - __main__ - INFO - Sincronización completada
+2025-12-21 01:52:07,448 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:52:07,448 - __main__ - WARNING - Docker no está instalado o no está en el PATH
+2025-12-21 01:52:07,449 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:52:07,449 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:52:07,453 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:52:07,455 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:52:08,962 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:08] "GET /socket.io/?EIO=4&transport=polling&t=Pi-P7A0 HTTP/1.1" 200 -
+2025-12-21 01:52:08,970 - __main__ - INFO - Cliente conectado
+2025-12-21 01:52:08,970 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:08] "POST /socket.io/?EIO=4&transport=polling&t=Pi-P7A5&sid=KmZMrjIO122s5k9KAAAA HTTP/1.1" 200 -
+2025-12-21 01:52:08,972 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:08] "GET /socket.io/?EIO=4&transport=polling&t=Pi-P7A5.0&sid=KmZMrjIO122s5k9KAAAA HTTP/1.1" 200 -
+2025-12-21 01:52:08,980 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:08] "GET /socket.io/?EIO=4&transport=polling&t=Pi-P7AF&sid=KmZMrjIO122s5k9KAAAA HTTP/1.1" 200 -
+2025-12-21 01:52:10,949 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:10] "GET / HTTP/1.1" 200 -
+2025-12-21 01:52:11,093 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:11] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:52:11,097 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:11] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:52:13,601 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:13] "GET /pentesting HTTP/1.1" 200 -
+2025-12-21 01:52:13,614 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:13] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:52:13,615 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:13] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:52:13,689 - core.database - ERROR - Error sincronizando con sistema de archivos: maximum recursion depth exceeded while calling a Python object
+2025-12-21 01:52:13,877 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:13] "GET /api/organizations HTTP/1.1" 200 -
+2025-12-21 01:52:30,280 - __main__ - INFO - Cliente desconectado
+2025-12-21 01:52:30,281 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:30] "GET /socket.io/?EIO=4&transport=websocket&sid=KmZMrjIO122s5k9KAAAA HTTP/1.1" 200 -
+2025-12-21 01:52:30,298 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:30] "GET / HTTP/1.1" 200 -
+2025-12-21 01:52:30,344 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:30] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:52:30,352 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:30] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:52:32,076 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:32] "GET /pentesting HTTP/1.1" 200 -
+2025-12-21 01:52:32,116 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:32] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:52:32,121 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:32] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:52:32,218 - core.database - ERROR - Error sincronizando con sistema de archivos: maximum recursion depth exceeded while calling a Python object
+2025-12-21 01:52:32,436 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:32] "GET /api/organizations HTTP/1.1" 200 -
+2025-12-21 01:52:36,627 - __main__ - INFO - Creando organización: test
+2025-12-21 01:52:36,635 - core.structure - INFO - Estructura creada para organización: test
+2025-12-21 01:52:36,652 - core.database - INFO - Organización creada: test en results\TEST
+2025-12-21 01:52:36,653 - __main__ - INFO - Organización TEST creada exitosamente
+2025-12-21 01:52:36,654 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:36] "POST /api/organizations HTTP/1.1" 200 -
+2025-12-21 01:52:36,758 - core.database - ERROR - Error sincronizando con sistema de archivos: maximum recursion depth exceeded while calling a Python object
+2025-12-21 01:52:36,999 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:36] "GET /api/organizations HTTP/1.1" 200 -
+2025-12-21 01:52:37,009 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:37] "GET /api/stats HTTP/1.1" 200 -
+2025-12-21 01:52:37,013 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:37] "GET /api/scans HTTP/1.1" 200 -
+2025-12-21 01:52:43,409 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:43] "GET /pentesting/TEST/reconocimiento HTTP/1.1" 200 -
+2025-12-21 01:52:43,448 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:43] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:52:43,453 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:52:43] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:54:10,942 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:54:11,009 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:54:11,798 - core.database - INFO - Base de datos inicializada correctamente
+2025-12-21 01:54:11,816 - __main__ - INFO - Sincronizando organizaciones existentes...
+2025-12-21 01:54:11,883 - core.database - ERROR - Error sincronizando con sistema de archivos: maximum recursion depth exceeded while calling a Python object
+2025-12-21 01:54:12,077 - __main__ - INFO - Sincronización completada
+2025-12-21 01:54:12,077 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:54:12,078 - __main__ - WARNING - Docker no está instalado o no está en el PATH
+2025-12-21 01:54:12,079 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:54:12,079 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:54:12,084 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:54:12,086 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:54:24,931 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:54:25,000 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:54:25,809 - core.database - INFO - Base de datos inicializada correctamente
+2025-12-21 01:54:25,823 - __main__ - INFO - Sincronizando organizaciones existentes...
+2025-12-21 01:54:25,880 - core.database - ERROR - Error sincronizando con sistema de archivos: maximum recursion depth exceeded while calling a Python object
+2025-12-21 01:54:26,064 - __main__ - INFO - Sincronización completada
+2025-12-21 01:54:26,064 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:54:26,065 - __main__ - WARNING - Docker no está instalado o no está en el PATH
+2025-12-21 01:54:26,066 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:54:26,066 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:54:26,073 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:54:26,076 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:54:41,598 - werkzeug - INFO -  * Detected change in 'C:\\Users\\jorGPS\\Documents\\ArsenalOT\\ScanHound\\app.py', reloading
+2025-12-21 01:54:41,682 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:54:42,621 - core.database - INFO - Base de datos inicializada correctamente
+2025-12-21 01:54:42,637 - __main__ - INFO - Sincronizando organizaciones existentes...
+2025-12-21 01:54:42,700 - core.database - ERROR - Error sincronizando con sistema de archivos: maximum recursion depth exceeded while calling a Python object
+2025-12-21 01:54:42,882 - __main__ - INFO - Sincronización completada
+2025-12-21 01:54:42,882 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:54:42,883 - __main__ - WARNING - Docker no está instalado o no está en el PATH
+2025-12-21 01:54:42,884 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:54:42,884 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:54:42,889 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:54:42,891 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:54:52,293 - core.database - INFO - Base de datos inicializada correctamente
+2025-12-21 01:54:52,301 - __main__ - INFO - Sincronizando organizaciones existentes...
+2025-12-21 01:54:52,362 - core.database - ERROR - Error sincronizando con sistema de archivos: maximum recursion depth exceeded while calling a Python object
+2025-12-21 01:54:52,645 - __main__ - INFO - Sincronización completada
+2025-12-21 01:54:52,645 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:54:52,648 - __main__ - WARNING - Docker no está instalado o no está en el PATH
+2025-12-21 01:54:52,648 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:54:52,648 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:54:52,677 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.15.108:5000
+2025-12-21 01:54:52,677 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-21 01:54:52,678 - werkzeug - INFO -  * Restarting with stat
+2025-12-21 01:54:53,322 - core.database - INFO - Base de datos inicializada correctamente
+2025-12-21 01:54:53,334 - __main__ - INFO - Sincronizando organizaciones existentes...
+2025-12-21 01:54:53,408 - core.database - ERROR - Error sincronizando con sistema de archivos: maximum recursion depth exceeded while calling a Python object
+2025-12-21 01:54:53,558 - __main__ - INFO - Sincronización completada
+2025-12-21 01:54:53,558 - __main__ - INFO - Iniciando Neo4j...
+2025-12-21 01:54:53,559 - __main__ - WARNING - Docker no está instalado o no está en el PATH
+2025-12-21 01:54:53,560 - __main__ - WARNING - No se pudo iniciar Neo4j automáticamente. Asegúrate de tener Docker instalado.
+2025-12-21 01:54:53,560 - __main__ - INFO - Iniciando ArsenalOT Web Application...
+2025-12-21 01:54:53,565 - werkzeug - WARNING -  * Debugger is active!
+2025-12-21 01:54:53,567 - werkzeug - INFO -  * Debugger PIN: 682-285-584
+2025-12-21 01:54:55,927 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:54:55] "GET /pentesting HTTP/1.1" 200 -
+2025-12-21 01:54:56,069 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:54:56] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:54:56,070 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:54:56] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:54:56,142 - core.database - ERROR - Error sincronizando con sistema de archivos: maximum recursion depth exceeded while calling a Python object
+2025-12-21 01:54:56,402 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:54:56] "GET /api/organizations HTTP/1.1" 200 -
+2025-12-21 01:54:59,408 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:54:59] "GET /api/stats HTTP/1.1" 200 -
+2025-12-21 01:54:59,413 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:54:59] "GET /api/scans HTTP/1.1" 200 -
+2025-12-21 01:55:03,279 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "GET /pentesting/TEST/reconocimiento HTTP/1.1" 200 -
+2025-12-21 01:55:03,297 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:55:03,298 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:55:03,317 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "GET /socket.io/?EIO=4&transport=polling&t=Pi-PnkG HTTP/1.1" 200 -
+2025-12-21 01:55:03,320 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "GET /api/stats?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:03,328 - __main__ - INFO - Cliente conectado
+2025-12-21 01:55:03,329 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "POST /socket.io/?EIO=4&transport=polling&t=Pi-PnkR&sid=7WdMA6-JhC6qRNh2AAAA HTTP/1.1" 200 -
+2025-12-21 01:55:03,336 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "GET /socket.io/?EIO=4&transport=polling&t=Pi-PnkT&sid=7WdMA6-JhC6qRNh2AAAA HTTP/1.1" 200 -
+2025-12-21 01:55:03,340 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "GET /api/results?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:03,351 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "GET /api/scans HTTP/1.1" 200 -
+2025-12-21 01:55:03,354 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "GET /api/stats?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:03,363 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "GET /api/results?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:03,372 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:03] "GET /api/scans HTTP/1.1" 200 -
+2025-12-21 01:55:08,360 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:08] "GET /api/stats?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:08,365 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:08] "GET /api/results?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:08,371 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:08] "GET /api/scans HTTP/1.1" 200 -
+2025-12-21 01:55:09,496 - __main__ - INFO - Cliente desconectado
+2025-12-21 01:55:09,497 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "GET /socket.io/?EIO=4&transport=websocket&sid=7WdMA6-JhC6qRNh2AAAA HTTP/1.1" 200 -
+2025-12-21 01:55:09,501 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "GET /pentesting/TEST/reconocimiento HTTP/1.1" 200 -
+2025-12-21 01:55:09,513 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:55:09,514 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:55:09,524 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "GET /socket.io/?EIO=4&transport=polling&t=Pi-PpFE HTTP/1.1" 200 -
+2025-12-21 01:55:09,527 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "GET /api/stats?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:09,534 - __main__ - INFO - Cliente conectado
+2025-12-21 01:55:09,536 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "POST /socket.io/?EIO=4&transport=polling&t=Pi-PpFP&sid=jg-F1PYEP_Y2y5WDAAAC HTTP/1.1" 200 -
+2025-12-21 01:55:09,540 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "GET /socket.io/?EIO=4&transport=polling&t=Pi-PpFQ&sid=jg-F1PYEP_Y2y5WDAAAC HTTP/1.1" 200 -
+2025-12-21 01:55:09,544 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "GET /api/results?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:09,556 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "GET /api/stats?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:09,557 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "GET /api/scans HTTP/1.1" 200 -
+2025-12-21 01:55:09,566 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "GET /api/results?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:09,576 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:09] "GET /api/scans HTTP/1.1" 200 -
+2025-12-21 01:55:11,370 - __main__ - INFO - Cliente desconectado
+2025-12-21 01:55:11,371 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:11] "GET /socket.io/?EIO=4&transport=websocket&sid=jg-F1PYEP_Y2y5WDAAAC HTTP/1.1" 200 -
+2025-12-21 01:55:11,377 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:11] "GET /pentesting/TEST/reconocimiento/scan HTTP/1.1" 200 -
+2025-12-21 01:55:11,389 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:11] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:55:11,390 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:11] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:55:11,406 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:11] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Ppie HTTP/1.1" 200 -
+2025-12-21 01:55:11,413 - __main__ - INFO - Cliente conectado
+2025-12-21 01:55:11,415 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:11] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Ppio&sid=UsIAre-ch-HtKBnlAAAE HTTP/1.1" 200 -
+2025-12-21 01:55:11,416 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:11] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Ppip&sid=UsIAre-ch-HtKBnlAAAE HTTP/1.1" 200 -
+2025-12-21 01:55:13,858 - __main__ - INFO - Cliente desconectado
+2025-12-21 01:55:13,859 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "GET /socket.io/?EIO=4&transport=websocket&sid=UsIAre-ch-HtKBnlAAAE HTTP/1.1" 200 -
+2025-12-21 01:55:13,862 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "GET /pentesting/TEST/reconocimiento HTTP/1.1" 200 -
+2025-12-21 01:55:13,874 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:55:13,875 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:55:13,898 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "GET /socket.io/?EIO=4&transport=polling&t=Pi-PqJW HTTP/1.1" 200 -
+2025-12-21 01:55:13,899 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "GET /api/stats?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:13,908 - __main__ - INFO - Cliente conectado
+2025-12-21 01:55:13,909 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "POST /socket.io/?EIO=4&transport=polling&t=Pi-PqJk&sid=Mmontft3VSWQBQgYAAAG HTTP/1.1" 200 -
+2025-12-21 01:55:13,912 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "GET /socket.io/?EIO=4&transport=polling&t=Pi-PqJl&sid=Mmontft3VSWQBQgYAAAG HTTP/1.1" 200 -
+2025-12-21 01:55:13,917 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "GET /api/results?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:13,925 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "GET /api/stats?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:13,930 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "GET /api/scans HTTP/1.1" 200 -
+2025-12-21 01:55:13,933 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "GET /api/results?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:13,942 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:13] "GET /api/scans HTTP/1.1" 200 -
+2025-12-21 01:55:15,712 - __main__ - INFO - Cliente desconectado
+2025-12-21 01:55:15,713 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:15] "GET /socket.io/?EIO=4&transport=websocket&sid=Mmontft3VSWQBQgYAAAG HTTP/1.1" 200 -
+2025-12-21 01:55:15,715 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:15] "GET /pentesting/TEST/reconocimiento/scan HTTP/1.1" 200 -
+2025-12-21 01:55:15,728 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:15] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:55:15,731 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:15] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:55:15,745 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:15] "GET /socket.io/?EIO=4&transport=polling&t=Pi-PqmT HTTP/1.1" 200 -
+2025-12-21 01:55:15,754 - __main__ - INFO - Cliente conectado
+2025-12-21 01:55:15,755 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:15] "POST /socket.io/?EIO=4&transport=polling&t=Pi-Pqma&sid=nR-FNZCd6xeuwBd5AAAI HTTP/1.1" 200 -
+2025-12-21 01:55:15,758 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:15] "GET /socket.io/?EIO=4&transport=polling&t=Pi-Pqmc&sid=nR-FNZCd6xeuwBd5AAAI HTTP/1.1" 200 -
+2025-12-21 01:55:18,009 - __main__ - INFO - Cliente desconectado
+2025-12-21 01:55:18,010 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:18] "GET /socket.io/?EIO=4&transport=websocket&sid=nR-FNZCd6xeuwBd5AAAI HTTP/1.1" 200 -
+2025-12-21 01:55:18,015 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:18] "GET /pentesting/TEST/reconocimiento/results HTTP/1.1" 200 -
+2025-12-21 01:55:18,029 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:18] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:55:18,031 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:18] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:55:18,043 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:18] "GET /api/results?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:18,049 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:18] "GET /api/results?org=TEST HTTP/1.1" 200 -
+2025-12-21 01:55:21,103 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:21] "GET /pentesting/TEST/reconocimiento/evidence HTTP/1.1" 200 -
+2025-12-21 01:55:21,118 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:21] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:55:21,118 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:21] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:55:21,127 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:21] "GET /api/evidence HTTP/1.1" 200 -
+2025-12-21 01:55:22,486 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:22] "GET /pentesting/TEST/reconocimiento/visualization HTTP/1.1" 200 -
+2025-12-21 01:55:22,503 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:22] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-12-21 01:55:22,504 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:22] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-12-21 01:55:23,220 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:23] "[35m[1mGET /api/neo4j/stats?org=TEST HTTP/1.1[0m" 503 -
+2025-12-21 01:55:23,224 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:23] "[35m[1mGET /api/neo4j/graph?org=TEST HTTP/1.1[0m" 503 -
+2025-12-21 01:55:23,225 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 01:55:23] "GET /api/neo4j/info HTTP/1.1" 200 -
+2025-12-21 04:10:43,705 - werkzeug - INFO - 127.0.0.1 - - [21/Dec/2025 04:10:43] "[35m[1mGET /api/neo4j/stats?org=TEST HTTP/1.1[0m" 503 -

@@ -2,6 +2,8 @@ attrs==25.3.0
 certifi==2025.1.31
 charset-normalizer==3.4.1
 colorama==0.4.6
+Flask==3.0.0
+flask-socketio==5.3.6
 h11==0.14.0
 idna==3.10
 interchange==2021.0.4
@@ -13,6 +15,7 @@ pillow==11.1.0
 py2neo==2021.2.4
 Pygments==2.19.1
 pymodbus==3.8.6
+# Simuladores de protocolos industriales (ya incluidos en pymodbus)
 PySocks==1.7.1
 python-nmap==0.7.1
 pytz==2025.1

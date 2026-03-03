@@ -1,0 +1,738 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="visualization-page">
+    <div class="page-header">
+        <h1><i class="fas fa-project-diagram"></i> Fase 1: Reconocimiento - Visualización de Resultados</h1>
+        <p>Organización: <strong>{{ org }}</strong> - Visualización interactiva de la red en Neo4j</p>
+    </div>
+
+    <div class="reconocimiento-nav">
+        <a href="/pentesting/{{ org }}/reconocimiento" class="nav-tab">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/scan" class="nav-tab">
+            <i class="fas fa-search"></i> Escanear
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/results" class="nav-tab">
+            <i class="fas fa-chart-bar"></i> Resultados
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/evidence" class="nav-tab">
+            <i class="fas fa-file-code"></i> Evidencias
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/visualization" class="nav-tab active">
+            <i class="fas fa-project-diagram"></i> Visualización
+        </a>
+        <a href="/pentesting/{{ org }}/reconocimiento/dashboard" class="nav-tab">
+            <i class="fas fa-chart-line"></i> Consultas
+        </a>
+    </div>
+
+    <!-- Información de Neo4j -->
+    <div class="neo4j-info-card">
+        <div class="neo4j-info-header">
+            <h2><i class="fas fa-database"></i> Información de Neo4j</h2>
+            <button class="btn btn-secondary" onclick="toggleNeo4jInfo()">
+                <i class="fas fa-chevron-down" id="neo4j-toggle-icon"></i>
+            </button>
+        </div>
+        <div id="neo4j-info-content" class="neo4j-info-content" style="display: none;">
+            <div class="info-grid">
+                <div class="info-item">
+                    <label><i class="fas fa-link"></i> Bolt URL:</label>
+                    <code id="bolt-url">Cargando...</code>
+                    <button class="btn-copy" onclick="copyToClipboard('bolt-url')">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                <div class="info-item">
+                    <label><i class="fas fa-globe"></i> Browser URL:</label>
+                    <a id="browser-url" href="#" target="_blank">Cargando...</a>
+                    <button class="btn-copy" onclick="copyToClipboard('browser-url')">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                <div class="info-item">
+                    <label><i class="fas fa-user"></i> Usuario:</label>
+                    <code id="neo4j-username">Cargando...</code>
+                    <button class="btn-copy" onclick="copyToClipboard('neo4j-username')">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                <div class="info-item">
+                    <label><i class="fas fa-lock"></i> Contraseña:</label>
+                    <code id="neo4j-password">Cargando...</code>
+                    <button class="btn-copy" onclick="copyToClipboard('neo4j-password')">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="neo4j-status">
+                <span id="neo4j-status-indicator" class="status-indicator"></span>
+                <span id="neo4j-status-text">Verificando estado...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="stats-section">
+        <div class="stat-card-mini">
+            <div class="stat-icon-mini blue">
+                <i class="fas fa-building"></i>
+            </div>
+            <div class="stat-info-mini">
+                <h3 id="stat-orgs">0</h3>
+                <p>Organizaciones</p>
+            </div>
+        </div>
+        <div class="stat-card-mini">
+            <div class="stat-icon-mini green">
+                <i class="fas fa-map-marker-alt"></i>
+            </div>
+            <div class="stat-info-mini">
+                <h3 id="stat-locations">0</h3>
+                <p>Ubicaciones</p>
+            </div>
+        </div>
+        <div class="stat-card-mini">
+            <div class="stat-icon-mini orange">
+                <i class="fas fa-server"></i>
+            </div>
+            <div class="stat-info-mini">
+                <h3 id="stat-ips">0</h3>
+                <p>IPs</p>
+            </div>
+        </div>
+        <div class="stat-card-mini">
+            <div class="stat-icon-mini red">
+                <i class="fas fa-network-wired"></i>
+            </div>
+            <div class="stat-info-mini">
+                <h3 id="stat-ports">0</h3>
+                <p>Puertos</p>
+            </div>
+        </div>
+        <div class="stat-card-mini">
+            <div class="stat-icon-mini purple">
+                <i class="fas fa-project-diagram"></i>
+            </div>
+            <div class="stat-info-mini">
+                <h3 id="stat-relationships">0</h3>
+                <p>Relaciones</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controles del grafo -->
+    <div class="graph-controls">
+        <button class="btn btn-primary" onclick="loadGraph()">
+            <i class="fas fa-sync"></i> Actualizar Grafo
+        </button>
+        <button class="btn btn-secondary" onclick="resetView()">
+            <i class="fas fa-expand"></i> Resetear Vista
+        </button>
+        <button class="btn btn-secondary" onclick="fitGraph()">
+            <i class="fas fa-compress"></i> Ajustar Vista
+        </button>
+        <div class="graph-options">
+            <label>
+                <input type="checkbox" id="physics-enabled" checked onchange="togglePhysics()">
+                Física
+            </label>
+            <label>
+                <input type="checkbox" id="labels-enabled" checked onchange="toggleLabels()">
+                Etiquetas
+            </label>
+        </div>
+    </div>
+
+    <!-- Visualización del grafo -->
+    <div class="graph-container">
+        <div id="graph-network" class="graph-network"></div>
+        <div id="graph-loading" class="graph-loading">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Cargando grafo...</p>
+        </div>
+    </div>
+
+    <!-- Panel de detalles -->
+    <div id="details-panel" class="details-panel" style="display: none;">
+        <div class="details-header">
+            <h3 id="details-title">Detalles</h3>
+            <button class="btn-close" onclick="closeDetails()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="details-content" class="details-content"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script>
+    let network = null;
+    let nodes = null;
+    let edges = null;
+    let currentOrg = '{{ org }}';
+
+    // Cargar información de Neo4j
+    async function loadNeo4jInfo() {
+        try {
+            const response = await fetch('/api/neo4j/info');
+            const data = await response.json();
+            
+            if (response.ok) {
+                document.getElementById('bolt-url').textContent = data.bolt_url;
+                document.getElementById('browser-url').href = data.browser_url;
+                document.getElementById('browser-url').textContent = data.browser_url;
+                document.getElementById('neo4j-username').textContent = data.username;
+                document.getElementById('neo4j-password').textContent = data.password;
+                
+                const statusIndicator = document.getElementById('neo4j-status-indicator');
+                const statusText = document.getElementById('neo4j-status-text');
+                
+                if (data.is_running) {
+                    statusIndicator.className = 'status-indicator status-online';
+                    statusText.textContent = 'Neo4j está corriendo';
+                } else {
+                    statusIndicator.className = 'status-indicator status-offline';
+                    statusText.textContent = 'Neo4j no está corriendo';
+                }
+            }
+        } catch (error) {
+            console.error('Error cargando info de Neo4j:', error);
+        }
+    }
+
+    function toggleNeo4jInfo() {
+        const content = document.getElementById('neo4j-info-content');
+        const icon = document.getElementById('neo4j-toggle-icon');
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            icon.className = 'fas fa-chevron-up';
+        } else {
+            content.style.display = 'none';
+            icon.className = 'fas fa-chevron-down';
+        }
+    }
+
+    function copyToClipboard(elementId) {
+        const element = document.getElementById(elementId);
+        const text = element.textContent || element.href;
+        navigator.clipboard.writeText(text).then(() => {
+            Utils.showNotification('Copiado al portapapeles', 'success');
+        });
+    }
+
+    // Cargar estadísticas
+    async function loadStats() {
+        try {
+            const response = await fetch(`/api/neo4j/stats?org=${encodeURIComponent(currentOrg)}`);
+            const data = await response.json();
+            
+            if (response.ok) {
+                document.getElementById('stat-orgs').textContent = data.orgs || 0;
+                document.getElementById('stat-locations').textContent = data.locations || 0;
+                document.getElementById('stat-ips').textContent = data.ips || 0;
+                document.getElementById('stat-ports').textContent = data.ports || 0;
+                document.getElementById('stat-relationships').textContent = data.relationships || 0;
+            }
+        } catch (error) {
+            console.error('Error cargando estadísticas:', error);
+        }
+    }
+
+    // Cargar y visualizar grafo
+    async function loadGraph() {
+        const loadingDiv = document.getElementById('graph-loading');
+        loadingDiv.style.display = 'flex';
+        
+        try {
+            const response = await fetch(`/api/neo4j/graph?org=${encodeURIComponent(currentOrg)}`);
+            const data = await response.json();
+            
+            if (response.ok && data.nodes) {
+                // Configurar colores por tipo de nodo
+                const nodeColors = {
+                    'ORG': '#3b82f6',
+                    'SEG': '#10b981',
+                    'Subred': '#f59e0b',
+                    'IP': '#ef4444',
+                    'Port': '#8b5cf6'
+                };
+                
+                // Preparar datos para vis.js
+                const visNodes = data.nodes.map(node => ({
+                    id: node.id,
+                    label: node.label,
+                    group: node.group,
+                    color: nodeColors[node.group] || '#6b7280',
+                    title: JSON.stringify(node.properties, null, 2),
+                    properties: node.properties
+                }));
+                
+                const visEdges = data.edges.map(edge => ({
+                    id: edge.id,
+                    from: edge.from,
+                    to: edge.to,
+                    label: edge.label,
+                    arrows: edge.arrows,
+                    color: { color: '#9ca3af' }
+                }));
+                
+                // Crear o actualizar red
+                const container = document.getElementById('graph-network');
+                
+                if (!nodes) {
+                    nodes = new vis.DataSet(visNodes);
+                    edges = new vis.DataSet(visEdges);
+                } else {
+                    nodes.clear();
+                    edges.clear();
+                    nodes.add(visNodes);
+                    edges.add(visEdges);
+                }
+                
+                const graphData = {
+                    nodes: nodes,
+                    edges: edges
+                };
+                
+                const options = {
+                    nodes: {
+                        shape: 'dot',
+                        size: 16,
+                        font: {
+                            size: 12,
+                            color: '#333'
+                        },
+                        borderWidth: 2
+                    },
+                    edges: {
+                        width: 2,
+                        font: {
+                            size: 10,
+                            align: 'middle'
+                        },
+                        smooth: {
+                            type: 'continuous'
+                        }
+                    },
+                    physics: {
+                        enabled: document.getElementById('physics-enabled').checked,
+                        stabilization: {
+                            iterations: 200
+                        }
+                    },
+                    interaction: {
+                        hover: true,
+                        tooltipDelay: 100,
+                        zoomView: true,
+                        dragView: true
+                    }
+                };
+                
+                if (!network) {
+                    network = new vis.Network(container, graphData, options);
+                    
+                    // Eventos
+                    network.on('click', function(params) {
+                        if (params.nodes.length > 0) {
+                            const nodeId = params.nodes[0];
+                            const node = visNodes.find(n => n.id === nodeId);
+                            if (node) {
+                                showNodeDetails(node);
+                            }
+                        } else {
+                            closeDetails();
+                        }
+                    });
+                    
+                    network.on('hoverNode', function(params) {
+                        container.style.cursor = 'pointer';
+                    });
+                    
+                    network.on('blurNode', function(params) {
+                        container.style.cursor = 'default';
+                    });
+                } else {
+                    network.setOptions(options);
+                }
+                
+                loadingDiv.style.display = 'none';
+                Utils.showNotification(`Grafo cargado: ${data.stats.total_nodes} nodos, ${data.stats.total_edges} relaciones`, 'success');
+            } else {
+                loadingDiv.innerHTML = '<p class="error-message">Error cargando grafo: ' + (data.error || 'Error desconocido') + '</p>';
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            loadingDiv.innerHTML = '<p class="error-message">Error de conexión</p>';
+        }
+    }
+
+    function showNodeDetails(node) {
+        const panel = document.getElementById('details-panel');
+        const title = document.getElementById('details-title');
+        const content = document.getElementById('details-content');
+        
+        title.textContent = `${node.group}: ${node.label}`;
+        
+        let html = '<div class="details-section"><h4>Propiedades</h4><table class="details-table">';
+        for (const [key, value] of Object.entries(node.properties)) {
+            html += `<tr><td><strong>${key}:</strong></td><td>${typeof value === 'object' ? JSON.stringify(value) : value}</td></tr>`;
+        }
+        html += '</table></div>';
+        
+        content.innerHTML = html;
+        panel.style.display = 'block';
+    }
+
+    function closeDetails() {
+        document.getElementById('details-panel').style.display = 'none';
+    }
+
+    function resetView() {
+        if (network) {
+            network.fit();
+        }
+    }
+
+    function fitGraph() {
+        if (network) {
+            network.fit({
+                animation: {
+                    duration: 500,
+                    easingFunction: 'easeInOutQuad'
+                }
+            });
+        }
+    }
+
+    function togglePhysics() {
+        if (network) {
+            network.setOptions({
+                physics: {
+                    enabled: document.getElementById('physics-enabled').checked
+                }
+            });
+        }
+    }
+
+    function toggleLabels() {
+        if (network) {
+            network.setOptions({
+                nodes: {
+                    font: {
+                        size: document.getElementById('labels-enabled').checked ? 12 : 0
+                    }
+                },
+                edges: {
+                    font: {
+                        size: document.getElementById('labels-enabled').checked ? 10 : 0
+                    }
+                }
+            });
+        }
+    }
+
+    // Inicializar
+    loadNeo4jInfo();
+    loadStats();
+    loadGraph();
+    
+    // Actualizar cada 30 segundos
+    setInterval(() => {
+        loadStats();
+    }, 30000);
+</script>
+
+<style>
+.visualization-page {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.neo4j-info-card {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.neo4j-info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.neo4j-info-header h2 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: var(--light-bg);
+    border-radius: 5px;
+}
+
+.info-item label {
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 120px;
+}
+
+.info-item code {
+    flex: 1;
+    padding: 0.5rem;
+    background: white;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+}
+
+.info-item a {
+    flex: 1;
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.btn-copy {
+    padding: 0.5rem;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-copy:hover {
+    background: var(--secondary-color);
+    transform: scale(1.1);
+}
+
+.neo4j-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-indicator.status-online {
+    background: var(--success-color);
+    box-shadow: 0 0 10px var(--success-color);
+}
+
+.status-indicator.status-offline {
+    background: var(--danger-color);
+}
+
+.stats-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card-mini {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.stat-icon-mini {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+}
+
+.stat-icon-mini.blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.stat-icon-mini.green { background: linear-gradient(135deg, #10b981, #059669); }
+.stat-icon-mini.orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.stat-icon-mini.red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.stat-icon-mini.purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+
+.stat-info-mini h3 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--text-primary);
+}
+
+.stat-info-mini p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.graph-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.graph-options {
+    display: flex;
+    gap: 1.5rem;
+    margin-left: auto;
+}
+
+.graph-options label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.graph-container {
+    position: relative;
+    background: var(--card-bg);
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    height: 70vh;
+    min-height: 600px;
+    overflow: hidden;
+}
+
+.graph-network {
+    width: 100%;
+    height: 100%;
+}
+
+.graph-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.9);
+    z-index: 10;
+}
+
+.graph-loading i {
+    font-size: 3rem;
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+}
+
+.details-panel {
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 400px;
+    height: 100vh;
+    background: var(--card-bg);
+    box-shadow: -5px 0 20px rgba(0,0,0,0.2);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+.details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.details-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 5px;
+    transition: all 0.3s;
+}
+
+.btn-close:hover {
+    background: var(--light-bg);
+    color: var(--text-primary);
+}
+
+.details-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+}
+
+.details-section {
+    margin-bottom: 2rem;
+}
+
+.details-section h4 {
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.details-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.details-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.details-table td:first-child {
+    width: 40%;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+    .details-panel {
+        width: 100%;
+    }
+    
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+
