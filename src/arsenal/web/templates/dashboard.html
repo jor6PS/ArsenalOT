@@ -1,0 +1,1237 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - ArsenalOT{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Header de Organización Rediseñado -->
+    <div class="org-header glass-card"
+        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; padding: 1.5rem; border-left: 4px solid var(--accent-cyan);">
+        <div>
+            <h1
+                style="margin: 0; font-size: 2.2rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.75rem;">
+                🏢
+                {% if org_name %}
+                {{ org_name }}
+                <input type="hidden" id="filterOrg" value="{{ org_name }}">
+                {% else %}
+                Global Dashboard
+                <input type="hidden" id="filterOrg" value="">
+                {% endif %}
+            </h1>
+            <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 1rem;">
+                Panel de Reconocimiento y Gestión de Activos
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end;">
+            <button class="btn btn-primary" onclick="exportData()"
+                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
+                <span>📥</span> Exportar Datos
+            </button>
+            <button class="btn btn-success" onclick="document.getElementById('importFileInput').click()"
+                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
+                <span>📤</span> Importar
+            </button>
+            {% if org_name %}
+            <button id="deleteOrgBtn" class="btn btn-danger" onclick="deleteOrganization()"
+                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
+                <span>🗑️</span> Eliminar Org.
+            </button>
+            {% endif %}
+            <input type="file" id="importFileInput" accept=".zip" style="display: none;" onchange="importData(event)">
+        </div>
+    </div>
+
+    <!-- Panel de Redes -->
+    <div class="networks-section glass-card" style="margin-bottom: 2rem; padding: 1.5rem;">
+        <h3
+            style="margin-top: 0; margin-bottom: 1.5rem; color: #60a5fa; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+            <span>🌐</span> Redes de la Organización
+        </h3>
+
+        <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+            <!-- Formulario Nueva Red -->
+            <div
+                style="flex: 1; min-width: 250px; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid #1e293b;">
+                <h4 style="margin-top: 0; font-size: 1rem; color: var(--text-primary); margin-bottom: 1rem;">Añadir
+                    Nueva Red</h4>
+                <form id="addNetworkForm" onsubmit="event.preventDefault(); addNetwork();"
+                    style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <input type="text" id="systemName" placeholder="Sistema Opcional (ej. SCADA)"
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                    <input type="text" id="networkName" placeholder="Nombre de red (ej. Oficinas)" required
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                    <input type="text" id="networkRange" placeholder="Rango (ej. 192.168.1.0/24)" required
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                    <button type="submit" class="btn"
+                        style="margin-top: 0.5rem; padding: 0.6rem; background: #2563eb; color: white; transition: 0.2s;">➕
+                        Añadir
+                        Red</button>
+                </form>
+            </div>
+
+            <!-- Lista de Redes -->
+            <div style="flex: 2; min-width: 300px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h4 style="margin: 0; font-size: 1rem; color: var(--text-primary);">Redes Registradas</h4>
+                    <button class="btn btn-sm" onclick="exportNetworksTxt()"
+                        style="padding: 0.4rem 0.8rem; background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;">
+                        📥 Exportar TXT
+                    </button>
+                </div>
+                <div id="networksList" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div class="loading">Cargando redes...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sistema de Filtros Visuales (Pills) -->
+    <div class="visual-filters" style="margin-bottom: 2rem; display: flex; gap: 1.5rem; flex-wrap: wrap;">
+        <!-- Container Ubicaciones -->
+        <div style="flex: 1; min-width: 300px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <label
+                    style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">📍
+                    Filtrar por Origen (From)</label>
+                <button id="deleteLocationBtn" class="btn btn-sm" onclick="deleteLocation()"
+                    style="display: none; padding: 0.2rem 0.5rem; font-size: 0.75rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;">🗑️
+                    Eliminar</button>
+            </div>
+            <div id="locationPills"
+                style="display: flex; flex-wrap: wrap; gap: 0.5rem; background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); min-height: 56px;">
+                <div class="loading" style="font-size: 0.85rem;">Cargando orígenes...</div>
+            </div>
+            <input type="hidden" id="filterLocation" value="">
+        </div>
+
+        <!-- Container Escaneos -->
+        <div style="flex: 2; min-width: 300px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <label
+                    style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">🎯
+                    Filtrar por Escaneo</label>
+                <button id="deleteScanBtn" class="btn btn-sm" onclick="deleteScan()"
+                    style="display: none; padding: 0.2rem 0.5rem; font-size: 0.75rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;">🗑️
+                    Eliminar</button>
+            </div>
+            <div id="scanPills"
+                style="display: flex; overflow-x: auto; padding-bottom: 0.5rem; gap: 0.75rem; background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); min-height: 56px;">
+                <div class="loading" style="font-size: 0.85rem;">Cargando escaneos...</div>
+            </div>
+            <input type="hidden" id="filterScan" value="">
+        </div>
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="stats-section glass-card" style="margin-bottom: 2rem; padding: 1.5rem;">
+        <h3
+            style="margin-top: 0; margin-bottom: 1.5rem; color: var(--text-primary); font-size: 1.25rem; font-weight: 600;">
+            📊 Estadísticas</h3>
+        <div class="stats-grid" id="statsGrid" style="margin-bottom: 2rem;">
+            {% if not org_name %}
+            <div class="stat-card">
+                <div class="stat-icon" style="opacity: 0.9;">🏢</div>
+                <div class="stat-info">
+                    <h3 id="orgsCount">-</h3>
+                    <p>Organizaciones</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="stat-card">
+                <div class="stat-icon">🔍</div>
+                <div class="stat-info">
+                    <h3 id="scansTotal">-</h3>
+                    <p>Escaneos Totales</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">✅</div>
+                <div class="stat-info">
+                    <h3 id="scansCompleted">-</h3>
+                    <p>Completados</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">⏳</div>
+                <div class="stat-info">
+                    <h3 id="scansRunning">-</h3>
+                    <p>En Ejecución</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">🖥️</div>
+                <div class="stat-info">
+                    <h3 id="hostsCount">-</h3>
+                    <p>Hosts</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">🔌</div>
+                <div class="stat-info">
+                    <h3 id="portsCount">-</h3>
+                    <p>Puertos</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">⚠️</div>
+                <div class="stat-info">
+                    <h3 id="vulnsCount">-</h3>
+                    <p>Vulnerabilidades</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">📸</div>
+                <div class="stat-info">
+                    <h3 id="screenshotsCount">-</h3>
+                    <p>Capturas</p>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">📄</div>
+                <div class="stat-info">
+                    <h3 id="sourcesCount">-</h3>
+                    <p>Códigos Fuente</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .pill {
+            padding: 0.4rem 1rem;
+            border-radius: 20px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .pill:hover {
+            background: #334155;
+            color: #f8fafc;
+        }
+
+        .pill.active {
+            background: #3b82f6;
+            color: #ffffff;
+            border-color: #60a5fa;
+            font-weight: 600;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+        }
+
+        .network-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .network-delete-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        .network-delete-btn:hover {
+            background: rgba(239, 68, 68, 0.4);
+        }
+    </style>
+
+    <!-- Progreso de Escaneos en Ejecución -->
+    <div id="runningScansProgress" style="display: none; margin-bottom: 2rem;">
+        <!-- Se llenará dinámicamente con escaneos en ejecución -->
+    </div>
+
+    <!-- Escaneos Recientes -->
+    <div class="dashboard-section glass-card" style="padding: 1.5rem; margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h2 style="margin: 0; color: var(--text-primary); font-size: 1.25rem; font-weight: 600;">📋 Escaneos
+                Recientes</h2>
+            <button id="cleanupZombiesBtn" class="btn btn-secondary" onclick="cleanupZombies()"
+                style="display: none; padding: 0.5rem 1rem;">
+                🧹 Limpiar Zombies
+            </button>
+        </div>
+        <div class="table-container" style="overflow-y: auto; overflow-x: auto; max-height: 70vh;">
+            <table id="recentScansTable" style="width: 100%;">
+                <thead style="position: sticky; top: 0; z-index: 10;">
+                    <tr>
+                        <th>ID</th>
+                        <th>Organización</th>
+                        <th>Ubicación</th>
+                        <th>Target</th>
+                        <th>Estado</th>
+                        <th>Inicio</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="recentScansBody">
+                    <tr>
+                        <td colspan="7" class="loading">Cargando...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentFilters = {
+        organization: '{{ org_name | default("") }}',
+        location: '',
+        scan_id: ''
+    };
+
+    async function loadOrganizations() {
+        try {
+            const orgNameContext = "{{ org_name | default('') }}";
+            const select = document.getElementById('filterOrg');
+
+            if (orgNameContext) {
+                // If we are in a pentest context, lock the filter to this org
+                currentFilters.organization = orgNameContext;
+            } else {
+                const response = await fetch('/api/organizations');
+                const orgs = await response.json();
+                select.innerHTML = '<option value="">Todas</option>' +
+                    orgs.map(org => `<option value="${org.name}">${org.name}</option>`).join('');
+                if (currentFilters.organization) {
+                    select.value = currentFilters.organization;
+                }
+            }
+        } catch (error) {
+            console.error('Error cargando organizaciones:', error);
+        }
+    }
+
+    async function loadLocations(organization = null) {
+        try {
+            const url = organization
+                ? `/api/locations?organization=${encodeURIComponent(organization)}`
+                : '/api/locations';
+            const response = await fetch(url);
+            const locations = await response.json();
+
+            const container = document.getElementById('locationPills');
+
+            let html = `<div class="pill ${!currentFilters.location ? 'active' : ''}" onclick="setLocationFilter('')">Todas</div>`;
+
+            locations.forEach(loc => {
+                const isActive = currentFilters.location === loc.location;
+                html += `<div class="pill ${isActive ? 'active' : ''}" onclick="setLocationFilter('${loc.location}')">${loc.location}</div>`;
+            });
+
+            container.innerHTML = html;
+
+            if (currentFilters.location) {
+                document.getElementById('filterLocation').value = currentFilters.location;
+            } else {
+                document.getElementById('filterLocation').value = '';
+            }
+        } catch (error) {
+            console.error('Error cargando ubicaciones:', error);
+            document.getElementById('locationPills').innerHTML = '<div class="loading">Error cargando ubicaciones</div>';
+        }
+    }
+
+    function setLocationFilter(loc) {
+        document.getElementById('filterLocation').value = loc;
+        currentFilters.location = loc;
+        currentFilters.scan_id = '';
+        document.getElementById('filterScan').value = '';
+
+        loadLocations(currentFilters.organization || null);
+        loadScans(currentFilters.organization || null, loc || null);
+        updateDeleteButtons();
+        applyFilters();
+    }
+
+    async function loadScans(organization = null, location = null) {
+        try {
+            const params = new URLSearchParams();
+            if (organization) params.append('organization', organization);
+            if (location) params.append('location', location);
+
+            const response = await fetch(`/api/scans/list?${params}`);
+            const scans = await response.json();
+
+            const container = document.getElementById('scanPills');
+
+            let html = `<div class="pill ${!currentFilters.scan_id ? 'active' : ''}" onclick="setScanFilter('')">Todos</div>`;
+
+            scans.forEach(scan => {
+                const isActive = currentFilters.scan_id == scan.id;
+                html += `<div class="pill ${isActive ? 'active' : ''}" onclick="setScanFilter('${scan.id}')">#${scan.id} - ${scan.location} (${scan.target})</div>`;
+            });
+
+            container.innerHTML = html;
+
+            if (currentFilters.scan_id) {
+                document.getElementById('filterScan').value = currentFilters.scan_id;
+            } else {
+                document.getElementById('filterScan').value = '';
+            }
+        } catch (error) {
+            console.error('Error cargando escaneos:', error);
+            document.getElementById('scanPills').innerHTML = '<div class="loading">Error cargando escaneos</div>';
+        }
+    }
+
+    function setScanFilter(scanId) {
+        document.getElementById('filterScan').value = scanId;
+        currentFilters.scan_id = scanId;
+
+        loadScans(currentFilters.organization || null, currentFilters.location || null);
+        updateDeleteButtons();
+        applyFilters();
+    }
+
+    // --- REDES (NETWORKS) LOGIC ---
+    async function loadNetworks(organization) {
+        if (!organization) return;
+        try {
+            const response = await fetch(`/api/networks?organization=${encodeURIComponent(organization)}`);
+            const networks = await response.json();
+            const container = document.getElementById('networksList');
+
+            if (networks.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.9rem;">No hay redes registradas para esta organización.</div>';
+                return;
+            }
+
+            // Agrupar por system_name
+            const grouped = {};
+            networks.forEach(net => {
+                const sys = net.system_name || "Sin Sistema Asociado";
+                if (!grouped[sys]) grouped[sys] = [];
+                grouped[sys].push(net);
+            });
+
+            let html = '';
+            // Asegurarnos de que "Sin Sistema Asociado" quede al final si lo hay, o simplemente ordernar alfabético.
+            const sortedSystems = Object.keys(grouped).sort((a, b) => {
+                if (a === "Sin Sistema Asociado") return 1;
+                if (b === "Sin Sistema Asociado") return -1;
+                return a.localeCompare(b);
+            });
+
+            for (const sys of sortedSystems) {
+                const nets = grouped[sys];
+                html += `
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                    <h5 style="margin-top: 0; margin-bottom: 1rem; color: #a5b4fc; font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>🖥️</span> ${sys}
+                    </h5>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+                `;
+
+                html += nets.map(net => `
+                    <div class="network-card">
+                        <button class="network-delete-btn" onclick="deleteNetwork(${net.id})">🗑️</button>
+                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem;">${net.network_name}</div>
+                        <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8;">${net.network_range}</div>
+                    </div>
+                `).join('');
+
+                html += `
+                    </div>
+                </div>
+                `;
+            }
+
+            container.innerHTML = html;
+
+        } catch (error) {
+            console.error('Error cargando redes:', error);
+            document.getElementById('networksList').innerHTML = '<div class="loading">Error cargando redes</div>';
+        }
+    }
+
+    async function addNetwork() {
+        const org = currentFilters.organization || document.getElementById('filterOrg').value;
+        if (!org) {
+            alert('Debe haber una organización seleccionada para añadir redes.');
+            return;
+        }
+
+        const sysInput = document.getElementById('systemName');
+        const nameInput = document.getElementById('networkName');
+        const rangeInput = document.getElementById('networkRange');
+
+        try {
+            const response = await fetch('/api/networks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organization: org,
+                    system_name: sysInput.value || null,
+                    network_name: nameInput.value,
+                    network_range: rangeInput.value
+                })
+            });
+
+            if (!response.ok) throw new Error('Error en la petición');
+
+            sysInput.value = '';
+            nameInput.value = '';
+            rangeInput.value = '';
+            loadNetworks(org);
+        } catch (error) {
+            console.error(error);
+            alert('Error al añadir la red');
+        }
+    }
+
+    function exportNetworksTxt() {
+        const org = currentFilters.organization || document.getElementById('filterOrg').value;
+        if (!org) {
+            alert('Debe haber una organización seleccionada para exportar.');
+            return;
+        }
+        window.location.href = `/api/networks/export?organization=${encodeURIComponent(org)}`;
+    }
+
+    async function deleteNetwork(id) {
+        if (!confirm('¿Estás seguro de eliminar esta red?')) return;
+        try {
+            const response = await fetch(`/api/networks/${id}`, { method: 'DELETE' });
+            if (!response.ok) throw new Error('Error al eliminar');
+            const org = currentFilters.organization || document.getElementById('filterOrg').value;
+            loadNetworks(org);
+        } catch (error) {
+            console.error(error);
+            alert('Error al eliminar red');
+        }
+    }
+    // --- END REDES LOGIC ---
+
+    async function loadStats() {
+        try {
+            const params = new URLSearchParams();
+            if (currentFilters.organization) params.append('organization', currentFilters.organization);
+            if (currentFilters.location) params.append('location', currentFilters.location);
+            if (currentFilters.scan_id) params.append('scan_id', currentFilters.scan_id);
+
+            const response = await fetch(`/api/stats?${params}`);
+            const stats = await response.json();
+
+            const orgsCountEl = document.getElementById('orgsCount');
+            if (orgsCountEl) {
+                orgsCountEl.textContent = stats.organizations;
+            }
+
+            document.getElementById('scansTotal').textContent = stats.scans.total;
+            document.getElementById('scansCompleted').textContent = stats.scans.completed;
+            document.getElementById('scansRunning').textContent = stats.scans.running;
+            document.getElementById('hostsCount').textContent = stats.hosts;
+            document.getElementById('portsCount').textContent = stats.ports;
+            document.getElementById('vulnsCount').textContent = stats.vulnerabilities;
+            document.getElementById('screenshotsCount').textContent = stats.screenshots || 0;
+            document.getElementById('sourcesCount').textContent = stats.sources || 0;
+        } catch (error) {
+            console.error('Error cargando estadísticas:', error);
+        }
+    }
+
+    // Variables para seguimiento de escaneos en ejecución
+    let runningScansTracking = {};
+    let runningScansIntervals = {};
+
+    // Función para cargar resultados en tiempo real de un scan
+    async function loadLiveResultsForScan(scanId) {
+        try {
+            const response = await fetch(`/api/scan/${scanId}/results/live`);
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error(`Error cargando resultados del scan ${scanId}:`, error);
+            return null;
+        }
+    }
+
+    // Función para actualizar la UI de progreso de un scan
+    function updateScanProgressUI(scanId, scanData, liveData) {
+        const container = document.getElementById(`scanProgress_${scanId}`);
+        if (!container) return;
+
+        const progressBar = container.querySelector(`#progressBar_${scanId}`);
+        const messagesDiv = container.querySelector(`#progressMessages_${scanId}`);
+        const resultsBody = container.querySelector(`#liveResultsBody_${scanId}`);
+        const resultsContainer = container.querySelector(`#liveResultsContainer_${scanId}`);
+
+        if (!progressBar || !messagesDiv) return;
+
+        // Actualizar mensajes
+        const statusText = scanData.status === 'running' ? '⏳ En ejecución' :
+            scanData.status === 'completed' ? '✅ Completado' :
+                '❌ Fallido';
+
+        const elapsed = scanData.started_at ?
+            Math.floor((new Date() - new Date(scanData.started_at)) / 1000) : 0;
+        const elapsedStr = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+
+        let message = `<div><strong>${statusText}</strong></div>`;
+        message += `<div>🖥️ Hosts descubiertos: ${scanData.hosts_discovered || 0}</div>`;
+        message += `<div>🔌 Puertos encontrados: ${scanData.ports_found || 0}</div>`;
+        message += `<div>⏱️ Tiempo transcurrido: ${elapsedStr}</div>`;
+        if (scanData.target_range) {
+            message += `<div>🎯 Target: ${scanData.target_range}</div>`;
+        }
+
+        messagesDiv.innerHTML = message;
+
+        // Actualizar barra de progreso
+        if (scanData.status === 'completed') {
+            progressBar.style.width = '100%';
+            progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+        } else if (scanData.hosts_discovered > 0 || scanData.ports_found > 0) {
+            const baseProgress = 20;
+            const activityProgress = Math.min(80, (scanData.hosts_discovered * 5) + (scanData.ports_found * 2));
+            const totalProgress = baseProgress + activityProgress;
+            progressBar.style.width = `${totalProgress}%`;
+            progressBar.style.background = 'linear-gradient(90deg, #3b82f6, #2563eb)';
+        } else {
+            progressBar.style.width = '10%';
+            progressBar.style.background = 'linear-gradient(90deg, #6366f1, #4f46e5)';
+        }
+
+        // Actualizar tabla de resultados
+        if (liveData && liveData.results && liveData.results.length > 0 && resultsBody && resultsContainer) {
+            resultsContainer.style.display = 'block';
+            resultsBody.innerHTML = liveData.results.map(r => {
+                const portDisplay = r.port || '-';
+                const protocolDisplay = r.protocol || '-';
+                const serviceDisplay = r.service_name || (r.port ? '-' : 'Host activo');
+                return `
+                    <tr style="border-bottom: 1px solid #334155;">
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.ip_address || '-'}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.hostname || '-'}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${portDisplay}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${protocolDisplay}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${serviceDisplay}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.product || '-'}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.version || '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Si el escaneo terminó, detener el seguimiento
+        if (scanData.status !== 'running') {
+            stopTrackingScan(scanId);
+        }
+    }
+
+    // Función para iniciar seguimiento de un scan
+    function startTrackingScan(scanId, scanData) {
+        if (runningScansIntervals[scanId]) return; // Ya se está siguiendo
+
+        // Crear contenedor de progreso
+        const progressContainer = document.getElementById('runningScansProgress');
+        progressContainer.style.display = 'block';
+
+        const scanProgressDiv = document.createElement('div');
+        scanProgressDiv.id = `scanProgress_${scanId}`;
+        scanProgressDiv.className = 'dashboard-section';
+        scanProgressDiv.style.cssText = 'padding: 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-color); margin-bottom: 1.5rem;';
+        scanProgressDiv.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="margin: 0; color: var(--accent-yellow); font-size: 1.1rem; font-weight: 600;">
+                    ⏳ Escaneo #${scanId} en Ejecución - ${scanData.organization_name} / ${scanData.location}
+                </h3>
+                <button class="btn btn-danger btn-sm" onclick="stopTrackingScan(${scanId})" style="padding: 0.4rem 0.8rem;">
+                    ❌ Ocultar
+                </button>
+            </div>
+            <div class="progress-bar" style="width: 100%; height: 30px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
+                <div id="progressBar_${scanId}" class="progress-fill" style="height: 100%; background: linear-gradient(90deg, #10b981, #059669); width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+            <div id="progressMessages_${scanId}" style="margin-bottom: 1rem; padding: 1rem; background: #0f172a; border-radius: 6px; border: 1px solid #334155;"></div>
+            <div id="liveResultsContainer_${scanId}" style="margin-top: 1.5rem; display: none;">
+                <h4 style="margin-bottom: 1rem; color: #e2e8f0;">📊 Resultados en Tiempo Real</h4>
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #334155; border-radius: 6px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead style="position: sticky; top: 0; background: #1e293b; z-index: 10;">
+                            <tr>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">IP</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">Hostname</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">Puerto</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">Protocolo</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">Servicio</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">Producto</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">Versión</th>
+                            </tr>
+                        </thead>
+                        <tbody id="liveResultsBody_${scanId}" style="background: #0f172a;">
+                            <!-- Los resultados se cargarán aquí dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+        progressContainer.appendChild(scanProgressDiv);
+
+        // Guardar datos del scan
+        runningScansTracking[scanId] = scanData;
+
+        // Cargar resultados iniciales
+        loadLiveResultsForScan(scanId).then(liveData => {
+            updateScanProgressUI(scanId, scanData, liveData);
+        });
+
+        // Iniciar polling
+        runningScansIntervals[scanId] = setInterval(async () => {
+            try {
+                // Obtener estado actualizado
+                const statusResponse = await fetch(`/api/scan/${scanId}/status`);
+                if (statusResponse.ok) {
+                    const updatedScan = await statusResponse.json();
+                    runningScansTracking[scanId] = updatedScan;
+
+                    // Obtener resultados en tiempo real
+                    const liveData = await loadLiveResultsForScan(scanId);
+
+                    // Actualizar UI
+                    updateScanProgressUI(scanId, updatedScan, liveData);
+                }
+            } catch (error) {
+                console.error(`Error actualizando scan ${scanId}:`, error);
+            }
+        }, 2000); // Actualizar cada 2 segundos
+    }
+
+    // Función para detener seguimiento de un scan
+    function stopTrackingScan(scanId) {
+        if (runningScansIntervals[scanId]) {
+            clearInterval(runningScansIntervals[scanId]);
+            delete runningScansIntervals[scanId];
+        }
+
+        const container = document.getElementById(`scanProgress_${scanId}`);
+        if (container) {
+            container.remove();
+        }
+
+        delete runningScansTracking[scanId];
+
+        // Ocultar contenedor si no hay más escaneos
+        const progressContainer = document.getElementById('runningScansProgress');
+        if (progressContainer && progressContainer.children.length === 0) {
+            progressContainer.style.display = 'none';
+        }
+    }
+
+    async function loadRecentScans() {
+        try {
+            const params = new URLSearchParams();
+            if (currentFilters.organization) params.append('organization', currentFilters.organization);
+
+            const response = await fetch(`/api/scans?${params}`);
+            const scans = await response.json();
+
+            // Filtrar por location y scan_id en el cliente si es necesario
+            let filteredScans = scans;
+            if (currentFilters.location) {
+                filteredScans = filteredScans.filter(s => s.location === currentFilters.location);
+            }
+            if (currentFilters.scan_id) {
+                filteredScans = filteredScans.filter(s => s.id == currentFilters.scan_id);
+            }
+
+            // Detectar escaneos en ejecución y mostrar su progreso
+            const runningScans = filteredScans.filter(s =>
+                s.status === 'running' && s.is_really_running === true
+            );
+
+            // Iniciar seguimiento de escaneos en ejecución
+            for (const scan of runningScans) {
+                if (!runningScansIntervals[scan.id]) {
+                    startTrackingScan(scan.id, scan);
+                }
+            }
+
+            // Detener seguimiento de escaneos que ya no están en ejecución
+            for (const scanId in runningScansIntervals) {
+                if (!runningScans.some(s => s.id == scanId)) {
+                    stopTrackingScan(parseInt(scanId));
+                }
+            }
+
+            const tbody = document.getElementById('recentScansBody');
+            if (filteredScans.length === 0) {
+                const filterText = currentFilters.organization || currentFilters.location || currentFilters.scan_id
+                    ? ' con los filtros aplicados' : '';
+                tbody.innerHTML = `<tr><td colspan="7" class="empty">No hay escaneos${filterText}</td></tr>`;
+            } else {
+                // Mostrar solo los primeros 10
+                const recentScans = filteredScans.slice(0, 10);
+                tbody.innerHTML = recentScans.map(scan => {
+                    const startDate = new Date(scan.started_at);
+                    const now = new Date();
+                    const elapsedHours = (now - startDate) / (1000 * 60 * 60);
+
+                    // Determinar si está realmente en ejecución
+                    const isReallyRunning = scan.is_really_running === true;
+                    const isRunning = scan.status === 'running';
+                    const isZombie = isRunning && !isReallyRunning && elapsedHours > 2;
+
+                    // Mostrar estado correcto
+                    let statusDisplay = scan.status;
+                    if (isRunning && isReallyRunning) {
+                        statusDisplay = 'running ⏳';
+                    } else if (isZombie) {
+                        statusDisplay = 'running ⚠️';
+                    }
+
+                    // Mostrar progreso para escaneos en ejecución
+                    let progressInfo = '';
+                    if (isRunning && isReallyRunning && (scan.hosts_discovered > 0 || scan.ports_found > 0)) {
+                        progressInfo = `<div style="font-size: 0.85em; color: #94a3b8; margin-top: 0.25rem;">
+                            🖥️ ${scan.hosts_discovered || 0} hosts | 🔌 ${scan.ports_found || 0} puertos
+                        </div>`;
+                    }
+
+                    // Botones de acción organizados
+                    const resultsUrl = `/pentest/${encodeURIComponent(scan.organization_name)}/recon/results?scan_id=${scan.id}`;
+                    let actionsHtml = '';
+                    if (isReallyRunning) {
+                        actionsHtml = `
+                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                <a href="${resultsUrl}" class="btn btn-sm" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; white-space: nowrap;">📊 Ver Resultados</a>
+                                <button class="btn btn-danger btn-sm" onclick="cancelScan(${scan.id})" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; white-space: nowrap;">❌ Cancelar</button>
+                            </div>
+                        `;
+                    } else {
+                        actionsHtml = `
+                            <a href="${resultsUrl}" class="btn btn-sm" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; white-space: nowrap;">📊 Ver Resultados</a>
+                        `;
+                    }
+
+                    return `
+                        <tr ${isZombie ? 'style="background-color: #fef2f2;"' : ''}>
+                            <td>${scan.id}</td>
+                            <td>${scan.organization_name}</td>
+                            <td>${scan.location}</td>
+                            <td>${scan.target_range}</td>
+                            <td>
+                                <span class="status-badge status-${scan.status}">
+                                    ${statusDisplay}
+                                </span>
+                                ${progressInfo}
+                            </td>
+                            <td>${startDate.toLocaleString()}</td>
+                            <td style="padding: 0.75rem;">
+                                ${actionsHtml}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                // Mostrar botón de limpieza si hay escaneos zombie
+                const hasZombies = scans.some(scan => {
+                    if (scan.status !== 'running') return false;
+                    const startDate = new Date(scan.started_at);
+                    const elapsedHours = (new Date() - startDate) / (1000 * 60 * 60);
+                    return elapsedHours > 2;
+                });
+
+                document.getElementById('cleanupZombiesBtn').style.display = hasZombies ? 'block' : 'none';
+            }
+        } catch (error) {
+            console.error('Error cargando escaneos:', error);
+        }
+    }
+
+    async function cleanupZombies() {
+        if (!confirm('¿Estás seguro de que quieres limpiar los escaneos zombie? Esto marcará los escaneos en ejecución (más de 2 horas) como completados o fallidos.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/scans/cleanup-zombies', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ max_hours: 2.0 })
+            });
+
+            const result = await response.json();
+            alert(`✅ ${result.message}`);
+
+            // Recargar la lista
+            loadRecentScans();
+            loadStats();
+        } catch (error) {
+            console.error('Error limpiando zombies:', error);
+            alert('❌ Error al limpiar escaneos zombie: ' + error.message);
+        }
+    }
+
+    function applyFilters() {
+        currentFilters.organization = document.getElementById('filterOrg').value;
+        currentFilters.location = document.getElementById('filterLocation').value;
+        currentFilters.scan_id = document.getElementById('filterScan').value;
+
+        loadStats();
+        loadRecentScans();
+    }
+
+    function clearFilters() {
+        currentFilters = {
+            organization: '',
+            location: '',
+            scan_id: ''
+        };
+
+        document.getElementById('filterOrg').value = '';
+        document.getElementById('filterLocation').value = '';
+        document.getElementById('filterScan').value = '';
+
+        loadLocations();
+        loadScans();
+        loadStats();
+        loadRecentScans();
+    }
+
+    // Actualizar ubicaciones cuando cambia la organización
+    document.getElementById('filterOrg').addEventListener('change', function () {
+        const org = this.value;
+        currentFilters.organization = org;
+        currentFilters.location = '';
+        currentFilters.scan_id = '';
+        document.getElementById('filterLocation').value = '';
+        document.getElementById('filterScan').value = '';
+        loadLocations(org || null);
+        loadScans(org || null, null);
+        updateDeleteButtons();
+        applyFilters();
+    });
+
+    // Actualizar escaneos cuando cambia la ubicación
+    document.getElementById('filterLocation').addEventListener('change', function () {
+        const org = document.getElementById('filterOrg').value;
+        const location = this.value;
+        currentFilters.location = location;
+        currentFilters.scan_id = '';
+        document.getElementById('filterScan').value = '';
+        loadScans(org || null, location || null);
+        updateDeleteButtons();
+        applyFilters();
+    });
+
+    // Actualizar cuando cambia el escaneo
+    document.getElementById('filterScan').addEventListener('change', function () {
+        currentFilters.scan_id = this.value;
+        updateDeleteButtons();
+        applyFilters();
+    });
+
+    // Actualizar visibilidad de botones de eliminación
+    function updateDeleteButtons() {
+        const org = document.getElementById('filterOrg').value;
+        const location = document.getElementById('filterLocation').value;
+        const scanId = document.getElementById('filterScan').value;
+
+        document.getElementById('deleteOrgBtn').style.display = org ? 'block' : 'none';
+        document.getElementById('deleteLocationBtn').style.display = (org && location) ? 'block' : 'none';
+        document.getElementById('deleteScanBtn').style.display = scanId ? 'block' : 'none';
+    }
+
+    // Función para eliminar organización
+    async function deleteOrganization() {
+        const org = document.getElementById('filterOrg').value;
+        if (!org) return;
+
+        if (!confirm(`¿Estás seguro de que quieres eliminar la organización "${org}"?\n\nEsto eliminará:\n- La organización completa\n- Todas sus ubicaciones\n- Todos sus escaneos\n- Todos los resultados y archivos asociados\n\n⚠️ Esta acción NO se puede deshacer.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/organization/${encodeURIComponent(org)}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Error al eliminar organización');
+            }
+
+            const result = await response.json();
+            alert(`✅ Organización "${org}" eliminada correctamente.\n\nEliminados:\n- ${result.scans_deleted} escaneos\n- ${result.locations_deleted} ubicaciones`);
+
+            // Limpiar filtros y recargar todos los datos
+            currentFilters = {
+                organization: '',
+                location: '',
+                scan_id: ''
+            };
+            document.getElementById('filterOrg').value = '';
+            document.getElementById('filterLocation').value = '';
+            document.getElementById('filterScan').value = '';
+            updateDeleteButtons();
+
+            const orgNameContext = "{{ org_name | default('') }}";
+            if (orgNameContext) {
+                window.location.href = '/pentest';
+                return;
+            }
+
+            // Recargar todos los datos si no estamos en una vista de contexto específica
+            await loadOrganizations();
+            await loadLocations();
+            await loadScans();
+            await loadStats();
+            await loadRecentScans();
+        } catch (error) {
+            console.error('Error eliminando organización:', error);
+            alert('❌ Error al eliminar organización: ' + error.message);
+        }
+    }
+
+    // Función para eliminar ubicación
+    async function deleteLocation() {
+        const org = document.getElementById('filterOrg').value;
+        const location = document.getElementById('filterLocation').value;
+
+        if (!org || !location) return;
+
+        if (!confirm(`¿Estás seguro de que quieres eliminar la ubicación "${location}" de la organización "${org}"?\n\nEsto eliminará:\n- La ubicación completa\n- Todos sus escaneos\n- Todos los resultados y archivos asociados\n\n⚠️ Esta acción NO se puede deshacer.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/location?organization=${encodeURIComponent(org)}&location=${encodeURIComponent(location)}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Error al eliminar ubicación');
+            }
+
+            const result = await response.json();
+            alert(`✅ Ubicación "${location}" eliminada correctamente.\n\nEliminados: ${result.deleted_count} escaneos`);
+
+            // Limpiar filtros y recargar todos los datos
+            currentFilters.location = '';
+            currentFilters.scan_id = '';
+            document.getElementById('filterLocation').value = '';
+            document.getElementById('filterScan').value = '';
+            updateDeleteButtons();
+
+            // Recargar todos los datos
+            await loadLocations(org || null);
+            await loadScans(org || null, null);
+            await loadStats();
+            await loadRecentScans();
+        } catch (error) {
+            console.error('Error eliminando ubicación:', error);
+            alert('❌ Error al eliminar ubicación: ' + error.message);
+        }
+    }
+
+    // Función para eliminar escaneo
+    async function deleteScan() {
+        const scanId = document.getElementById('filterScan').value;
+        const org = document.getElementById('filterOrg').value;
+        const location = document.getElementById('filterLocation').value;
+
+        if (!scanId) return;
+
+        if (!confirm(`¿Estás seguro de que quieres eliminar el escaneo #${scanId}?\n\nEsto eliminará:\n- El escaneo completo\n- Todos sus resultados\n- Todos los archivos asociados\n\n⚠️ Esta acción NO se puede deshacer.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/scan/${scanId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Error al eliminar escaneo');
+            }
+
+            alert(`✅ Escaneo #${scanId} eliminado correctamente.`);
+
+            // Limpiar filtro de escaneo y recargar todos los datos
+            currentFilters.scan_id = '';
+            document.getElementById('filterScan').value = '';
+            updateDeleteButtons();
+
+            // Recargar todos los datos
+            await loadScans(org || null, location || null);
+            await loadStats();
+            await loadRecentScans();
+        } catch (error) {
+            console.error('Error eliminando escaneo:', error);
+            alert('❌ Error al eliminar escaneo: ' + error.message);
+        }
+    }
+
+    // Cargar datos al inicio
+    loadOrganizations();
+    loadLocations();
+    loadScans();
+    loadStats();
+    loadRecentScans();
+    const initOrg = currentFilters.organization || document.getElementById('filterOrg').value;
+    if (initOrg) {
+        loadNetworks(initOrg);
+    }
+    updateDeleteButtons();
+
+    // Actualizar cada 10 segundos (reducido para menos carga)
+    setInterval(() => {
+        loadStats();
+        loadRecentScans();
+    }, 10000);
+
+    // Función para cancelar escaneo desde el dashboard
+    async function cancelScan(scanId) {
+        if (!confirm(`¿Estás seguro de que quieres cancelar el escaneo #${scanId}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/scan/${scanId}/cancel`, {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                alert('✅ ' + result.message);
+                // Recargar escaneos y estadísticas
+                await loadRecentScans();
+                await loadStats();
+            } else {
+                alert('❌ Error: ' + (result.detail || result.message));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error cancelando escaneo: ' + error.message);
+        }
+    }
+
+    async function exportData() {
+        const org = document.getElementById('filterOrg').value;
+        const location = document.getElementById('filterLocation').value;
+        const scanId = document.getElementById('filterScan').value;
+
+        const params = new URLSearchParams();
+        if (org) params.append('organization', org);
+        if (location) params.append('location', location);
+        if (scanId) params.append('scan_id', scanId);
+
+        try {
+            const response = await fetch(`/api/export?${params.toString()}`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Error exportando datos');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'export.zip';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            alert('✅ Exportación completada correctamente');
+        } catch (error) {
+            alert(`❌ Error exportando datos: ${error.message}`);
+        }
+    }
+
+    async function importData(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!file.name.endsWith('.zip')) {
+            alert('❌ Por favor, selecciona un archivo ZIP válido');
+            event.target.value = '';
+            return;
+        }
+
+        if (!confirm(`¿Estás seguro de que quieres importar "${file.name}"?\n\nEsto añadirá los datos al sistema actual.`)) {
+            event.target.value = '';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/api/import', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                const stats = result.stats;
+                alert(`✅ Importación completada:\n\n` +
+                    `- Organizaciones: ${stats.organizations}\n` +
+                    `- Escaneos: ${stats.scans}\n` +
+                    `- Resultados: ${stats.scan_results}\n` +
+                    `- Hosts: ${stats.hosts}\n` +
+                    `- Vulnerabilidades: ${stats.vulnerabilities}\n` +
+                    `- Enrichments: ${stats.enrichments}\n` +
+                    `- Archivos: ${stats.files_imported}`);
+
+                loadOrganizations().then(() => {
+                    const orgNameContext = "{{ org_name | default('') }}";
+                    if (orgNameContext) {
+                        loadLocations(orgNameContext);
+                        loadScans(orgNameContext, '');
+                        loadStats();
+                        loadRecentScans();
+                    } else {
+                        loadLocations();
+                        loadScans();
+                        loadStats();
+                        loadRecentScans();
+                    }
+                });
+            } else {
+                alert(`❌ Error: ${result.detail || result.message}`);
+            }
+        } catch (error) {
+            alert(`❌ Error importando datos: ${error.message}`);
+        } finally {
+            event.target.value = '';
+        }
+    }
+</script>
+{% endblock %}

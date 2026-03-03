@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}ArsenalOT - Dashboard Principal{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1 class="page-title">🛡️ ArsenalOT</h1>
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">Plataforma integral de ciberseguridad y pentesting.</p>
+</div>
+
+<div class="glass-card" style="padding: 2rem; margin-top: 2rem;">
+    <h2 style="margin-top: 0; margin-bottom: 2rem; color: var(--accent-blue); font-size: 1.5rem;">Módulos Disponibles
+    </h2>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+
+        <!-- Pentest Module -->
+        <a href="/pentest" style="text-decoration: none; color: inherit;">
+            <div class="stat-card"
+                style="cursor: pointer; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2.5rem; transition: transform 0.2s, box-shadow 0.2s;">
+                <div class="stat-icon"
+                    style="font-size: 3rem; margin-bottom: 1rem; background: rgba(37, 99, 235, 0.2);">🎯</div>
+                <h3 style="margin: 0 0 1rem 0; font-size: 1.4rem;">Pentest</h3>
+                <p style="color: var(--text-secondary); text-align: center; margin: 0;">Ejecuta escaneos, analiza
+                    resultados y gestiona fases de pentesting por organización.</p>
+            </div>
+        </a>
+
+        <!-- Cheatsheets Module (Coming Soon) -->
+        <div class="stat-card"
+            style="opacity: 0.6; cursor: not-allowed; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2.5rem;">
+            <div class="stat-icon" style="font-size: 3rem; margin-bottom: 1rem; background: rgba(100, 116, 139, 0.2);">
+                📚</div>
+            <h3 style="margin: 0 0 1rem 0; font-size: 1.4rem;">Cheatsheets</h3>
+            <p style="color: var(--text-secondary); text-align: center; margin: 0;">(Próximamente) Guías rápidas y
+                comandos útiles para diferentes escenarios de ataque y defensa.</p>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

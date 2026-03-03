@@ -1,0 +1,1196 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo Escaneo - ArsenalOT{% endblock %}
+
+{% block content %}
+<div class="scan-page">
+    <h1 class="page-title">🔍 Nuevo Escaneo</h1>
+
+    <!-- Sección de importación XML (colapsable, menos prominente) -->
+    <details class="import-section glass-card" style="margin-bottom: 2rem; padding: 1.5rem;">
+        <summary style="cursor: pointer; color: var(--text-primary); font-weight: 500; user-select: none;">
+            <span>📥 Importar escaneo Nmap desde XML</span>
+        </summary>
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #1e293b;">
+            <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">Importa un escaneo Nmap existente desde
+                un archivo XML.</p>
+
+            <form id="importXmlForm" enctype="multipart/form-data"
+                style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="import_organization" style="font-size: 0.85rem;">Organización *</label>
+                        {% if org_name %}
+                        <input type="text" id="import_organization" name="organization" value="{{ org_name }}" required
+                            readonly
+                            style="font-size: 0.9rem; padding: 0.4rem; background: var(--bg-body); cursor: not-allowed; opacity: 0.8;">
+                        {% else %}
+                        <input type="text" id="import_organization" name="organization" required
+                            placeholder="Ej: EmpresaX" list="importOrgsList"
+                            style="font-size: 0.9rem; padding: 0.4rem;">
+                        <datalist id="importOrgsList"></datalist>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="import_location" style="font-size: 0.85rem;">Ubicación *</label>
+                        <input type="text" id="import_location" name="location" required
+                            placeholder="Ej: Oficina Central" style="font-size: 0.9rem; padding: 0.4rem;">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="xml_file" style="font-size: 0.85rem;">Archivo XML de Nmap *</label>
+                    <input type="file" id="xml_file" name="xml_file" accept=".xml" required
+                        style="font-size: 0.85rem; padding: 0.4rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #e2e8f0;">
+                </div>
+
+                <div class="form-actions" style="margin-top: 0.5rem;">
+                    <button type="submit" class="btn btn-primary" id="importXmlBtn"
+                        style="font-size: 0.85rem; padding: 0.5rem 1rem;">
+                        <span id="importBtnText">📥 Importar</span>
+                        <span id="importBtnSpinner" class="spinner hidden"
+                            style="display: none; margin-left: 0.5rem;">⏳</span>
+                    </button>
+                </div>
+            </form>
+
+            <div id="importResult" style="margin-top: 0.75rem; display: none;"></div>
+        </div>
+    </details>
+
+    <!-- Sección de importación PCAP (colapsable, menos prominente) -->
+    <details class="import-section glass-card" style="margin-bottom: 2rem; padding: 1.5rem;">
+        <summary style="cursor: pointer; color: var(--text-primary); font-weight: 500; user-select: none;">
+            <span>🎧 Importar escaneo pasivo desde PCAP</span>
+        </summary>
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #1e293b;">
+            <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">Importa un escaneo pasivo desde un
+                archivo PCAP o PCAPNG. La extracción de resultados es la misma que cuando se inicia un escaneo pasivo.
+            </p>
+
+            <form id="importPcapForm" enctype="multipart/form-data"
+                style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="import_pcap_organization" style="font-size: 0.85rem;">Organización *</label>
+                        {% if org_name %}
+                        <input type="text" id="import_pcap_organization" name="organization" value="{{ org_name }}"
+                            required readonly
+                            style="font-size: 0.9rem; padding: 0.4rem; background: var(--bg-body); cursor: not-allowed; opacity: 0.8;">
+                        {% else %}
+                        <input type="text" id="import_pcap_organization" name="organization" required
+                            placeholder="Ej: EmpresaX" list="importPcapOrgsList"
+                            style="font-size: 0.9rem; padding: 0.4rem;">
+                        <datalist id="importPcapOrgsList"></datalist>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="import_pcap_location" style="font-size: 0.85rem;">Ubicación *</label>
+                        <input type="text" id="import_pcap_location" name="location" required
+                            placeholder="Ej: Oficina Central" style="font-size: 0.9rem; padding: 0.4rem;">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="pcap_file" style="font-size: 0.85rem;">Archivo PCAP/PCAPNG *</label>
+                    <input type="file" id="pcap_file" name="pcap_file" accept=".pcap,.pcapng" required
+                        style="font-size: 0.85rem; padding: 0.4rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #e2e8f0;">
+                </div>
+
+                <div class="form-actions" style="margin-top: 0.5rem;">
+                    <button type="submit" class="btn btn-primary" id="importPcapBtn"
+                        style="font-size: 0.85rem; padding: 0.5rem 1rem;">
+                        <span id="importPcapBtnText">🎧 Importar</span>
+                        <span id="importPcapBtnSpinner" class="spinner hidden"
+                            style="display: none; margin-left: 0.5rem;">⏳</span>
+                    </button>
+                </div>
+            </form>
+
+            <div id="importPcapResult" style="margin-top: 0.75rem; display: none;"></div>
+        </div>
+    </details>
+
+    <form id="scanForm" class="scan-form">
+        <div class="form-section">
+            <h2>📋 Información Básica</h2>
+
+            <div class="form-group">
+                <label for="organization">Organización *</label>
+                {% if org_name %}
+                <input type="text" id="organization" name="organization" value="{{ org_name }}" readonly
+                    style="background: var(--bg-body); cursor: not-allowed; opacity: 0.8;">
+                {% else %}
+                <input type="text" id="organization" name="organization" required placeholder="Ej: Acme Corp"
+                    list="orgsList">
+                <datalist id="orgsList"></datalist>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="location">Origen (From) *</label>
+                <input type="text" id="location" name="location" required placeholder="Ej: Oficina Central">
+            </div>
+
+            <div class="form-group">
+                <label for="interface">Interfaz de Red</label>
+                <input type="text" id="interface" name="interface" value="eth0" placeholder="eth0">
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>🎯 Modo de Escaneo</h2>
+
+            <div class="form-group">
+                <label for="scan_mode">Tipo de Escaneo *</label>
+                <select id="scan_mode" name="scan_mode" required onchange="toggleScanMode()">
+                    <option value="active" selected>🔍 Escaneo Activo</option>
+                    <option value="passive">🎧 Escaneo Pasivo</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Sección de Escaneos Activos -->
+        <div class="form-section" id="activeScanSection">
+            <h2>🔍 Capacidades de Escaneo Activo</h2>
+
+            <div class="form-group">
+                <label for="target_range">Rango de IPs *</label>
+                <div id="networkSelectorContainer"
+                    style="display: none; gap: 0.5rem; align-items: stretch; margin-bottom: 0.5rem;">
+                    <select id="networkSelector" class="form-control"
+                        style="flex: 1; padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.1); color: var(--text-secondary);">
+                        <option value="">-- Seleccionar red de la Organización --</option>
+                    </select>
+                    <button type="button" onclick="addSelectedNetwork()" class="btn btn-sm"
+                        style="background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; white-space: nowrap;">➕
+                        Añadir al Rango</button>
+                </div>
+                <input type="text" id="target_range" name="target_range" required
+                    placeholder="Ej: 192.168.1.0/24 o 192.168.1.100">
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="host_discovery" name="host_discovery" checked>
+                    <span>🔍 Descubrimiento de Hosts</span>
+                    <small>Detección de hosts activos mediante ARP y ping</small>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="nmap" name="nmap" checked>
+                    <span>🔌 Escaneo Nmap</span>
+                    <small>Escaneo de puertos y servicios</small>
+                </label>
+            </div>
+
+            <div id="nmapOptions" class="nmap-options">
+                <div class="form-group">
+                    <label for="nmap_speed">Velocidad del Escaneo</label>
+                    <select id="nmap_speed" name="nmap_speed">
+                        <option value="rapido">Rápido (T4)</option>
+                        <option value="normal" selected>Normal (T3)</option>
+                        <option value="lento">Lento (T2)</option>
+                    </select>
+                </div>
+
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="nmap_versions" name="nmap_versions">
+                        <span>Detección de Versiones (-sV)</span>
+                    </label>
+                </div>
+
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="nmap_vulns" name="nmap_vulns">
+                        <span>Escaneo de Vulnerabilidades (--script vuln)</span>
+                    </label>
+                </div>
+
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="nmap_ot_ports" name="nmap_ot_ports" checked>
+                        <span>Puertos OT (Operational Technology)</span>
+                    </label>
+                </div>
+
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="nmap_it_ports" name="nmap_it_ports" checked>
+                        <span>Puertos Comunes IT</span>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label for="custom_ports">Puertos Personalizados (opcional)</label>
+                    <input type="text" id="custom_ports" name="custom_ports" placeholder="Ej: 80,443,8080">
+                </div>
+            </div>
+
+            <!-- Comando Nmap Editable Preview (ahora movido encima de las opciones finales) -->
+            <div id="nmapCommandPreview" class="nmap-command-preview"
+                style="display: none; margin-top: 1.5rem; margin-bottom: 1rem; padding: 1rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <label style="font-weight: 600; color: #e2e8f0; font-size: 0.95rem;">🔧 Comando Nmap Editable
+                        (Ajusta a tu gusto):</label>
+                    <button type="button" onclick="copyNmapCommand()"
+                        style="padding: 0.25rem 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">
+                        📋 Copiar
+                    </button>
+                </div>
+                <textarea id="nmapCommandText" name="custom_nmap_command"
+                    style="width: 100%; min-height: 80px; padding: 0.75rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #60a5fa; font-family: 'Courier New', monospace; font-size: 0.9rem; resize: vertical;"
+                    spellcheck="false">El comando aparecerá aquí cuando configures las opciones de Nmap</textarea>
+                <small style="color: #94a3b8; font-size: 0.8rem; margin-top: 0.5rem; display: block;">* Puedes modificar
+                    libremente este comando. El escaneo ejecutará exactamente lo que escribas aquí arriba.</small>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="screenshots" name="screenshots">
+                    <span>📸 Capturas de Pantalla</span>
+                    <small>Captura de servicios web (requiere Firefox)</small>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="source_code" name="source_code">
+                    <span>📄 Código Fuente</span>
+                    <small>Extracción de código HTML de servicios web</small>
+                </label>
+            </div>
+        </div>
+
+        <!-- Sección de Escaneo Pasivo -->
+        <div class="form-section" id="passiveScanSection" style="display: none;">
+            <h2>🎧 Configuración de Escaneo Pasivo</h2>
+
+            <div class="form-group">
+                <label for="pcap_filter">Filtro BPF (Opcional)</label>
+                <input type="text" id="pcap_filter" name="pcap_filter"
+                    placeholder='Ej: "tcp port 80" o "host 192.168.1.1"'>
+                <small>Filtro de captura en formato BPF. Déjalo vacío para capturar todo el tráfico.</small>
+            </div>
+
+            <div style="background: #1e293b; padding: 1rem; border-radius: 6px; margin-top: 1rem;">
+                <p style="margin: 0; color: #94a3b8; font-size: 0.9rem;">
+                    <strong>ℹ️ Información sobre Escaneo Pasivo:</strong><br>
+                    • Captura tráfico de red usando tshark/wireshark<br>
+                    • Extrae automáticamente direcciones IP y puertos descubiertos<br>
+                    • Los resultados se guardan en la base de datos en tiempo real<br>
+                    • Puedes detener el escaneo en cualquier momento<br>
+                    • El archivo pcap puede descargarse después
+                </p>
+            </div>
+        </div>
+
+</div>
+<div class="form-actions">
+    <button type="submit" class="btn btn-primary" id="startScanBtn">
+        <span id="btnText">🚀 Iniciar Escaneo</span>
+        <span id="btnSpinner" class="spinner hidden" style="display: none; margin-left: 0.5rem;">⏳</span>
+    </button>
+    <button type="button" class="btn btn-danger hidden" id="cancelScanBtn" style="display: none;">
+        ❌ Cancelar Escaneo
+    </button>
+</div>
+</form>
+
+<div id="scanProgress" class="scan-progress hidden">
+    <h3>Progreso del Escaneo</h3>
+    <div class="progress-bar"
+        style="width: 100%; height: 30px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
+        <div id="progressBarFill" class="progress-fill"
+            style="height: 100%; background: linear-gradient(90deg, #10b981, #059669); width: 0%; transition: width 0.3s ease;">
+        </div>
+    </div>
+    <div id="progressMessages" class="progress-messages"
+        style="margin-bottom: 1rem; padding: 1rem; background: #0f172a; border-radius: 6px; border: 1px solid #334155;">
+    </div>
+    <div id="scanStatus" class="scan-status" style="margin-bottom: 1rem;"></div>
+</div>
+</div>
+
+<script>
+    // Cargar organizaciones para ambos formularios
+    async function loadOrganizations() {
+        try {
+            const response = await fetch('/api/organizations');
+            const orgs = await response.json();
+
+            // Para formulario de escaneo
+            const datalist = document.getElementById('orgsList');
+            datalist.innerHTML = orgs.map(org =>
+                `<option value="${org.name}">${org.name}</option>`
+            ).join('');
+
+            // Para formulario de importación XML
+            const importDatalist = document.getElementById('importOrgsList');
+            importDatalist.innerHTML = orgs.map(org =>
+                `<option value="${org.name}">${org.name}</option>`
+            ).join('');
+
+            // Para formulario de importación PCAP
+            const importPcapDatalist = document.getElementById('importPcapOrgsList');
+            importPcapDatalist.innerHTML = orgs.map(org =>
+                `<option value="${org.name}">${org.name}</option>`
+            ).join('');
+        } catch (error) {
+            console.error('Error cargando organizaciones:', error);
+        }
+    }
+
+    // Función para cambiar entre modos de escaneo
+    function toggleScanMode() {
+        const scanMode = document.getElementById('scan_mode').value;
+        const activeSection = document.getElementById('activeScanSection');
+        const passiveSection = document.getElementById('passiveScanSection');
+        const targetRangeField = document.getElementById('target_range');
+
+        if (scanMode === 'active') {
+            activeSection.style.display = 'block';
+            passiveSection.style.display = 'none';
+            targetRangeField.required = true;
+        } else {
+            activeSection.style.display = 'none';
+            passiveSection.style.display = 'block';
+            targetRangeField.required = false;
+        }
+
+        updateNmapCommand();
+    }
+
+    // Mostrar/ocultar opciones de Nmap
+    document.getElementById('nmap').addEventListener('change', function () {
+        document.getElementById('nmapOptions').style.display =
+            this.checked ? 'block' : 'none';
+        updateNmapCommand();
+    });
+
+    // Funciones para cargar y seleccionar redes en Escaneo
+    async function updateNetworksOptions() {
+        const orgInput = document.getElementById('organization');
+        const selectorContainer = document.getElementById('networkSelectorContainer');
+        const selector = document.getElementById('networkSelector');
+
+        const orgName = orgInput ? orgInput.value.trim() : '';
+
+        if (!orgName) {
+            selectorContainer.style.display = 'none';
+            return;
+        }
+
+        try {
+            const resp = await fetch(`/api/networks?organization=${encodeURIComponent(orgName)}`);
+            if (!resp.ok) {
+                selectorContainer.style.display = 'none';
+                return;
+            }
+            const networks = await resp.json();
+
+            if (networks && networks.length > 0) {
+                selectorContainer.style.display = 'flex';
+
+                let optionsHtml = '<option value="">-- Seleccionar red para añadir --</option>';
+
+                // Opción para TODA LA ORGANIZACIÓN
+                const allOrgRanges = networks.map(n => n.network_range).join(' ');
+                optionsHtml += `<option value="${allOrgRanges}" style="font-weight: bold; color: var(--accent-yellow);">🏢 Añadir Toda la Organización (${networks.length} redes)</option>`;
+
+                const grouped = {};
+                networks.forEach(net => {
+                    const sys = net.system_name || "Sin Sistema Asociado";
+                    if (!grouped[sys]) grouped[sys] = [];
+                    grouped[sys].push(net);
+                });
+
+                const sortedSystems = Object.keys(grouped).sort((a, b) => {
+                    if (a === "Sin Sistema Asociado") return 1;
+                    if (b === "Sin Sistema Asociado") return -1;
+                    return a.localeCompare(b);
+                });
+
+                for (const sys of sortedSystems) {
+                    optionsHtml += `<optgroup label="SISTEMA: ${sys}">`;
+
+                    // Opción para TODO EL SISTEMA (si hay más de 1 red en el sistema)
+                    if (grouped[sys].length > 1) {
+                        const allSysRanges = grouped[sys].map(n => n.network_range).join(' ');
+                        optionsHtml += `<option value="${allSysRanges}" style="font-weight: bold;">[Añadir todo el sistema ${sys}]</option>`;
+                    }
+
+                    grouped[sys].forEach(net => {
+                        optionsHtml += `<option value="${net.network_range}">&nbsp;&nbsp;📄 ${net.network_name} (${net.network_range})</option>`;
+                    });
+                    optionsHtml += `</optgroup>`;
+                }
+                selector.innerHTML = optionsHtml;
+            } else {
+                selectorContainer.style.display = 'none';
+            }
+        } catch (e) {
+            console.error("Error loading networks", e);
+            selectorContainer.style.display = 'none';
+        }
+    }
+
+    function addSelectedNetwork() {
+        const selector = document.getElementById('networkSelector');
+        const targetInput = document.getElementById('target_range');
+        if (selector.value) {
+            const valsToAdd = selector.value.split(' ');
+            let currentVals = targetInput.value.trim() === '' ? [] : targetInput.value.trim().split(/\s+/);
+
+            valsToAdd.forEach(v => {
+                if (!currentVals.includes(v)) {
+                    currentVals.push(v);
+                }
+            });
+
+            targetInput.value = currentVals.join(' ');
+            selector.value = '';
+
+            // Limpiar errores de validación de HTML5 y lanzar eventos para refrescar la UI (Nmap command view)
+            targetInput.setCustomValidity('');
+            targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+            targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    document.getElementById('organization').addEventListener('change', updateNetworksOptions);
+    document.getElementById('organization').addEventListener('blur', updateNetworksOptions);
+
+    // Cargar redes al inicio
+    setTimeout(updateNetworksOptions, 500);
+
+    // Funciones para construir y mostrar el comando Nmap
+    function buildNmapCommand() {
+        const scanMode = document.getElementById('scan_mode').value;
+        const nmapEnabled = document.getElementById('nmap').checked;
+
+        // Solo mostrar comando si es escaneo activo y Nmap está habilitado
+        if (scanMode !== 'active' || !nmapEnabled) {
+            return null;
+        }
+
+        const targetRange = document.getElementById('target_range').value || 'TARGET_IP';
+        const speed = document.getElementById('nmap_speed').value || 'normal';
+        const enableVersions = document.getElementById('nmap_versions').checked;
+        const enableVulns = document.getElementById('nmap_vulns').checked;
+        const otPorts = document.getElementById('nmap_ot_ports').checked;
+        const itPorts = document.getElementById('nmap_it_ports').checked;
+        const customPorts = document.getElementById('custom_ports').value.trim();
+
+        // Construir lista de puertos (deben coincidir exactamente con port_scanner.py)
+        const itPortsList = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1433, 1521, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888, 9090, 27017, 5000, 27018, 27019, 50000];
+        // Lista completa OT (sin duplicados de IT, debe coincidir con port_scanner.py)
+        const otPortsList = [102, 502, 789, 1089, 1090, 1091, 1911, 1962, 2222, 2223, 2404, 4000, 4840, 4843, 4911, 5901, 7890, 9600, 10000, 12320, 12321, 18245, 18246, 19999, 20000, 20547, 34962, 34963, 34964, 34980, 44818, 46823, 46824, 47808, 47809, 47810, 47820, 55000, 55001, 55002, 55003, 55555, 55556, 55900, 55901, 55902, 55903, 61408, 62351, 62352, 62353, 62354, 62355];
+
+        let portsSet = new Set();
+
+        if (itPorts) {
+            itPortsList.forEach(p => portsSet.add(p));
+        }
+
+        if (otPorts) {
+            // Solo agregar OT ports que no estén en IT
+            otPortsList.forEach(p => {
+                if (!itPortsList.includes(p)) {
+                    portsSet.add(p);
+                }
+            });
+        }
+
+        if (customPorts) {
+            customPorts.split(',').forEach(p => {
+                const port = parseInt(p.trim());
+                if (!isNaN(port) && port > 0 && port <= 65535) {
+                    portsSet.add(port);
+                }
+            });
+        }
+
+        // Construir comando
+        let cmd = ['nmap'];
+
+        // Velocidad (solo -T según selección del usuario)
+        const speedMap = {
+            'rapido': '-T4',
+            'normal': '-T3',
+            'lento': '-T2'
+        };
+        cmd.push(speedMap[speed] || '-T3');
+
+        // Técnica de escaneo: TCP connect scan (no requiere privilegios root)
+        cmd.push('-sT');
+
+        // Puertos
+        if (portsSet.size > 0) {
+            const portsArray = Array.from(portsSet).sort((a, b) => a - b);
+            const portsStr = portsArray.join(',');
+            cmd.push('-p', portsStr);
+        } else {
+            cmd.push('--top-ports', '1000');
+        }
+
+        // Detección de versiones (solo si está marcado en la interfaz)
+        if (enableVersions) {
+            cmd.push('-sV');
+        }
+
+        // Scripts de vulnerabilidades (solo si está marcado en la interfaz)
+        if (enableVulns) {
+            cmd.push('--script', 'vuln');
+        }
+
+        // Target (al final)
+        cmd.push(targetRange);
+
+        // Output XML (no incluirlo en el preview, se genera automáticamente)
+        // cmd.push('-oX', 'nmap_scan.xml');
+
+        return cmd.join(' ');
+    }
+
+    function updateNmapCommand() {
+        const scanMode = document.getElementById('scan_mode').value;
+        const nmapEnabled = document.getElementById('nmap').checked;
+        const previewDiv = document.getElementById('nmapCommandPreview');
+        const commandText = document.getElementById('nmapCommandText');
+
+        if (scanMode === 'active' && nmapEnabled) {
+            const cmd = buildNmapCommand();
+            if (cmd) {
+                // Al ser textarea usamos .value en vez de .textContent
+                commandText.value = cmd;
+                previewDiv.style.display = 'block';
+            } else {
+                previewDiv.style.display = 'none';
+            }
+        } else {
+            previewDiv.style.display = 'none';
+        }
+    }
+
+    function copyNmapCommand() {
+        // Al ser textarea usamos .value
+        const commandText = document.getElementById('nmapCommandText').value;
+        navigator.clipboard.writeText(commandText).then(() => {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✓ Copiado';
+            btn.style.color = '#10b981';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.color = '#94a3b8';
+            }, 2000);
+        }).catch(err => {
+            console.error('Error copiando comando:', err);
+            alert('Error al copiar el comando');
+        });
+    }
+
+    // Event listeners para actualizar el comando cuando cambian las opciones
+    document.getElementById('scan_mode').addEventListener('change', function () {
+        toggleScanMode();
+        updateNmapCommand();
+    });
+
+    document.getElementById('target_range').addEventListener('input', updateNmapCommand);
+    document.getElementById('nmap_speed').addEventListener('change', updateNmapCommand);
+    document.getElementById('nmap_versions').addEventListener('change', updateNmapCommand);
+    document.getElementById('nmap_vulns').addEventListener('change', updateNmapCommand);
+    document.getElementById('nmap_ot_ports').addEventListener('change', updateNmapCommand);
+    document.getElementById('nmap_it_ports').addEventListener('change', updateNmapCommand);
+    document.getElementById('custom_ports').addEventListener('input', updateNmapCommand);
+
+    let currentScanId = null;
+    let wsConnection = null;
+    let resultsPollingInterval = null;
+    let lastResultsHash = null;
+
+    // Manejar envío del formulario
+    document.getElementById('scanForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const startBtn = document.getElementById('startScanBtn');
+        const btnText = document.getElementById('btnText');
+        const btnSpinner = document.getElementById('btnSpinner');
+        const cancelBtn = document.getElementById('cancelScanBtn');
+
+        // Deshabilitar botón y mostrar spinner
+        startBtn.disabled = true;
+        btnText.textContent = 'Iniciando...';
+        btnSpinner.style.display = 'inline-block';
+        btnSpinner.classList.remove('hidden');
+
+        const formData = new FormData(this);
+        const scanMode = formData.get('scan_mode') || 'active';
+
+        const config = {
+            organization: formData.get('organization'),
+            location: formData.get('location'),
+            target_range: scanMode === 'passive' ? '0.0.0.0/0' : (formData.get('target_range') || ''),
+            interface: formData.get('interface') || 'eth0',
+            scan_mode: scanMode,
+            host_discovery: scanMode === 'active' ? formData.has('host_discovery') : false,
+            nmap: scanMode === 'active' ? formData.has('nmap') : false,
+            nmap_speed: formData.get('nmap_speed') || 'normal',
+            nmap_versions: formData.has('nmap_versions'),
+            nmap_vulns: formData.has('nmap_vulns'),
+            nmap_ot_ports: formData.has('nmap_ot_ports'),
+            nmap_it_ports: formData.has('nmap_it_ports'),
+            custom_ports: formData.get('custom_ports') || null,
+            custom_nmap_command: formData.get('custom_nmap_command') || null,
+            screenshots: formData.has('screenshots'),
+            source_code: formData.has('source_code'),
+            pcap_filter: formData.get('pcap_filter') || null
+        };
+
+        try {
+            const response = await fetch('/api/scan/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                // El servidor devolvió un error
+                const errorMsg = result.detail || result.message || 'Error desconocido al iniciar el escaneo';
+                console.error('Error del servidor:', errorMsg);
+                alert('❌ Error: ' + errorMsg);
+                startBtn.disabled = false;
+                btnText.textContent = '🚀 Iniciar Escaneo';
+                btnSpinner.style.display = 'none';
+                btnSpinner.classList.add('hidden');
+                return;
+            }
+
+            if (result.scan_id) {
+                currentScanId = result.scan_id;
+
+                // Restaurar botón y mostrar botón de cancelar
+                startBtn.disabled = false;
+                btnText.textContent = '🚀 Iniciar Escaneo';
+                btnSpinner.style.display = 'none';
+                btnSpinner.classList.add('hidden');
+                cancelBtn.style.display = 'inline-block';
+                cancelBtn.classList.remove('hidden');
+
+                // Guardar scan_id en sessionStorage para persistencia
+                sessionStorage.setItem('currentScanId', result.scan_id.toString());
+
+                // Mostrar progreso
+                document.getElementById('scanProgress').classList.remove('hidden');
+                startProgressTracking(result.scan_id);
+            } else {
+                alert('Error al iniciar el escaneo: No se recibió scan_id');
+                startBtn.disabled = false;
+                btnText.textContent = '🚀 Iniciar Escaneo';
+                btnSpinner.style.display = 'none';
+                btnSpinner.classList.add('hidden');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al iniciar el escaneo: ' + error.message);
+            startBtn.disabled = false;
+            btnText.textContent = '🚀 Iniciar Escaneo';
+            btnSpinner.style.display = 'none';
+            btnSpinner.classList.add('hidden');
+        }
+    });
+
+    // Manejar cancelación
+    document.getElementById('cancelScanBtn').addEventListener('click', async function () {
+        if (!currentScanId) return;
+
+        if (!confirm('¿Estás seguro de que quieres cancelar este escaneo?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/scan/${currentScanId}/cancel`, {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                alert('✅ ' + result.message);
+
+                // Detener el seguimiento del progreso
+                stopProgressTracking();
+
+                // Ocultar progreso
+                document.getElementById('scanProgress').classList.add('hidden');
+            } else {
+                alert('❌ Error: ' + (result.detail || result.message));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error cancelando escaneo: ' + error.message);
+        }
+    });
+
+    // Función para cargar resultados en tiempo real y actualizar el progreso
+    async function loadLiveResults(scanId) {
+        try {
+            const response = await fetch(`/api/scan/${scanId}/results/live`);
+            const data = await response.json();
+
+            // Actualizar los mensajes de progreso con los resultados
+            const messagesDiv = document.getElementById('progressMessages');
+            if (messagesDiv && data.results && data.results.length > 0) {
+                // Crear hash simple para detectar cambios
+                const currentHash = JSON.stringify(data.results.map(r => `${r.ip_address}:${r.port || ''}:${r.service_name || ''}`));
+
+                // Solo actualizar si hay cambios
+                if (currentHash !== lastResultsHash) {
+                    lastResultsHash = currentHash;
+
+                    // Agrupar por IP para mostrar de forma más clara
+                    const hostsMap = new Map();
+                    data.results.forEach(r => {
+                        const ip = r.ip_address;
+                        if (!hostsMap.has(ip)) {
+                            hostsMap.set(ip, {
+                                ip: ip,
+                                hostname: r.hostname,
+                                ports: []
+                            });
+                        }
+                        if (r.port) {
+                            hostsMap.get(ip).ports.push({
+                                port: r.port,
+                                protocol: r.protocol,
+                                service: r.service_name,
+                                product: r.product,
+                                version: r.version
+                            });
+                        }
+                    });
+
+                    // Construir HTML de resultados (sin el mensaje antiguo del WebSocket)
+                    let resultsHtml = '<div style="margin-top: 0.5rem;"><div style="font-weight: 600; margin-bottom: 0.5rem; color: #94a3b8;">Hosts descubiertos:</div>';
+                    resultsHtml += '<div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto;">';
+
+                    Array.from(hostsMap.values()).forEach(host => {
+                        resultsHtml += `<div style="padding: 0.5rem; background: #1e293b; border-radius: 4px; border: 1px solid #334155;">`;
+                        resultsHtml += `<div style="font-weight: 600; color: #60a5fa;">${host.ip}</div>`;
+                        if (host.hostname) {
+                            resultsHtml += `<div style="font-size: 0.85em; color: #94a3b8; margin-top: 0.25rem;">${host.hostname}</div>`;
+                        }
+                        if (host.ports.length > 0) {
+                            resultsHtml += `<div style="margin-top: 0.5rem; font-size: 0.85em;">`;
+                            host.ports.forEach(p => {
+                                const serviceInfo = p.service ? ` (${p.service})` : '';
+                                const productInfo = p.product ? ` - ${p.product}` : '';
+                                const versionInfo = p.version ? ` ${p.version}` : '';
+                                resultsHtml += `<div style="color: #94a3b8; margin-left: 1rem;">🔌 ${p.port}/${p.protocol}${serviceInfo}${productInfo}${versionInfo}</div>`;
+                            });
+                            resultsHtml += `</div>`;
+                        } else {
+                            resultsHtml += `<div style="margin-top: 0.25rem; font-size: 0.85em; color: #94a3b8; font-style: italic;">Host activo (sin puertos abiertos)</div>`;
+                        }
+                        resultsHtml += `</div>`;
+                    });
+
+                    resultsHtml += '</div></div>';
+
+                    // Mostrar solo los resultados (sin el mensaje antiguo)
+                    messagesDiv.innerHTML = resultsHtml;
+                }
+            }
+
+            // Actualizar estado del escaneo
+            const statusDiv = document.getElementById('scanStatus');
+            if (statusDiv) {
+                if (data.status === 'running') {
+                    // Mostrar que está en ejecución
+                    const stats = data.stats || { hosts: 0, ports: 0 };
+                    statusDiv.innerHTML = `<div style="padding: 0.75rem; background: #1e293b; border: 1px solid #334155; border-radius: 4px; color: #60a5fa;">
+                        <strong>🔄 Escaneo en ejecución...</strong><br>
+                        <div style="margin-top: 0.5rem; font-size: 0.9em; color: #94a3b8;">
+                            Hosts descubiertos: <strong>${stats.hosts || 0}</strong> | Puertos encontrados: <strong>${stats.ports || 0}</strong>
+                        </div>
+                    </div>`;
+                } else if (data.status === 'failed') {
+                    // Solo mostrar error si realmente falló
+                    if (data.error_message) {
+                        statusDiv.innerHTML = `<div class="error"><strong>Escaneo falló</strong><br><pre style="white-space: pre-wrap; font-size: 0.9em; margin-top: 0.5rem; padding: 0.5rem; background: #1e293b; color: #e2e8f0; border-radius: 4px;">${data.error_message}</pre></div>`;
+                    }
+                    stopProgressTracking();
+                } else if (data.status === 'completed') {
+                    // Escaneo completado
+                    const stats = data.stats || { hosts: 0, ports: 0 };
+                    statusDiv.innerHTML = `<div style="padding: 0.75rem; background: #064e3b; border: 1px solid #059669; border-radius: 4px; color: #d1fae5;">
+                        <strong>✅ Escaneo completado</strong><br>
+                        <div style="margin-top: 0.5rem; font-size: 0.9em;">
+                            Hosts descubiertos: <strong>${stats.hosts || 0}</strong> | Puertos encontrados: <strong>${stats.ports || 0}</strong>
+                        </div>
+                    </div>`;
+                    stopProgressTracking();
+                }
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Error cargando resultados en vivo:', error);
+            return null;
+        }
+    }
+
+    function startProgressTracking(scanId) {
+        currentScanId = scanId;
+        lastResultsHash = null;
+        const messagesDiv = document.getElementById('progressMessages');
+        const statusDiv = document.getElementById('scanStatus');
+        const cancelBtn = document.getElementById('cancelScanBtn');
+        const progressBar = document.getElementById('progressBarFill');
+
+        // Conectar WebSocket para estadísticas
+        const ws = new WebSocket(`ws://${window.location.host.replace('http://', 'ws://').replace('https://', 'wss://')}/ws/scan/${scanId}`);
+        wsConnection = ws;
+
+        ws.onopen = function () {
+            // No mostrar mensaje, el estado se muestra en scanStatus
+            messagesDiv.innerHTML = '';
+        };
+
+        ws.onmessage = function (event) {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'progress') {
+                // No mostrar mensaje antiguo, solo actualizar barra de progreso y cargar resultados
+                // El estado se muestra en scanStatus (más abajo)
+
+                // Cargar resultados para actualizar la lista
+                loadLiveResults(scanId);
+
+                // Mejorar barra de progreso basada en hosts/ports descubiertos
+                if (data.status === 'completed') {
+                    progressBar.style.width = '100%';
+                    progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+                } else if (data.hosts_discovered > 0 || data.ports_found > 0) {
+                    // Progreso incremental: 20% base + hasta 80% basado en actividad
+                    const baseProgress = 20;
+                    const activityProgress = Math.min(80, (data.hosts_discovered * 5) + (data.ports_found * 2));
+                    const totalProgress = baseProgress + activityProgress;
+                    progressBar.style.width = `${totalProgress}%`;
+                    progressBar.style.background = 'linear-gradient(90deg, #3b82f6, #2563eb)';
+                } else {
+                    progressBar.style.width = '10%';
+                    progressBar.style.background = 'linear-gradient(90deg, #6366f1, #4f46e5)';
+                }
+
+            } else if (data.type === 'completed') {
+                progressBar.style.width = '100%';
+                progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+                messagesDiv.innerHTML += `<div class="success">✅ ${data.message}</div>`;
+                statusDiv.innerHTML = `<div class="success"><strong>Escaneo completado exitosamente</strong><br>Hosts: ${data.hosts_discovered} | Puertos: ${data.ports_found}</div>`;
+                stopProgressTracking();
+            } else if (data.type === 'failed') {
+                progressBar.style.width = '0%';
+                progressBar.style.background = '#ef4444';
+                messagesDiv.innerHTML += `<div class="error">❌ ${data.message}</div>`;
+                const errorMsg = data.error_message || 'Error desconocido';
+                statusDiv.innerHTML = `
+                    <div class="error">
+                        <strong>Escaneo falló</strong>
+                        <details style="margin-top: 0.5rem;">
+                            <summary style="cursor: pointer; color: #fee2e2; font-size: 0.9em;">Ver detalles del error</summary>
+                            <pre style="white-space: pre-wrap; font-size: 0.85em; margin-top: 0.5rem; padding: 0.5rem; background: #1e293b; color: #e2e8f0; border-radius: 4px; overflow-x: auto; max-height: 300px; overflow-y: auto;">${errorMsg}</pre>
+                        </details>
+                    </div>
+                `;
+                stopProgressTracking();
+            } else if (data.type === 'error') {
+                messagesDiv.innerHTML += `<div class="error">⚠️ ${data.message}</div>`;
+            }
+        };
+
+        ws.onerror = function (error) {
+            console.error('WebSocket error:', error);
+            messagesDiv.innerHTML += '<div class="error">❌ Error de conexión WebSocket</div>';
+        };
+
+        ws.onclose = function () {
+            console.log('WebSocket cerrado');
+            wsConnection = null;
+        };
+
+        // Iniciar polling de resultados en tiempo real
+        loadLiveResults(scanId); // Cargar inmediatamente
+        resultsPollingInterval = setInterval(async () => {
+            const data = await loadLiveResults(scanId);
+            if (data) {
+                // Actualizar barra de progreso basada en estado
+                const progressBar = document.getElementById('progressBarFill');
+                if (progressBar) {
+                    if (data.status === 'running') {
+                        // Mantener progreso animado mientras está ejecutándose
+                        const stats = data.stats || { hosts: 0, ports: 0 };
+                        const baseProgress = 20;
+                        const activityProgress = Math.min(80, (stats.hosts * 5) + (stats.ports * 2));
+                        const totalProgress = baseProgress + activityProgress;
+                        progressBar.style.width = `${totalProgress}%`;
+                        progressBar.style.background = 'linear-gradient(90deg, #3b82f6, #2563eb)';
+                    } else if (data.status === 'completed') {
+                        progressBar.style.width = '100%';
+                        progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+                    } else if (data.status === 'failed') {
+                        progressBar.style.width = '100%';
+                        progressBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
+                    }
+                }
+
+                // Solo parar el polling si el escaneo terminó (completed o failed)
+                if (data.status !== 'running') {
+                    stopProgressTracking();
+                }
+            }
+        }, 2000); // Poll cada 2 segundos
+    }
+
+    function stopProgressTracking() {
+        if (resultsPollingInterval) {
+            clearInterval(resultsPollingInterval);
+            resultsPollingInterval = null;
+        }
+        if (wsConnection) {
+            wsConnection.close();
+            wsConnection = null;
+        }
+        const cancelBtn = document.getElementById('cancelScanBtn');
+        cancelBtn.style.display = 'none';
+        cancelBtn.classList.add('hidden');
+        currentScanId = null;
+        lastResultsHash = null;
+        // Limpiar sessionStorage
+        sessionStorage.removeItem('currentScanId');
+    }
+
+    // Función para restaurar seguimiento de scan en progreso
+    async function restoreScanTracking() {
+        // Verificar si hay un scan_id en la URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlScanId = urlParams.get('scan_id');
+
+        // O usar el scan_id de sessionStorage
+        const storedScanId = sessionStorage.getItem('currentScanId');
+        const scanIdToCheck = urlScanId || storedScanId;
+
+        if (scanIdToCheck) {
+            try {
+                // Verificar si el scan está running
+                const response = await fetch(`/api/scan/${scanIdToCheck}/status`);
+                if (response.ok) {
+                    const scanStatus = await response.json();
+                    if (scanStatus.status === 'running') {
+                        // Restaurar seguimiento
+                        currentScanId = parseInt(scanIdToCheck);
+                        document.getElementById('scanProgress').classList.remove('hidden');
+                        document.getElementById('cancelScanBtn').style.display = 'inline-block';
+                        document.getElementById('cancelScanBtn').classList.remove('hidden');
+                        startProgressTracking(currentScanId);
+                        console.log(`✅ Reanudado seguimiento del escaneo ${scanIdToCheck}`);
+                    }
+                }
+            } catch (error) {
+                console.error('Error verificando estado del scan:', error);
+                // Limpiar sessionStorage si hay error
+                sessionStorage.removeItem('currentScanId');
+            }
+        }
+    }
+
+    // Restaurar seguimiento cuando se carga la página
+    loadOrganizations();
+    restoreScanTracking();
+
+    // Manejar importación XML
+    document.getElementById('importXmlForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const importBtn = document.getElementById('importXmlBtn');
+        const importBtnText = document.getElementById('importBtnText');
+        const importBtnSpinner = document.getElementById('importBtnSpinner');
+        const importResult = document.getElementById('importResult');
+
+        // Deshabilitar botón y mostrar spinner
+        importBtn.disabled = true;
+        importBtnText.textContent = 'Importando...';
+        importBtnSpinner.style.display = 'inline-block';
+        importBtnSpinner.classList.remove('hidden');
+        importResult.style.display = 'none';
+
+        const formData = new FormData(this);
+
+        try {
+            const response = await fetch('/api/scan/import-xml', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                importResult.style.display = 'block';
+                importResult.innerHTML = `
+                    <div style="padding: 1rem; background: #064e3b; border: 1px solid #059669; border-radius: 4px; color: #d1fae5;">
+                        <strong>✅ ${result.message}</strong>
+                        <div style="margin-top: 0.5rem; font-size: 0.9em;">
+                            <div>Escaneo ID: ${result.scan_id}</div>
+                            <div>Hosts procesados: ${result.stats.hosts_processed}</div>
+                            <div>Puertos procesados: ${result.stats.ports_processed}</div>
+                        </div>
+                        <div style="margin-top: 0.5rem;">
+                            <a href="/results?scan_id=${result.scan_id}" class="btn btn-primary" style="display: inline-block; padding: 0.5rem 1rem; text-decoration: none;">
+                                Ver Resultados
+                            </a>
+                        </div>
+                    </div>
+                `;
+
+                // Limpiar formulario
+                this.reset();
+            } else {
+                importResult.style.display = 'block';
+                importResult.innerHTML = `
+                    <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
+                        <strong>❌ Error:</strong> ${result.detail || 'Error desconocido'}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            importResult.style.display = 'block';
+            importResult.innerHTML = `
+                <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
+                    <strong>❌ Error:</strong> ${error.message}
+                </div>
+            `;
+        } finally {
+            // Restaurar botón
+            importBtn.disabled = false;
+            importBtnText.textContent = '📥 Importar';
+            importBtnSpinner.style.display = 'none';
+            importBtnSpinner.classList.add('hidden');
+        }
+    });
+
+    // Manejar importación PCAP
+    document.getElementById('importPcapForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const importPcapBtn = document.getElementById('importPcapBtn');
+        const importPcapBtnText = document.getElementById('importPcapBtnText');
+        const importPcapBtnSpinner = document.getElementById('importPcapBtnSpinner');
+        const importPcapResult = document.getElementById('importPcapResult');
+
+        // Deshabilitar botón y mostrar spinner
+        importPcapBtn.disabled = true;
+        importPcapBtnText.textContent = 'Importando...';
+        importPcapBtnSpinner.style.display = 'inline-block';
+        importPcapBtnSpinner.classList.remove('hidden');
+        importPcapResult.style.display = 'none';
+
+        const formData = new FormData(this);
+
+        try {
+            const response = await fetch('/api/scan/import-pcap', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                importPcapResult.style.display = 'block';
+                importPcapResult.innerHTML = `
+                    <div style="padding: 1rem; background: #064e3b; border: 1px solid #059669; border-radius: 4px; color: #d1fae5;">
+                        <strong>✅ ${result.message}</strong>
+                        <div style="margin-top: 0.5rem; font-size: 0.9em;">
+                            <div>Escaneo ID: ${result.scan_id}</div>
+                            <div>Hosts procesados: ${result.stats.hosts_processed}</div>
+                            <div>Puertos procesados: ${result.stats.ports_processed}</div>
+                        </div>
+                        <div style="margin-top: 0.5rem;">
+                            <a href="/results?scan_id=${result.scan_id}" class="btn btn-primary" style="display: inline-block; padding: 0.5rem 1rem; text-decoration: none;">
+                                Ver Resultados
+                            </a>
+                        </div>
+                    </div>
+                `;
+
+                // Limpiar formulario
+                this.reset();
+            } else {
+                importPcapResult.style.display = 'block';
+                importPcapResult.innerHTML = `
+                    <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
+                        <strong>❌ Error:</strong> ${result.detail || 'Error desconocido'}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            importPcapResult.style.display = 'block';
+            importPcapResult.innerHTML = `
+                <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
+                    <strong>❌ Error:</strong> ${error.message}
+                </div>
+            `;
+        } finally {
+            // Restaurar botón
+            importPcapBtn.disabled = false;
+            importPcapBtnText.textContent = '🎧 Importar';
+            importPcapBtnSpinner.style.display = 'none';
+            importPcapBtnSpinner.classList.add('hidden');
+        }
+    });
+
+    // Inicializar preview del comando Nmap al cargar la página
+    setTimeout(updateNmapCommand, 100);
+</script>
+
+<style>
+    .spinner {
+        display: inline-block;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .hidden {
+        display: none !important;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    #startScanBtn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+</style>
+{% endblock %}

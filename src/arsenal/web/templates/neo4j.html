@@ -1,0 +1,1549 @@
+{% extends "base.html" %}
+
+{% block title %}Exportar a Neo4j - ArsenalOT{% endblock %}
+
+{% block content %}
+<div class="neo4j-page">
+    <h1 class="page-title">🔗 Exportar a Neo4j</h1>
+
+    <div class="info-box">
+        <p>Esta herramienta exporta los resultados de los escaneos a una base de datos Neo4j para visualización en
+            grafos.</p>
+    </div>
+
+    <!-- Conexión a Neo4j -->
+    <div id="connectionStatus" class="glass-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
+        <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🔌 Conexión a
+            Neo4j</h3>
+
+        <div
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                <label for="neo4j_ip" style="font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 500;">IP del
+                    Servidor *</label>
+                <input type="text" id="neo4j_ip" name="ip" required placeholder="192.168.1.100"
+                    style="font-size: 0.9rem; padding: 0.5rem;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                <label for="neo4j_username" style="font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 500;">Usuario
+                    *</label>
+                <input type="text" id="neo4j_username" name="username" required placeholder="neo4j" value="neo4j"
+                    style="font-size: 0.9rem; padding: 0.5rem;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                <label for="neo4j_password"
+                    style="font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 500;">Contraseña *</label>
+                <input type="password" id="neo4j_password" name="password" required placeholder="Contraseña"
+                    style="font-size: 0.9rem; padding: 0.5rem;">
+            </div>
+        </div>
+
+        <div
+            style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span id="connectionIndicator"
+                    style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);"></span>
+                <span id="connectionText" style="font-weight: 500; color: var(--text-primary);">Desconectado</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <button type="button" id="connectBtn" class="btn"
+                    style="background: #4ECDC4; color: white; padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    🔌 Conectar
+                </button>
+                <button type="button" id="disconnectBtn" class="btn"
+                    style="background: #ef4444; color: white; padding: 0.5rem 1rem; font-size: 0.9rem; display: none;">
+                    🔌 Desconectar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exportar a Neo4j -->
+    <div class="glass-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
+        <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">📤 Exportar a
+            Neo4j</h3>
+
+        <form id="neo4jForm" style="background: transparent;">
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                    <label for="neo4j_org"
+                        style="font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 500;">Organización</label>
+                    <select id="neo4j_org" name="organization" style="font-size: 0.9rem; padding: 0.5rem;">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                    <label for="neo4j_location"
+                        style="font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 500;">Ubicación</label>
+                    <select id="neo4j_location" name="location" style="font-size: 0.9rem; padding: 0.5rem;">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-actions" style="margin-top: 0;">
+                <button type="submit" class="btn btn-primary" id="exportBtn"
+                    style="font-size: 0.95rem; padding: 0.6rem 1.5rem;" disabled>
+                    🚀 Exportar a Neo4j
+                </button>
+            </div>
+        </form>
+
+        <div id="exportStatus" class="export-status hidden" style="margin-top: 1rem;">
+            <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">Estado de la Exportación</h3>
+            <div id="exportMessages" class="export-messages" style="font-size: 0.9rem;"></div>
+        </div>
+    </div>
+
+    <details
+        style="margin-top: 1.5rem; background: #fee2e2; border: 2px solid #ef4444; border-radius: 6px; overflow: hidden;">
+        <summary
+            style="cursor: pointer; padding: 0.75rem 1rem; color: #991b1b; font-size: 0.9rem; font-weight: 600; user-select: none; list-style: none;">
+            <span style="font-size: 0.9rem;">⚠️ ZONA DE PELIGRO - Borrar Base de Datos Neo4j</span>
+        </summary>
+        <div style="padding: 1rem; padding-top: 0.5rem;">
+            <p style="color: #7f1d1d; margin-bottom: 0.75rem; font-size: 0.85rem; font-weight: 500;">
+                <strong>ADVERTENCIA:</strong> Eliminará <strong>TODOS</strong> los datos de la base de datos Neo4j
+                (organizaciones, escaneos, hosts, resultados, vulnerabilidades, evidencias).
+            </p>
+            <p style="color: #991b1b; margin-bottom: 0.75rem; font-size: 0.85rem; font-weight: 600;">
+                ⚠️ Esta acción es <strong>IRREVERSIBLE</strong>.
+            </p>
+            <button type="button" class="btn" id="clearAllBtn" onclick="clearAllDatabase()"
+                style="background: #ef4444; color: white; padding: 0.6rem 1.2rem; font-size: 0.9rem; font-weight: 600;"
+                disabled>
+                🗑️ ELIMINAR TODA LA BASE DE DATOS NEO4J
+            </button>
+        </div>
+    </details>
+
+    <!-- Cargar Dashboard Neo4j -->
+    <div class="glass-card" style="margin-top: 1.5rem; padding: 1.5rem;">
+        <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">📊 Dashboard
+            Neo4j</h3>
+        <p style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--text-secondary);">
+            Visualiza estadísticas y gráficos interactivos de los datos en Neo4j.
+        </p>
+        <button type="button" id="loadDashboardBtn" class="btn"
+            style="background: #4ECDC4; color: white; padding: 0.6rem 1.5rem; font-size: 0.95rem;" disabled>
+            📊 Cargar Dashboard
+        </button>
+    </div>
+
+    <!-- Dashboard Neo4j -->
+    <div id="neo4jDashboard" style="margin-top: 3rem; display: none;">
+        <h2 class="page-title" style="margin-bottom: 1.5rem;">📊 Dashboard Neo4j</h2>
+
+        <div
+            style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                <div>
+                    <label style="font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 500; display: block;">Filtrar
+                        por Organización</label>
+                    <select id="dashboardOrgFilter" style="width: 100%; padding: 0.5rem; font-size: 0.9rem;">
+                        <option value="">Todas las organizaciones</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: flex-end;">
+                    <button onclick="loadDashboard()" class="btn btn-primary"
+                        style="padding: 0.6rem 1.5rem; font-size: 0.9rem;">
+                        🔄 Actualizar Dashboard
+                    </button>
+                </div>
+            </div>
+
+            <!-- Estadísticas generales -->
+            <div id="dashboardStats"
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                <!-- Se llenará dinámicamente -->
+            </div>
+        </div>
+
+        <!-- Gráficos -->
+        <div
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+            <div class="glass-card" style="padding: 1.5rem;">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🏢 Hosts
+                    por Organización</h3>
+                <canvas id="hostsByOrgChart" style="max-height: 300px;"></canvas>
+            </div>
+
+            <div class="glass-card" style="padding: 1.5rem;">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🔌 Top
+                    Puertos</h3>
+                <canvas id="topPortsChart" style="max-height: 300px;"></canvas>
+            </div>
+
+            <div class="glass-card" style="padding: 1.5rem;">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">⚠️
+                    Vulnerabilidades por Severidad</h3>
+                <canvas id="vulnsBySeverityChart" style="max-height: 300px;"></canvas>
+            </div>
+
+            <div class="glass-card" style="padding: 1.5rem;">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🔧 Top
+                    Servicios</h3>
+                <canvas id="topServicesChart" style="max-height: 300px;"></canvas>
+            </div>
+        </div>
+
+        <!-- Grafos adicionales -->
+        <div
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+            <div class="glass-card" style="padding: 1.5rem;">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🔗
+                    Dispositivos Similares</h3>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                    IPs agrupadas por puertos y servicios similares que probablemente sean el mismo tipo de activo
+                </p>
+                <div id="similarDevicesGraph"
+                    style="width: 100%; height: 600px; border: 1px solid var(--border-color); border-radius: 6px; background: white;">
+                </div>
+            </div>
+
+            <div class="glass-card" style="padding: 1.5rem;">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">📍 IPs
+                    en Múltiples Ubicaciones</h3>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                    IPs descubiertas en diferentes ubicaciones de la misma organización
+                </p>
+                <div id="duplicateIPsGraph"
+                    style="width: 100%; height: 600px; border: 1px solid var(--border-color); border-radius: 6px; background: white;">
+                </div>
+            </div>
+        </div>
+
+        <!-- Grafo de Red -->
+        <div class="glass-card" style="padding: 1.5rem; margin-bottom: 2rem;">
+            <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem; color: var(--accent-yellow);">🕸️ Grafo de Red Interactivo
+            </h3>
+
+            <!-- Filtros de nodos -->
+            <div
+                style="margin-bottom: 1rem; padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 6px; border: 1px solid var(--border-color);">
+                <p style="margin: 0 0 0.75rem 0; font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">
+                    <strong>Filtrar tipos de nodos:</strong>
+                </p>
+                <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center;">
+                    <label
+                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                        <input type="checkbox" class="node-filter" data-type="ORG" checked style="cursor: pointer;">
+                        <span style="color: #00BFFF;">●</span> Organizaciones
+                    </label>
+                    <label
+                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                        <input type="checkbox" class="node-filter" data-type="SEG" checked style="cursor: pointer;">
+                        <span style="color: #4ECDC4;">●</span> Segmentos
+                    </label>
+                    <label
+                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                        <input type="checkbox" class="node-filter" data-type="Subred" checked style="cursor: pointer;">
+                        <span style="color: #9B59B6;">●</span> Subredes
+                    </label>
+                    <label
+                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                        <input type="checkbox" class="node-filter" data-type="IP" checked style="cursor: pointer;">
+                        <span style="color: #F38181;">●</span> IPs
+                    </label>
+                    <label
+                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                        <input type="checkbox" class="node-filter" data-type="Port" checked style="cursor: pointer;">
+                        <span style="color: #FFE66D;">●</span> Puertos
+                    </label>
+                    <button type="button" id="fitGraphBtn" class="btn"
+                        style="background: #4ECDC4; color: white; padding: 0.35rem 0.6rem; font-size: 1rem; margin-left: auto; line-height: 1; min-width: 32px;"
+                        title="Ajustar vista al contenido">
+                        ⛶
+                    </button>
+                    <button type="button" id="selectAllNodesBtn" class="btn"
+                        style="background: #6B7280; color: white; padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                        Seleccionar Todos
+                    </button>
+                    <button type="button" id="deselectAllNodesBtn" class="btn"
+                        style="background: #6B7280; color: white; padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                        Deseleccionar Todos
+                    </button>
+                </div>
+            </div>
+
+            <div id="networkGraph"
+                style="height: 600px; border: 1px solid var(--border-color); border-radius: 4px; background: white;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- vis-network para grafos -->
+<script src="https://unpkg.com/vis-network@latest/dist/vis-network.min.js"></script>
+
+<script>
+    // Variables globales
+    let hostsByOrgChart = null;
+    let topPortsChart = null;
+    let vulnsBySeverityChart = null;
+    let topServicesChart = null;
+    let similarDevicesGraph = null;
+    let duplicateIPsGraph = null;
+    let networkGraph = null;
+    let isConnected = false;
+    let allGraphNodes = null; // Almacenar todos los nodos originales
+    let allGraphEdges = null; // Almacenar todas las relaciones originales
+
+    async function loadOrganizations() {
+        try {
+            const orgNameContext = "{{ org_name | default('') }}";
+            const select = document.getElementById('neo4j_org');
+            const dashboardSelect = document.getElementById('dashboardOrgFilter');
+
+            if (orgNameContext) {
+                const options = `<option value="${orgNameContext}" selected>${orgNameContext}</option>`;
+                select.innerHTML = options;
+                select.disabled = true;
+
+                if (dashboardSelect) {
+                    dashboardSelect.innerHTML = options;
+                    dashboardSelect.disabled = true;
+                }
+            } else {
+                const response = await fetch('/api/organizations');
+                const orgs = await response.json();
+
+                const options = '<option value="">Todas</option>' +
+                    orgs.map(org => `<option value="${org.name}">${org.name}</option>`).join('');
+
+                select.innerHTML = options;
+                if (dashboardSelect) {
+                    dashboardSelect.innerHTML = '<option value="">Todas las organizaciones</option>' +
+                        orgs.map(org => `<option value="${org.name}">${org.name}</option>`).join('');
+                }
+            }
+        } catch (error) {
+            console.error('Error cargando organizaciones:', error);
+        }
+    }
+
+    async function loadLocations(organization = null) {
+        try {
+            const url = organization
+                ? `/api/locations?organization=${encodeURIComponent(organization)}`
+                : '/api/locations';
+            const response = await fetch(url);
+            const locations = await response.json();
+            const select = document.getElementById('neo4j_location');
+            select.innerHTML = '<option value="">Todas</option>' +
+                locations.map(loc => `<option value="${loc.location}">${loc.location}</option>`).join('');
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+
+    // Actualizar ubicaciones cuando cambia la organización
+    document.getElementById('neo4j_org').addEventListener('change', function () {
+        loadLocations(this.value || null);
+    });
+
+    // Función para obtener credenciales Neo4j
+    function getNeo4jCredentials() {
+        return {
+            ip: document.getElementById('neo4j_ip').value,
+            username: document.getElementById('neo4j_username').value,
+            password: document.getElementById('neo4j_password').value
+        };
+    }
+
+    // Función para cargar el dashboard
+    async function loadDashboard() {
+        if (!isConnected) {
+            alert('❌ Debes estar conectado a Neo4j para cargar el dashboard. Haz clic en "Conectar" primero.');
+            return;
+        }
+
+        const creds = getNeo4jCredentials();
+        if (!creds.ip || !creds.username || !creds.password) {
+            alert('❌ Por favor, completa los campos de IP, Usuario y Contraseña de Neo4j antes de cargar el dashboard.');
+            return;
+        }
+
+        const orgFilter = document.getElementById('dashboardOrgFilter').value;
+        const request = { ...creds, organization: orgFilter || null };
+
+        // Mostrar dashboard
+        document.getElementById('neo4jDashboard').style.display = 'block';
+
+        try {
+            // Cargar estadísticas generales
+            const statsResponse = await fetch('/api/neo4j/dashboard/stats', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request)
+            });
+            const stats = await statsResponse.json();
+
+            // Renderizar estadísticas
+            const statsContainer = document.getElementById('dashboardStats');
+            statsContainer.innerHTML = `
+                <div style="text-align: center; padding: 1rem; background: rgba(255, 107, 107, 0.1); border-radius: 6px;">
+                    <div style="font-size: 2rem; font-weight: bold; color: #FF6B6B;">${stats.organizations || 0}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">Organizaciones</div>
+                </div>
+                <div style="text-align: center; padding: 1rem; background: rgba(78, 205, 196, 0.1); border-radius: 6px;">
+                    <div style="font-size: 2rem; font-weight: bold; color: #4ECDC4;">${stats.locations || 0}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">Ubicaciones</div>
+                </div>
+                <div style="text-align: center; padding: 1rem; background: rgba(243, 129, 129, 0.1); border-radius: 6px;">
+                    <div style="font-size: 2rem; font-weight: bold; color: #F38181;">${stats.hosts || 0}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">Hosts</div>
+                </div>
+                <div style="text-align: center; padding: 1rem; background: rgba(255, 230, 109, 0.1); border-radius: 6px;">
+                    <div style="font-size: 2rem; font-weight: bold; color: #FFE66D;">${stats.ports || 0}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">Puertos</div>
+                </div>
+                <div style="text-align: center; padding: 1rem; background: rgba(255, 99, 71, 0.1); border-radius: 6px;">
+                    <div style="font-size: 2rem; font-weight: bold; color: #FF6347;">${stats.vulnerabilities || 0}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">Vulnerabilidades</div>
+                </div>
+            `;
+
+            // Cargar hosts por organización
+            const hostsResponse = await fetch('/api/neo4j/dashboard/hosts-by-org', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request)
+            });
+            const hostsData = await hostsResponse.json();
+            if (Array.isArray(hostsData)) {
+                updateHostsByOrgChart(hostsData);
+            } else {
+                console.error('Hosts data is not an array:', hostsData);
+                updateHostsByOrgChart([]);
+            }
+
+            // Cargar top puertos
+            const portsResponse = await fetch('/api/neo4j/dashboard/top-ports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request)
+            });
+            const portsData = await portsResponse.json();
+            if (Array.isArray(portsData)) {
+                updateTopPortsChart(portsData);
+            } else {
+                console.error('Ports data is not an array:', portsData);
+                updateTopPortsChart([]);
+            }
+
+            // Cargar vulnerabilidades por severidad
+            const vulnsResponse = await fetch('/api/neo4j/dashboard/vulnerabilities-by-severity', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request)
+            });
+            const vulnsData = await vulnsResponse.json();
+            if (Array.isArray(vulnsData)) {
+                updateVulnsBySeverityChart(vulnsData);
+            } else {
+                console.error('Vulnerabilities data is not an array:', vulnsData);
+                updateVulnsBySeverityChart([]);
+            }
+
+            // Cargar top servicios
+            const servicesResponse = await fetch('/api/neo4j/dashboard/services', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request)
+            });
+            const servicesData = await servicesResponse.json();
+            if (Array.isArray(servicesData)) {
+                updateTopServicesChart(servicesData);
+            } else {
+                console.error('Services data is not an array:', servicesData);
+                updateTopServicesChart([]);
+            }
+
+            // Cargar dispositivos similares
+            try {
+                const similarResponse = await fetch('/api/neo4j/dashboard/similar-devices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(request)
+                });
+                if (!similarResponse.ok) {
+                    throw new Error(`HTTP ${similarResponse.status}`);
+                }
+                const similarData = await similarResponse.json();
+                console.log('Datos de dispositivos similares:', similarData);
+                if (Array.isArray(similarData)) {
+                    updateSimilarDevicesChart(similarData);
+                } else {
+                    console.error('Similar devices data is not an array:', similarData);
+                    updateSimilarDevicesChart([]);
+                }
+            } catch (error) {
+                console.error('Error cargando dispositivos similares:', error);
+                updateSimilarDevicesChart([]);
+            }
+
+            // Cargar IPs duplicadas
+            try {
+                const duplicateResponse = await fetch('/api/neo4j/dashboard/duplicate-ips', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(request)
+                });
+                if (!duplicateResponse.ok) {
+                    throw new Error(`HTTP ${duplicateResponse.status}`);
+                }
+                const duplicateData = await duplicateResponse.json();
+                console.log('Datos de IPs duplicadas:', duplicateData);
+                if (Array.isArray(duplicateData)) {
+                    updateDuplicateIPsChart(duplicateData);
+                } else {
+                    console.error('Duplicate IPs data is not an array:', duplicateData);
+                    updateDuplicateIPsChart([]);
+                }
+            } catch (error) {
+                console.error('Error cargando IPs duplicadas:', error);
+                updateDuplicateIPsChart([]);
+            }
+
+            // Cargar grafo de red
+            const graphResponse = await fetch('/api/neo4j/dashboard/network-graph', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request)
+            });
+            const graphData = await graphResponse.json();
+            updateNetworkGraph(graphData);
+
+            // Configurar filtros después de cargar el grafo
+            setupGraphFilters();
+
+        } catch (error) {
+            console.error('Error cargando dashboard:', error);
+            alert('❌ Error cargando el dashboard: ' + error.message);
+        }
+    }
+
+    // Actualizar gráfico de hosts por organización
+    function updateHostsByOrgChart(data) {
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            data = [];
+        }
+        const ctx = document.getElementById('hostsByOrgChart').getContext('2d');
+        if (hostsByOrgChart) {
+            hostsByOrgChart.destroy();
+        }
+        hostsByOrgChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.map(d => d.org || 'Unknown'),
+                datasets: [{
+                    label: 'Hosts',
+                    data: data.map(d => d.count || 0),
+                    backgroundColor: 'rgba(78, 205, 196, 0.6)',
+                    borderColor: 'rgba(78, 205, 196, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    // Actualizar gráfico de top puertos
+    function updateTopPortsChart(data) {
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            data = [];
+        }
+        const ctx = document.getElementById('topPortsChart').getContext('2d');
+        if (topPortsChart) {
+            topPortsChart.destroy();
+        }
+        topPortsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.map(d => 'Puerto ' + (d.port || 'Unknown')),
+                datasets: [{
+                    label: 'Ocurrencias',
+                    data: data.map(d => d.count || 0),
+                    backgroundColor: 'rgba(255, 230, 109, 0.6)',
+                    borderColor: 'rgba(255, 230, 109, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    // Actualizar gráfico de vulnerabilidades por severidad
+    function updateVulnsBySeverityChart(data) {
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            data = [];
+        }
+        const ctx = document.getElementById('vulnsBySeverityChart').getContext('2d');
+        if (vulnsBySeverityChart) {
+            vulnsBySeverityChart.destroy();
+        }
+
+        const colors = {
+            'CRITICAL': 'rgba(255, 0, 0, 0.6)',
+            'HIGH': 'rgba(255, 99, 71, 0.6)',
+            'MEDIUM': 'rgba(255, 165, 0, 0.6)',
+            'LOW': 'rgba(255, 230, 109, 0.6)',
+            'UNKNOWN': 'rgba(128, 128, 128, 0.6)'
+        };
+
+        vulnsBySeverityChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: data.map(d => d.severity || 'UNKNOWN'),
+                datasets: [{
+                    data: data.map(d => d.count || 0),
+                    backgroundColor: data.map(d => colors[d.severity] || colors['UNKNOWN']),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+
+    // Actualizar gráfico de top servicios
+    function updateTopServicesChart(data) {
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            data = [];
+        }
+        const ctx = document.getElementById('topServicesChart').getContext('2d');
+        if (topServicesChart) {
+            topServicesChart.destroy();
+        }
+        topServicesChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.map(d => d.service || 'Unknown'),
+                datasets: [{
+                    label: 'Ocurrencias',
+                    data: data.map(d => d.count || 0),
+                    backgroundColor: 'rgba(149, 225, 211, 0.6)',
+                    borderColor: 'rgba(149, 225, 211, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: { beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    // Actualizar grafo de dispositivos similares
+    function updateSimilarDevicesChart(data) {
+        console.log('updateSimilarDevicesChart llamado con:', data);
+        const container = document.getElementById('similarDevicesGraph');
+        if (!container) {
+            console.error('Elemento similarDevicesGraph no encontrado');
+            return;
+        }
+
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            console.log('No hay datos de dispositivos similares');
+            container.innerHTML = '<p style="text-align: center; padding: 2rem; color: #666;">No se encontraron dispositivos similares</p>';
+            similarDevicesGraph = null;
+            return;
+        }
+
+        console.log('Procesando', data.length, 'grupos de dispositivos similares');
+
+        // Crear nodos y edges para vis-network
+        const nodes = [];
+        const edges = [];
+        const nodeMap = new Map();
+        let nodeId = 1;
+
+        // Colores para diferentes grupos
+        const groupColors = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+            '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#58D68D'
+        ];
+
+        data.forEach((group, groupIdx) => {
+            const groupColor = groupColors[groupIdx % groupColors.length];
+            const groupId = `group_${groupIdx}`;
+
+            // Crear nodo del grupo
+            const groupLabel = `Grupo ${groupIdx + 1}\n(${group.ip_count} IPs)`;
+            nodes.push({
+                id: groupId,
+                label: groupLabel,
+                color: {
+                    background: groupColor,
+                    border: '#333',
+                    highlight: { background: groupColor, border: '#000' }
+                },
+                font: { size: 14, color: '#000', face: 'Arial', bold: true },
+                shape: 'box',
+                size: 30
+            });
+
+            // Crear nodos para cada IP del grupo y conectarlos al grupo
+            if (group.ips && Array.isArray(group.ips)) {
+                group.ips.forEach(ip => {
+                    if (!nodeMap.has(ip)) {
+                        nodeMap.set(ip, nodeId++);
+                        nodes.push({
+                            id: nodeMap.get(ip),
+                            label: ip,
+                            color: {
+                                background: '#E8E8E8',
+                                border: '#666',
+                                highlight: { background: '#D0D0D0', border: '#000' }
+                            },
+                            font: { size: 14, color: '#000' },
+                            shape: 'dot',
+                            size: 35,
+                            title: `IP: ${ip}\nPuertos comunes: ${(group.common_ports || []).join(', ')}\nServicios: ${(group.common_services || []).join(', ')}`
+                        });
+                    }
+
+                    // Conectar IP al grupo
+                    edges.push({
+                        from: groupId,
+                        to: nodeMap.get(ip),
+                        color: { color: groupColor, highlight: groupColor },
+                        width: 2,
+                        title: `Similitud: ${group.similarity_score}`
+                    });
+                });
+            }
+        });
+
+        // Crear el grafo
+        const graphData = {
+            nodes: new vis.DataSet(nodes),
+            edges: new vis.DataSet(edges)
+        };
+
+        const options = {
+            nodes: {
+                font: { size: 14, color: '#000', face: 'Arial', bold: true },
+                borderWidth: 3,
+                shadow: true,
+                chosen: {
+                    node: function (values, id, selected, hovering) {
+                        values.borderWidth = 5;
+                        if (values.shape === 'dot') {
+                            values.size = 40;
+                        }
+                    }
+                }
+            },
+            edges: {
+                width: 3,
+                smooth: { type: 'continuous' },
+                arrows: { to: { enabled: false } },
+                shadow: true
+            },
+            physics: {
+                stabilization: { iterations: 200, fit: true },
+                barnesHut: {
+                    gravitationalConstant: -3000,
+                    springLength: 300,
+                    springConstant: 0.001,
+                    damping: 0.09
+                }
+            },
+            interaction: {
+                hover: true,
+                tooltipDelay: 100,
+                zoomView: true,
+                dragView: true
+            }
+        };
+
+        similarDevicesGraph = new vis.Network(container, graphData, options);
+
+        // Ajustar vista
+        setTimeout(() => {
+            if (similarDevicesGraph) {
+                similarDevicesGraph.fit({ animation: true });
+            }
+        }, 500);
+    }
+
+    // Actualizar grafo de IPs duplicadas
+    function updateDuplicateIPsChart(data) {
+        console.log('updateDuplicateIPsChart llamado con:', data);
+        const container = document.getElementById('duplicateIPsGraph');
+        if (!container) {
+            console.error('Elemento duplicateIPsGraph no encontrado');
+            return;
+        }
+
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            console.log('No hay datos de IPs duplicadas');
+            container.innerHTML = '<p style="text-align: center; padding: 2rem; color: #666;">No se encontraron IPs en múltiples ubicaciones</p>';
+            duplicateIPsGraph = null;
+            return;
+        }
+
+        console.log('Procesando', data.length, 'IPs duplicadas');
+
+        // Crear nodos y edges para vis-network
+        const nodes = [];
+        const edges = [];
+        const locationMap = new Map();
+        let locationNodeId = 10000; // IDs altos para ubicaciones
+
+        // Primero, recolectar todas las ubicaciones únicas
+        const allLocations = new Set();
+        data.forEach(item => {
+            (item.locations || []).forEach(loc => allLocations.add(loc));
+        });
+
+        // Colores
+        const ipColor = '#9B59B6'; // Morado para IPs
+        const locationColor = '#3498DB'; // Azul para ubicaciones
+
+        // Crear nodos de ubicaciones (se posicionarán a la izquierda usando posiciones fijas)
+        const locationArray = Array.from(allLocations);
+        locationArray.forEach((location, idx) => {
+            locationMap.set(location, locationNodeId++);
+            nodes.push({
+                id: locationMap.get(location),
+                label: location,
+                color: {
+                    background: locationColor,
+                    border: '#2980B9',
+                    highlight: { background: '#5DADE2', border: '#000' }
+                },
+                font: { size: 18, color: '#FFF', face: 'Arial', bold: true },
+                shape: 'box',
+                size: 50,
+                widthConstraint: { maximum: 200 },
+                title: `Ubicación: ${location}`,
+                x: -800, // Posición fija a la izquierda
+                y: (idx - locationArray.length / 2) * 150, // Distribución vertical
+                fixed: { x: false, y: false } // Permitir movimiento pero con fuerza inicial
+            });
+        });
+
+        // Crear nodos de IPs (se posicionarán a la derecha)
+        data.forEach((item, idx) => {
+            const ip = item.ip || 'Unknown';
+            const locations = item.locations || [];
+            const org = item.organization || '';
+
+            // Crear nodo de IP
+            const ipNodeId = `ip_${idx}`;
+            nodes.push({
+                id: ipNodeId,
+                label: ip,
+                color: {
+                    background: ipColor,
+                    border: '#7D3C98',
+                    highlight: { background: '#8E44AD', border: '#000' }
+                },
+                font: { size: 16, color: '#000', face: 'Arial', bold: true },
+                shape: 'dot',
+                size: 40,
+                title: `IP: ${ip}\nOrganización: ${org}\nUbicaciones: ${locations.length}\n${locations.join(', ')}`,
+                x: 800, // Posición fija a la derecha
+                y: (idx - data.length / 2) * 150, // Distribución vertical
+                fixed: { x: false, y: false }
+            });
+
+            // Conectar cada ubicación a la IP
+            locations.forEach(location => {
+                const locationId = locationMap.get(location);
+                if (locationId) {
+                    edges.push({
+                        from: locationId,
+                        to: ipNodeId,
+                        color: { color: '#666', highlight: '#000' },
+                        width: 3,
+                        smooth: { type: 'curvedCW', roundness: 0.5 },
+                        title: `${ip} encontrada en ${location}`
+                    });
+                }
+            });
+        });
+
+        // Crear el grafo
+        const graphData = {
+            nodes: new vis.DataSet(nodes),
+            edges: new vis.DataSet(edges)
+        };
+
+        const options = {
+            nodes: {
+                font: { size: 16, face: 'Arial', bold: true },
+                borderWidth: 3,
+                shadow: true,
+                chosen: {
+                    node: function (values, id, selected, hovering) {
+                        values.borderWidth = 5;
+                        values.size = 45;
+                    }
+                }
+            },
+            edges: {
+                width: 3,
+                color: { color: '#666', highlight: '#000' },
+                arrows: { to: { enabled: false } },
+                smooth: { type: 'curvedCW', roundness: 0.5 },
+                shadow: true
+            },
+            physics: {
+                enabled: true,
+                stabilization: { iterations: 200, fit: true },
+                barnesHut: {
+                    gravitationalConstant: -3000,
+                    springLength: 400,
+                    springConstant: 0.001,
+                    damping: 0.09
+                },
+                repulsion: {
+                    centralGravity: 0.1,
+                    springLength: 400,
+                    springConstant: 0.001,
+                    nodeDistance: 500,
+                    damping: 0.09
+                }
+            },
+            interaction: {
+                hover: true,
+                tooltipDelay: 200,
+                zoomView: true,
+                dragView: true,
+                dragNodes: true,
+                selectConnectedEdges: true
+            }
+        };
+
+        duplicateIPsGraph = new vis.Network(container, graphData, options);
+
+        // Ajustar vista después de la estabilización
+        duplicateIPsGraph.on('stabilizationEnd', function () {
+            duplicateIPsGraph.fit({ animation: true, padding: 50 });
+        });
+
+        // Ajustar vista inicial
+        setTimeout(() => {
+            if (duplicateIPsGraph) {
+                duplicateIPsGraph.fit({ animation: true, padding: 50 });
+            }
+        }, 1000);
+    }
+
+    // Actualizar grafo de red
+    function updateNetworkGraph(data) {
+        const container = document.getElementById('networkGraph');
+
+        if (!data || !data.nodes || !data.edges) {
+            container.innerHTML = '<p style="text-align: center; padding: 2rem; color: var(--text-secondary);">No hay datos para mostrar el grafo</p>';
+            return;
+        }
+
+        // Mapear colores a nodos
+        const nodeData = data.nodes.map(node => ({
+            id: node.id,
+            label: node.label || 'Unknown',
+            group: node.group || 'Unknown',
+            color: {
+                background: node.color || '#CCCCCC',
+                border: '#333333',
+                highlight: { background: node.color || '#CCCCCC', border: '#000000' }
+            },
+            font: { size: 12, color: '#000000' },
+            borderWidth: 2,
+            shadow: true
+        }));
+
+        // Guardar todos los nodos y relaciones originales
+        allGraphNodes = new vis.DataSet(nodeData);
+        allGraphEdges = new vis.DataSet(data.edges);
+
+        // Configurar opciones del grafo
+        const options = {
+            nodes: {
+                shape: 'dot',
+                size: 16,
+                font: { size: 12, color: '#000000' },
+                borderWidth: 2,
+                shadow: true
+            },
+            edges: {
+                width: 2,
+                color: { color: '#848484', highlight: '#848484' },
+                smooth: { type: 'continuous' },
+                arrows: { to: { enabled: true, scaleFactor: 0.5 } }
+            },
+            physics: {
+                stabilization: { iterations: 200 },
+                barnesHut: {
+                    gravitationalConstant: -2000,
+                    springLength: 100,
+                    springConstant: 0.04
+                }
+            },
+            interaction: {
+                hover: true,
+                tooltipDelay: 200,
+                zoomView: true,
+                dragView: true,
+                selectConnectedEdges: true
+            }
+        };
+
+        if (networkGraph) {
+            networkGraph.destroy();
+        }
+
+        // Aplicar filtros iniciales antes de crear el grafo
+        const filteredData = getFilteredGraphData();
+
+        networkGraph = new vis.Network(container, filteredData, options);
+
+        // Ajustar vista inicial
+        setTimeout(() => {
+            if (networkGraph) {
+                networkGraph.fit({ animation: true });
+            }
+        }, 500);
+    }
+
+    // Obtener datos filtrados del grafo
+    function getFilteredGraphData() {
+        if (!allGraphNodes || !allGraphEdges) {
+            return { nodes: new vis.DataSet([]), edges: new vis.DataSet([]) };
+        }
+
+        // Obtener tipos de nodos seleccionados (por defecto todos)
+        const filterCheckboxes = document.querySelectorAll('.node-filter');
+        let checkedTypes = [];
+
+        if (filterCheckboxes.length > 0) {
+            checkedTypes = Array.from(filterCheckboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.dataset.type);
+        } else {
+            // Si no hay checkboxes, mostrar todos
+            checkedTypes = ['ORG', 'SEG', 'Subred', 'IP', 'Port'];
+        }
+
+        // Obtener todos los nodos
+        const allNodes = allGraphNodes.get();
+        const allEdges = allGraphEdges.get();
+
+        // Filtrar nodos por tipo
+        const filteredNodeIds = allNodes
+            .filter(node => checkedTypes.includes(node.group))
+            .map(node => node.id);
+
+        // Filtrar relaciones: solo mantener las que conectan nodos visibles
+        const filteredEdges = allEdges.filter(edge =>
+            filteredNodeIds.includes(edge.from) && filteredNodeIds.includes(edge.to)
+        );
+
+        // Obtener nodos filtrados
+        const nodesToShow = allNodes.filter(node => filteredNodeIds.includes(node.id));
+
+        return {
+            nodes: new vis.DataSet(nodesToShow),
+            edges: new vis.DataSet(filteredEdges)
+        };
+    }
+
+    // Aplicar filtros de nodos
+    function applyNodeFilters() {
+        if (!allGraphNodes || !allGraphEdges || !networkGraph) {
+            return;
+        }
+
+        const filteredData = getFilteredGraphData();
+
+        // Actualizar el dataset del grafo
+        networkGraph.setData(filteredData);
+
+        // Ajustar vista después de filtrar
+        setTimeout(() => {
+            if (networkGraph) {
+                networkGraph.fit({ animation: true });
+            }
+        }, 100);
+    }
+
+    // Ajustar vista del grafo
+    function fitNetworkGraph() {
+        if (networkGraph) {
+            networkGraph.fit({
+                animation: {
+                    duration: 500,
+                    easingFunction: 'easeInOutQuad'
+                }
+            });
+        }
+    }
+
+    // Event listeners para filtros
+    document.addEventListener('DOMContentLoaded', function () {
+        // Agregar listeners a los checkboxes de filtro cuando se carguen
+        setTimeout(() => {
+            const filters = document.querySelectorAll('.node-filter');
+            filters.forEach(filter => {
+                filter.addEventListener('change', applyNodeFilters);
+            });
+
+            // Botón de ajustar vista
+            const fitBtn = document.getElementById('fitGraphBtn');
+            if (fitBtn) {
+                fitBtn.addEventListener('click', fitNetworkGraph);
+            }
+
+            // Botones de seleccionar/deseleccionar todos
+            const selectAllBtn = document.getElementById('selectAllNodesBtn');
+            const deselectAllBtn = document.getElementById('deselectAllNodesBtn');
+
+            if (selectAllBtn) {
+                selectAllBtn.addEventListener('click', function () {
+                    document.querySelectorAll('.node-filter').forEach(cb => cb.checked = true);
+                    applyNodeFilters();
+                });
+            }
+
+            if (deselectAllBtn) {
+                deselectAllBtn.addEventListener('click', function () {
+                    document.querySelectorAll('.node-filter').forEach(cb => cb.checked = false);
+                    applyNodeFilters();
+                });
+            }
+        }, 1000);
+    });
+
+    // También agregar listeners cuando se cargue el dashboard
+    function setupGraphFilters() {
+        const filters = document.querySelectorAll('.node-filter');
+        filters.forEach(filter => {
+            filter.removeEventListener('change', applyNodeFilters);
+            filter.addEventListener('change', applyNodeFilters);
+        });
+
+        const fitBtn = document.getElementById('fitGraphBtn');
+        if (fitBtn) {
+            fitBtn.removeEventListener('click', fitNetworkGraph);
+            fitBtn.addEventListener('click', fitNetworkGraph);
+        }
+
+        const selectAllBtn = document.getElementById('selectAllNodesBtn');
+        const deselectAllBtn = document.getElementById('deselectAllNodesBtn');
+
+        if (selectAllBtn) {
+            selectAllBtn.removeEventListener('click', function () { });
+            selectAllBtn.addEventListener('click', function () {
+                document.querySelectorAll('.node-filter').forEach(cb => cb.checked = true);
+                applyNodeFilters();
+            });
+        }
+
+        if (deselectAllBtn) {
+            deselectAllBtn.removeEventListener('click', function () { });
+            deselectAllBtn.addEventListener('click', function () {
+                document.querySelectorAll('.node-filter').forEach(cb => cb.checked = false);
+                applyNodeFilters();
+            });
+        }
+    }
+
+    // Cargar dashboard cuando se exporta exitosamente
+    document.getElementById('neo4jForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        if (!isConnected) {
+            alert('❌ Debes estar conectado a Neo4j para exportar. Haz clic en "Conectar" primero.');
+            return;
+        }
+
+        // Obtener credenciales de la sección de conexión
+        const creds = getNeo4jCredentials();
+        if (!creds.ip || !creds.username || !creds.password) {
+            alert('❌ Por favor, completa los campos de conexión a Neo4j antes de exportar.');
+            return;
+        }
+
+        // Obtener filtros del formulario de exportación
+        const formData = new FormData(this);
+        const orgValue = formData.get('organization');
+        const locValue = formData.get('location');
+        const config = {
+            ip: creds.ip,
+            username: creds.username,
+            password: creds.password,
+            organization: (orgValue && orgValue.trim() !== '') ? orgValue.trim() : null,
+            location: (locValue && locValue.trim() !== '') ? locValue.trim() : null
+        };
+
+        // Validar que las credenciales requeridas no estén vacías
+        if (!config.ip || !config.username || !config.password) {
+            alert('❌ Las credenciales de conexión (IP, Usuario y Contraseña) son obligatorias.');
+            document.getElementById('exportBtn').disabled = false;
+            return;
+        }
+
+        document.getElementById('exportStatus').classList.remove('hidden');
+        document.getElementById('exportMessages').innerHTML = '<p>⏳ Exportando...</p>';
+        document.getElementById('exportBtn').disabled = true;
+
+        try {
+            const response = await fetch('/api/neo4j/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
+                throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                document.getElementById('exportMessages').innerHTML =
+                    `<p class="success">✅ Exportación completada exitosamente</p><pre>${result.message}</pre>`;
+                // Cargar dashboard automáticamente después de exportar
+                setTimeout(() => {
+                    loadDashboard();
+                }, 1000);
+            } else {
+                document.getElementById('exportMessages').innerHTML =
+                    `<p class="error">❌ Error en la exportación</p><pre>${result.message || 'Error desconocido'}</pre>`;
+            }
+        } catch (error) {
+            console.error('Error en exportación:', error);
+            document.getElementById('exportMessages').innerHTML =
+                `<p class="error">❌ Error: ${error.message || 'Error desconocido'}</p>`;
+        } finally {
+            document.getElementById('exportBtn').disabled = false;
+        }
+    });
+
+
+    loadOrganizations();
+    loadLocations();
+
+    // Verificar si hay una conexión guardada al cargar la página
+    checkSavedConnection();
+
+    // Guardar credenciales en localStorage
+    function saveNeo4jCredentials(creds) {
+        try {
+            localStorage.setItem('neo4j_credentials', JSON.stringify(creds));
+            localStorage.setItem('neo4j_connected', 'true');
+        } catch (e) {
+            console.error('Error guardando credenciales:', e);
+        }
+    }
+
+    // Cargar credenciales de localStorage
+    function loadNeo4jCredentials() {
+        try {
+            const saved = localStorage.getItem('neo4j_credentials');
+            const connected = localStorage.getItem('neo4j_connected') === 'true';
+
+            if (saved && connected) {
+                const creds = JSON.parse(saved);
+                document.getElementById('neo4j_ip').value = creds.ip || '';
+                document.getElementById('neo4j_username').value = creds.username || '';
+                document.getElementById('neo4j_password').value = creds.password || '';
+                return creds;
+            }
+        } catch (e) {
+            console.error('Error cargando credenciales:', e);
+        }
+        return null;
+    }
+
+    // Limpiar credenciales de localStorage
+    function clearNeo4jCredentials() {
+        try {
+            localStorage.removeItem('neo4j_credentials');
+            localStorage.removeItem('neo4j_connected');
+        } catch (e) {
+            console.error('Error limpiando credenciales:', e);
+        }
+    }
+
+    // Funciones de conexión/desconexión
+    async function connectToNeo4j() {
+        const creds = getNeo4jCredentials();
+        if (!creds.ip || !creds.username || !creds.password) {
+            alert('❌ Por favor, completa los campos de IP, Usuario y Contraseña de Neo4j.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/neo4j/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(creds)
+            });
+
+            const result = await response.json();
+
+            if (result.connected) {
+                isConnected = true;
+                saveNeo4jCredentials(creds);
+                updateConnectionStatus(true);
+                // Cargar organizaciones de Neo4j
+                loadNeo4jOrganizations();
+            } else {
+                alert('❌ Error de conexión: ' + result.message);
+                updateConnectionStatus(false);
+                clearNeo4jCredentials();
+            }
+        } catch (error) {
+            alert('❌ Error: ' + error.message);
+            updateConnectionStatus(false);
+            clearNeo4jCredentials();
+        }
+    }
+
+    function disconnectFromNeo4j() {
+        isConnected = false;
+        clearNeo4jCredentials();
+        updateConnectionStatus(false);
+        // Ocultar dashboard
+        document.getElementById('neo4jDashboard').style.display = 'none';
+    }
+
+    // Verificar conexión guardada al cargar la página
+    async function checkSavedConnection() {
+        const savedCreds = loadNeo4jCredentials();
+        if (savedCreds && savedCreds.ip && savedCreds.username && savedCreds.password) {
+            // Intentar reconectar automáticamente
+            try {
+                const response = await fetch('/api/neo4j/connect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(savedCreds)
+                });
+
+                const result = await response.json();
+                if (result.connected) {
+                    isConnected = true;
+                    updateConnectionStatus(true);
+                    loadNeo4jOrganizations();
+                } else {
+                    clearNeo4jCredentials();
+                }
+            } catch (e) {
+                clearNeo4jCredentials();
+            }
+        }
+    }
+
+    function updateConnectionStatus(connected) {
+        const indicator = document.getElementById('connectionIndicator');
+        const text = document.getElementById('connectionText');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+
+        if (connected) {
+            indicator.style.background = '#10b981';
+            indicator.style.boxShadow = '0 0 8px rgba(16, 185, 129, 0.5)';
+            text.textContent = 'Conectado';
+            connectBtn.style.display = 'none';
+            disconnectBtn.style.display = 'inline-block';
+            exportBtn.disabled = false;
+            clearAllBtn.disabled = false;
+        } else {
+            indicator.style.background = '#ef4444';
+            indicator.style.boxShadow = '0 0 8px rgba(239, 68, 68, 0.5)';
+            text.textContent = 'Desconectado';
+            connectBtn.style.display = 'inline-block';
+            disconnectBtn.style.display = 'none';
+            exportBtn.disabled = true;
+            clearAllBtn.disabled = true;
+        }
+    }
+
+    // Event listeners para conexión
+    document.getElementById('connectBtn').addEventListener('click', connectToNeo4j);
+    document.getElementById('disconnectBtn').addEventListener('click', disconnectFromNeo4j);
+
+    // Cargar organizaciones para el dashboard cuando cambia el filtro
+    const dashboardOrgFilter = document.getElementById('dashboardOrgFilter');
+    if (dashboardOrgFilter) {
+        dashboardOrgFilter.addEventListener('change', function () {
+            // Opcional: recargar dashboard automáticamente cuando cambia el filtro
+        });
+    }
+
+    // Configurar botón de cargar dashboard (ya existe en el HTML)
+    const loadDashboardBtn = document.getElementById('loadDashboardBtn');
+    if (loadDashboardBtn) {
+        loadDashboardBtn.onclick = loadDashboard;
+
+        // Actualizar estado del botón cuando cambia la conexión
+        const originalUpdateStatus = updateConnectionStatus;
+        updateConnectionStatus = function (connected) {
+            originalUpdateStatus(connected);
+            if (loadDashboardBtn) {
+                loadDashboardBtn.disabled = !connected;
+            }
+        };
+    }
+
+    async function clearAllDatabase() {
+        if (!isConnected) {
+            alert('❌ Debes estar conectado a Neo4j para eliminar la base de datos. Haz clic en "Conectar" primero.');
+            return;
+        }
+
+        // Obtener credenciales del formulario
+        const ip = document.getElementById('neo4j_ip').value;
+        const username = document.getElementById('neo4j_username').value;
+        const password = document.getElementById('neo4j_password').value;
+
+        if (!ip || !username || !password) {
+            alert('❌ Por favor, completa los campos de IP, Usuario y Contraseña de Neo4j antes de eliminar la base de datos.');
+            return;
+        }
+
+        // Primera confirmación
+        const firstConfirm = confirm(
+            '⚠️ ADVERTENCIA CRÍTICA ⚠️\n\n' +
+            'Estás a punto de eliminar TODOS los datos de la base de datos Neo4j:\n\n' +
+            '• Todos los nodos\n' +
+            '• Todas las relaciones\n' +
+            '• Todos los datos exportados\n\n' +
+            'Esta acción es IRREVERSIBLE y NO se puede deshacer.\n\n' +
+            '¿Estás ABSOLUTAMENTE seguro?'
+        );
+
+        if (!firstConfirm) return;
+
+        // Segunda confirmación con texto que debe escribir
+        const confirmText = prompt(
+            '⚠️ ÚLTIMA CONFIRMACIÓN ⚠️\n\n' +
+            'Para confirmar que realmente quieres eliminar TODOS los datos de Neo4j,\n' +
+            'escribe exactamente: ELIMINAR NEO4J\n\n' +
+            'Cualquier otro texto cancelará la operación.'
+        );
+
+        if (confirmText !== 'ELIMINAR NEO4J') {
+            alert('Operación cancelada. El texto no coincide.');
+            return;
+        }
+
+        // Tercera confirmación final
+        const finalConfirm = confirm(
+            '⚠️ CONFIRMACIÓN FINAL ⚠️\n\n' +
+            'Esta es tu última oportunidad.\n\n' +
+            '¿Confirmas que quieres eliminar TODOS los datos de Neo4j?\n\n' +
+            'Esta acción NO se puede deshacer.'
+        );
+
+        if (!finalConfirm) {
+            alert('Operación cancelada.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/neo4j/clear-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ip: ip,
+                    username: username,
+                    password: password
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(
+                    '✅ Base de datos Neo4j limpiada completamente\n\n' +
+                    result.message
+                );
+            } else {
+                alert(`❌ Error: ${result.detail || result.message}`);
+            }
+        } catch (error) {
+            alert(`❌ Error: ${error.message}`);
+        }
+    }
+
+    // Cargar organizaciones de Neo4j para el filtro del dashboard
+    async function loadNeo4jOrganizations() {
+        const creds = getNeo4jCredentials();
+        if (!creds.ip || !creds.username || !creds.password) {
+            return; // No cargar si no hay credenciales
+        }
+
+        try {
+            const response = await fetch('/api/neo4j/dashboard/organizations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(creds)
+            });
+            const orgs = await response.json();
+            const select = document.getElementById('dashboardOrgFilter');
+            select.innerHTML = '<option value="">Todas las organizaciones</option>' +
+                orgs.map(org => `<option value="${org.name}">${org.name}</option>`).join('');
+        } catch (error) {
+            // Silenciar error si no hay conexión a Neo4j
+            console.log('No se pudieron cargar organizaciones de Neo4j:', error);
+        }
+    }
+
+    // Intentar cargar organizaciones cuando se ingresan credenciales
+    ['neo4j_ip', 'neo4j_username', 'neo4j_password'].forEach(id => {
+        document.getElementById(id).addEventListener('blur', function () {
+            const creds = getNeo4jCredentials();
+            if (creds.ip && creds.username && creds.password) {
+                loadNeo4jOrganizations();
+            }
+        });
+    });
+</script>
+{% endblock %}

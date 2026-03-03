@@ -1,0 +1,458 @@
+{% extends "base.html" %}
+
+{% block title %}Detalles del Escaneo - ArsenalOT{% endblock %}
+
+{% block content %}
+<div class="scan-details-page">
+    <h1 class="page-title">📊 Detalles del Escaneo #<span id="scanId"></span></h1>
+    
+    <div id="loading" class="loading-message">Cargando información del escaneo...</div>
+    
+    <div id="scanInfo" style="display: none;">
+        <!-- Información básica del escaneo -->
+        <div class="info-section">
+            <h2>📋 Información del Escaneo</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <strong>Organización:</strong> <span id="orgName"></span>
+                </div>
+                <div class="info-item">
+                    <strong>Ubicación:</strong> <span id="location"></span>
+                </div>
+                <div class="info-item">
+                    <strong>Target:</strong> <span id="target"></span>
+                </div>
+                <div class="info-item">
+                    <strong>Estado:</strong> <span id="status"></span>
+                </div>
+                <div class="info-item">
+                    <strong>Iniciado:</strong> <span id="startedAt"></span>
+                </div>
+                <div class="info-item">
+                    <strong>Completado:</strong> <span id="completedAt"></span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Estadísticas -->
+        <div class="stats-section">
+            <h2>📈 Estadísticas</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="hostsCount">0</div>
+                    <div class="stat-label">Hosts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="portsCount">0</div>
+                    <div class="stat-label">Puertos</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="vulnsCount">0</div>
+                    <div class="stat-label">Vulnerabilidades</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="screenshotsCount">0</div>
+                    <div class="stat-label">Capturas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="sourcesCount">0</div>
+                    <div class="stat-label">Códigos Fuente</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Evidencias -->
+        <div class="evidence-section">
+            <h2>📸 Capturas de Pantalla</h2>
+            <div id="screenshotsContainer" class="evidence-grid">
+                <div class="loading">Cargando capturas...</div>
+            </div>
+        </div>
+        
+        <div class="evidence-section">
+            <h2>📄 Códigos Fuente</h2>
+            <div id="sourcesContainer" class="evidence-list">
+                <div class="loading">Cargando códigos fuente...</div>
+            </div>
+        </div>
+        
+        <div class="evidence-section">
+            <h2>⚠️ Vulnerabilidades</h2>
+            <div id="vulnerabilitiesContainer" class="vulns-list">
+                <div class="loading">Cargando vulnerabilidades...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const scanId = {{ scan_id }};
+    document.getElementById('scanId').textContent = scanId;
+    
+    async function loadScanDetails() {
+        try {
+            // Cargar información del escaneo
+            const scanResponse = await fetch(`/api/scans`);
+            const scans = await scanResponse.json();
+            const scan = scans.find(s => s.id == scanId);
+            
+            if (!scan) {
+                document.getElementById('loading').textContent = 'Escaneo no encontrado';
+                return;
+            }
+            
+            // Mostrar información básica
+            document.getElementById('orgName').textContent = scan.organization_name;
+            document.getElementById('location').textContent = scan.location;
+            document.getElementById('target').textContent = scan.target_range;
+            document.getElementById('status').textContent = scan.status;
+            document.getElementById('startedAt').textContent = scan.started_at ? new Date(scan.started_at).toLocaleString() : '-';
+            document.getElementById('completedAt').textContent = scan.completed_at ? new Date(scan.completed_at).toLocaleString() : '-';
+            
+            // Cargar estadísticas
+            const statsResponse = await fetch(`/api/stats?scan_id=${scanId}`);
+            const stats = await statsResponse.json();
+            
+            document.getElementById('hostsCount').textContent = stats.hosts || 0;
+            document.getElementById('portsCount').textContent = stats.ports || 0;
+            document.getElementById('vulnsCount').textContent = stats.vulnerabilities || 0;
+            
+            // Cargar evidencias
+            await loadScreenshots();
+            await loadSourceCodes();
+            await loadVulnerabilities();
+            
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('scanInfo').style.display = 'block';
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('loading').textContent = 'Error cargando información del escaneo';
+        }
+    }
+    
+    async function loadScreenshots() {
+        try {
+            const response = await fetch(`/api/scan/${scanId}/screenshots`);
+            const screenshots = await response.json();
+            
+            const container = document.getElementById('screenshotsContainer');
+            if (screenshots.length === 0) {
+                container.innerHTML = '<div class="empty">No hay capturas de pantalla</div>';
+                document.getElementById('screenshotsCount').textContent = '0';
+            } else {
+                document.getElementById('screenshotsCount').textContent = screenshots.length;
+                container.innerHTML = screenshots.map(s => `
+                    <div class="evidence-item">
+                        <div class="evidence-header">
+                            <strong>${s.ip_address}:${s.port}</strong>
+                        </div>
+                        <div class="evidence-content">
+                            <img src="/api/evidence/screenshot/${scanId}/${s.ip_address}/${s.port}" 
+                                 alt="Screenshot ${s.ip_address}:${s.port}"
+                                 onclick="showScreenshotModal('${s.ip_address}', ${s.port})"
+                                 style="cursor: pointer; max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                    </div>
+                `).join('');
+            }
+        } catch (error) {
+            console.error('Error cargando screenshots:', error);
+            document.getElementById('screenshotsContainer').innerHTML = '<div class="error">Error cargando capturas</div>';
+        }
+    }
+    
+    async function loadSourceCodes() {
+        try {
+            const response = await fetch(`/api/scan/${scanId}/sources`);
+            const sources = await response.json();
+            
+            const container = document.getElementById('sourcesContainer');
+            if (sources.length === 0) {
+                container.innerHTML = '<div class="empty">No hay códigos fuente</div>';
+                document.getElementById('sourcesCount').textContent = '0';
+            } else {
+                document.getElementById('sourcesCount').textContent = sources.length;
+                container.innerHTML = sources.map(s => `
+                    <div class="evidence-item">
+                        <div class="evidence-header">
+                            <strong>${s.ip_address}:${s.port}</strong>
+                            <button class="btn-view" onclick="showSourceCode('${s.ip_address}', ${s.port})">Ver código</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        } catch (error) {
+            console.error('Error cargando sources:', error);
+            document.getElementById('sourcesContainer').innerHTML = '<div class="error">Error cargando códigos fuente</div>';
+        }
+    }
+    
+    async function loadVulnerabilities() {
+        try {
+            const response = await fetch(`/api/scan/${scanId}/vulnerabilities`);
+            const vulns = await response.json();
+            
+            const container = document.getElementById('vulnerabilitiesContainer');
+            if (vulns.length === 0) {
+                container.innerHTML = '<div class="empty">No hay vulnerabilidades</div>';
+            } else {
+                container.innerHTML = vulns.map(v => `
+                    <div class="vuln-item">
+                        <div class="vuln-header">
+                            <strong>${v.vulnerability_name || v.vulnerability_id || 'Vulnerabilidad'}</strong>
+                            <span class="severity severity-${v.severity?.toLowerCase() || 'unknown'}">${v.severity || 'Unknown'}</span>
+                        </div>
+                        <div class="vuln-info">
+                            <div><strong>Host:</strong> ${v.ip_address}:${v.port}</div>
+                            ${v.cve_id ? `<div><strong>CVE:</strong> ${v.cve_id}</div>` : ''}
+                            ${v.cvss_score ? `<div><strong>CVSS:</strong> ${v.cvss_score}</div>` : ''}
+                        </div>
+                        ${v.description ? `<div class="vuln-description">${v.description}</div>` : ''}
+                    </div>
+                `).join('');
+            }
+        } catch (error) {
+            console.error('Error cargando vulnerabilidades:', error);
+            document.getElementById('vulnerabilitiesContainer').innerHTML = '<div class="error">Error cargando vulnerabilidades</div>';
+        }
+    }
+    
+    function showScreenshotModal(ip, port) {
+        const modal = document.createElement('div');
+        modal.className = 'evidence-modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>📸 Captura de Pantalla - ${ip}:${port}</h3>
+                    <button class="modal-close" onclick="this.closest('.evidence-modal').remove()">×</button>
+                </div>
+                <div class="modal-body">
+                    <img src="/api/evidence/screenshot/${scanId}/${ip}/${port}" 
+                         alt="Screenshot ${ip}:${port}" 
+                         style="max-width: 100%; height: auto;">
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+    }
+    
+    function showSourceCode(ip, port) {
+        const modal = document.createElement('div');
+        modal.className = 'evidence-modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>📄 Código Fuente - ${ip}:${port}</h3>
+                    <button class="modal-close" onclick="this.closest('.evidence-modal').remove()">×</button>
+                </div>
+                <div class="modal-body">
+                    <pre id="sourceCodeContent" style="background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 4px; overflow: auto; max-height: 70vh; white-space: pre-wrap; word-wrap: break-word;">Cargando...</pre>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        fetch(`/api/evidence/source/${scanId}/${ip}/${port}`)
+            .then(response => {
+                if (response.headers.get('content-type')?.includes('application/json')) {
+                    return response.json();
+                } else {
+                    return response.text().then(text => ({ content: text }));
+                }
+            })
+            .then(data => {
+                const contentDiv = document.getElementById('sourceCodeContent');
+                if (data.content) {
+                    contentDiv.textContent = data.content;
+                } else {
+                    contentDiv.textContent = 'No se pudo cargar el código fuente';
+                }
+            })
+            .catch(error => {
+                document.getElementById('sourceCodeContent').textContent = `Error: ${error.message}`;
+            });
+        
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+    }
+    
+    loadScanDetails();
+</script>
+
+<style>
+    .scan-details-page {
+        padding: 2rem;
+    }
+    
+    .info-section, .stats-section, .evidence-section {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .info-item {
+        padding: 0.5rem;
+        background: #f9fafb;
+        border-radius: 4px;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        text-align: center;
+    }
+    
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+    
+    .evidence-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .evidence-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .evidence-item {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    
+    .evidence-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .evidence-content {
+        margin-top: 0.5rem;
+    }
+    
+    .vulns-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .vuln-item {
+        background: #fef2f2;
+        border-left: 4px solid #ef4444;
+        border-radius: 4px;
+        padding: 1rem;
+    }
+    
+    .vuln-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .severity {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-weight: bold;
+    }
+    
+    .severity-critical { background: #dc2626; color: white; }
+    .severity-high { background: #ea580c; color: white; }
+    .severity-medium { background: #f59e0b; color: white; }
+    .severity-low { background: #10b981; color: white; }
+    .severity-unknown { background: #6b7280; color: white; }
+    
+    .vuln-info {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .vuln-description {
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background: white;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+    
+    .btn-view {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+    
+    .btn-view:hover {
+        background: #2563eb;
+    }
+    
+    .loading-message {
+        text-align: center;
+        padding: 2rem;
+        font-size: 1.2rem;
+        color: #6b7280;
+    }
+    
+    .empty {
+        text-align: center;
+        padding: 2rem;
+        color: #9ca3af;
+    }
+    
+    .error {
+        text-align: center;
+        padding: 2rem;
+        color: #ef4444;
+    }
+</style>
+{% endblock %}
+

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ArsenalOT{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <a href="/" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+                    <h1><span>🛡️</span> ArsenalOT</h1>
+                </a>
+            </div>
+            <ul class="nav-menu">
+                {% if org_name and '/recon' in request.url.path %}
+                <li><a href="/pentest/{{ org_name | urlencode }}/recon" class="nav-link">Dashboard (Recon)</a></li>
+                <li><a href="/pentest/{{ org_name | urlencode }}/recon/scan" class="nav-link">Nuevo Escaneo</a></li>
+                <li><a href="/pentest/{{ org_name | urlencode }}/recon/results" class="nav-link">Resultados</a></li>
+                <li><a href="/pentest/{{ org_name | urlencode }}/recon/neo4j" class="nav-link">Neo4j</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 ArsenalOT - Sistema de Gestión de Escaneos de Red</p>
+    </footer>
+
+    <script src="/static/js/main.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>
