@@ -415,8 +415,8 @@ class ScanStorage:
         # Validar que es IP privada antes de proceder
         try:
             ip_obj = ipaddress.ip_address(host_ip)
-            if not ip_obj.is_private:
-                # IP pública, no guardar en la base de datos
+            if ip_obj.is_global and not ip_obj.is_private and not ip_obj.is_loopback and not ip_obj.is_link_local and not ip_obj.is_reserved:
+                # IP pública mundialmente enrutable, no guardar en la base de datos
                 return False
         except ValueError:
             # IP inválida, no guardar
@@ -507,8 +507,8 @@ class ScanStorage:
         # Validar que es IP privada antes de proceder
         try:
             ip_obj = ipaddress.ip_address(host_ip)
-            if not ip_obj.is_private:
-                # IP pública, no guardar en la base de datos
+            if ip_obj.is_global and not ip_obj.is_private and not ip_obj.is_loopback and not ip_obj.is_link_local and not ip_obj.is_reserved:
+                # IP pública mundialmente enrutable, no guardar en la base de datos
                 return False
             is_private = True
         except ValueError:
