@@ -11,6 +11,38 @@
             grafos.</p>
     </div>
 
+    <!-- Controles locales de Neo4j y NeoDash -->
+    <div class="glass-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
+        <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🖥️ Servicios
+            Locales Docker</h3>
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">Levanta una instancia local de
+            Neo4j y NeoDash con Docker directamente desde aquí.</p>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+            <button id="btnNeo4j" class="btn"
+                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; background: #018bff; color: white;"
+                onclick="toggleDockerService('neo4j')">
+                <span id="iconNeo4j">▶️</span> <span id="textNeo4j">Levantar Neo4j</span>
+            </button>
+            <a id="linkNeo4j" href="http://localhost:7474" target="_blank" class="btn btn-success"
+                style="display: none; padding: 0.6rem 1.2rem; font-size: 0.95rem; align-items: center; gap: 0.5rem;">
+                <span>🔗</span> Panel Neo4j
+            </a>
+
+            <div style="width: 1px; background: var(--border-color); align-self: stretch;"></div>
+
+            <button id="btnNeodash" class="btn"
+                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; background: #60a5fa; color: white;"
+                onclick="toggleDockerService('neodash')">
+                <span id="iconNeodash">▶️</span> <span id="textNeodash">Levantar NeoDash</span>
+            </button>
+            <a id="linkNeodash" href="http://localhost:5005" target="_blank" class="btn btn-success"
+                style="display: none; padding: 0.6rem 1.2rem; font-size: 0.95rem; align-items: center; gap: 0.5rem;">
+                <span>🔗</span> Panel NeoDash
+            </a>
+        </div>
+        <div id="dockerStatusMsg" style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);"></div>
+    </div>
+
     <!-- Conexión a Neo4j -->
     <div id="connectionStatus" class="glass-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
         <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🔌 Conexión a
@@ -1545,5 +1577,72 @@
             }
         });
     });
+
+    // --- NEO4J & NEODASH DOCKER CONTROLS ---
+    async function toggleDockerService(service) {
+        const svcLabel = service === 'neo4j' ? 'Neo4j' : 'NeoDash';
+        const btn = document.getElementById(`btn${svcLabel}`);
+        const isRunning = btn.getAttribute('data-running') === 'true';
+        const action = isRunning ? 'stop' : 'start';
+
+        btn.disabled = true;
+        const textEl = document.getElementById(`text${svcLabel}`);
+        const origText = textEl.innerText;
+        textEl.innerText = isRunning ? 'Deteniendo...' : 'Levantando...';
+
+        const statusMsg = document.getElementById('dockerStatusMsg');
+        if (statusMsg) statusMsg.innerText = '';
+
+        try {
+            const response = await fetch(`/api/docker/${service}/${action}`, { method: 'POST' });
+            const data = await response.json();
+            if (!response.ok || data.status === 'error') {
+                throw new Error(data.message || `Error al ${action} ${service}`);
+            }
+            if (statusMsg) statusMsg.innerText = data.message || `Servicio ${service} ${isRunning ? 'detenido' : 'iniciado'}.`;
+            await checkDockerService(service);
+        } catch (error) {
+            console.error(error);
+            if (statusMsg) statusMsg.style.color = '#ef4444';
+            if (statusMsg) statusMsg.innerText = `Error: ${error.message}`;
+            textEl.innerText = origText;
+            btn.disabled = false;
+        }
+    }
+
+    async function checkDockerService(service) {
+        try {
+            const response = await fetch(`/api/docker/${service}/status`);
+            const data = await response.json();
+            const svcLabel = service === 'neo4j' ? 'Neo4j' : 'NeoDash';
+            const btn = document.getElementById(`btn${svcLabel}`);
+            const icon = document.getElementById(`icon${svcLabel}`);
+            const text = document.getElementById(`text${svcLabel}`);
+            const link = document.getElementById(`link${svcLabel}`);
+
+            if (data.running) {
+                btn.setAttribute('data-running', 'true');
+                btn.style.background = '#ef4444';
+                icon.innerText = '\u23f9\ufe0f';
+                text.innerText = `Detener ${svcLabel}`;
+                link.style.display = 'inline-flex';
+            } else {
+                btn.setAttribute('data-running', 'false');
+                btn.style.background = service === 'neo4j' ? '#018bff' : '#60a5fa';
+                icon.innerText = '\u25b6\ufe0f';
+                text.innerText = `Levantar ${svcLabel}`;
+                link.style.display = 'none';
+            }
+            btn.disabled = false;
+        } catch (error) {
+            console.error(`Error checking ${service} status:`, error);
+        }
+    }
+
+    // Poll status every 5 seconds and on load
+    setInterval(() => { checkDockerService('neo4j'); checkDockerService('neodash'); }, 5000);
+    checkDockerService('neo4j');
+    checkDockerService('neodash');
+
 </script>
 {% endblock %}

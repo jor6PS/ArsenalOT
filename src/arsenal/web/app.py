@@ -2665,14 +2665,19 @@ async def clear_neo4j_database(config: Neo4jConfig):
 # NEO4J & NEODASH LOCAL DOCKER MANAGEMENT
 # ============================================================================
 
-def get_docker_compose_cmd(service: str, action: str) -> list:
+def _get_compose_base() -> list:
+    """Returns the base docker compose command, preferring the plugin syntax."""
     compose_file = Path.cwd() / "docker-compose.neo4j.yml"
+    return ["docker", "compose", "-f", str(compose_file)]
+
+def get_docker_compose_cmd(service: str, action: str) -> list:
+    compose_base = _get_compose_base()
     if action == "up":
-        return ["docker-compose", "-f", str(compose_file), "up", "-d", service]
+        return compose_base + ["up", "-d", service]
     elif action == "stop":
-        return ["docker-compose", "-f", str(compose_file), "stop", service]
+        return compose_base + ["stop", service]
     elif action == "status":
-        return ["docker", "ps", "--format", "{{.Names}}", "--filter", f"name=scanhound_{service}"]
+        return ["docker", "ps", "--format", "{{.Names}}", "--filter", f"name={service}"]
     return []
 
 @app.post("/api/docker/{service}/start")

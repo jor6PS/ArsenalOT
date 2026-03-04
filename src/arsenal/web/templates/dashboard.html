@@ -34,30 +34,6 @@
                 <span>📤</span> Importar
             </button>
 
-            <div style="width: 1px; background: var(--border-color); margin: 0 0.5rem;"></div>
-
-            <button id="btnNeo4j" class="btn"
-                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; background: #018bff; color: white;"
-                onclick="toggleDockerService('neo4j')">
-                <span id="iconNeo4j">▶️</span> <span id="textNeo4j">Levantar Neo4j</span>
-            </button>
-            <a id="linkNeo4j" href="http://localhost:7474" target="_blank" class="btn btn-success"
-                style="display: none; padding: 0.6rem 1.2rem; font-size: 0.95rem; align-items: center; gap: 0.5rem;">
-                <span>🔗</span> Panel Neo4j
-            </a>
-
-            <button id="btnNeodash" class="btn"
-                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; background: #60a5fa; color: white;"
-                onclick="toggleDockerService('neodash')">
-                <span id="iconNeodash">▶️</span> <span id="textNeodash">Levantar NeoDash</span>
-            </button>
-            <a id="linkNeodash" href="http://localhost:5005" target="_blank" class="btn btn-success"
-                style="display: none; padding: 0.6rem 1.2rem; font-size: 0.95rem; align-items: center; gap: 0.5rem;">
-                <span>🔗</span> Panel NeoDash
-            </a>
-
-            <div style="width: 1px; background: var(--border-color); margin: 0 0.5rem;"></div>
-
             {% if org_name %}
             <button id="deleteOrgBtn" class="btn btn-danger" onclick="deleteOrganization()"
                 style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
