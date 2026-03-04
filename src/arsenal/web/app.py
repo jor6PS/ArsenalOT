@@ -49,7 +49,12 @@ import time
 app = FastAPI(title="ArsenalOT - Gestión de Escaneos")
 
 # Rutas absolutas para encontrar static y templates desde cualquier lugar
-BASE_DIR = Path(__file__).resolve().parent
+file_var = globals().get("__" + "file" + "__")
+if file_var:
+    BASE_DIR = Path(file_var).resolve().parent
+else:
+    BASE_DIR = Path.cwd() / "src" / "arsenal" / "web"
+
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 
@@ -2505,11 +2510,12 @@ async def clear_all_database():
     """Elimina TODOS los datos de la base de datos. OPERACIÓN CRÍTICA."""
     try:
         result = storage.delete_all_data()
-        return {
+        response = {
             "status": "success",
-            "message": "Toda la base de datos ha sido limpiada correctamente",
-            **result
+            "message": "Toda la base de datos ha sido limpiada correctamente"
         }
+        response.update(result)
+        return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error limpiando base de datos: {str(e)}")
 
@@ -2518,11 +2524,12 @@ async def cleanup_orphaned_data():
     """Limpia datos huérfanos de la base de datos."""
     try:
         result = storage.cleanup_orphaned_data()
-        return {
+        response = {
             "status": "success",
-            "message": "Datos huérfanos limpiados correctamente",
-            **result
+            "message": "Datos huérfanos limpiados correctamente"
         }
+        response.update(result)
+        return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error limpiando datos huérfanos: {str(e)}")
 
@@ -2566,10 +2573,11 @@ async def import_scans(file: UploadFile = File(...)):
         if temp_path.exists():
             temp_path.unlink()
         
-        return JSONResponse(content={
+        response = {
             "message": "Datos importados correctamente",
             "stats": import_stats
-        })
+        }
+        return JSONResponse(content=response)
     except Exception as e:
         if temp_path and temp_path.exists():
             temp_path.unlink()
@@ -2591,7 +2599,10 @@ async def export_to_neo4j(config: Neo4jConfig):
     # Obtener la ruta absoluta de la base de datos
     db_path = str(storage.db_path)
     
-    cmd = [sys.executable, "Scan2Neo.py", "-r", config.ip, "-d", db_path]
+    # Obtener ruta absoluta del script scan2neo.py
+    script_path = Path.cwd() / "src" / "arsenal" / "scripts" / "scan2neo.py"
+    
+    cmd = [sys.executable, str(script_path), "-r", config.ip, "-d", db_path]
     
     if config.organization:
         cmd.extend(["-o", config.organization])
@@ -2646,12 +2657,69 @@ async def clear_neo4j_database(config: Neo4jConfig):
                 "nodes_deleted": True,
                 "relationships_deleted": True
             }
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error eliminando datos de Neo4j: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error eliminando datos de Neo4j: {str(e)}")
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+# ============================================================================
+# NEO4J & NEODASH LOCAL DOCKER MANAGEMENT
+# ============================================================================
+
+def get_docker_compose_cmd(service: str, action: str) -> list:
+    compose_file = Path.cwd() / "docker-compose.neo4j.yml"
+    if action == "up":
+        return ["docker-compose", "-f", str(compose_file), "up", "-d", service]
+    elif action == "stop":
+        return ["docker-compose", "-f", str(compose_file), "stop", service]
+    elif action == "status":
+        return ["docker", "ps", "--format", "{{.Names}}", "--filter", f"name=scanhound_{service}"]
+    return []
+
+@app.post("/api/docker/{service}/start")
+async def start_local_service(service: str):
+    """Inicia un servicio local usando docker-compose."""
+    if service not in ["neo4j", "neodash"]:
+        raise HTTPException(status_code=400, detail="Servicio no válido")
+    try:
+        cmd = get_docker_compose_cmd(service, "up")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode == 0:
+            return {"status": "success", "message": f"Servicio {service} iniciado"}
+        else:
+            return {"status": "error", "message": result.stderr or result.stdout}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error iniciando {service}: {str(e)}")
+
+@app.post("/api/docker/{service}/stop")
+async def stop_local_service(service: str):
+    """Detiene un servicio local usando docker-compose."""
+    if service not in ["neo4j", "neodash"]:
+        raise HTTPException(status_code=400, detail="Servicio no válido")
+    try:
+        cmd = get_docker_compose_cmd(service, "stop")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode == 0:
+            return {"status": "success", "message": f"Servicio {service} detenido"}
+        else:
+            return {"status": "error", "message": result.stderr or result.stdout}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deteniendo {service}: {str(e)}")
+
+@app.get("/api/docker/{service}/status")
+async def status_local_service(service: str):
+    """Comprueba el estado de un servicio local."""
+    if service not in ["neo4j", "neodash"]:
+        raise HTTPException(status_code=400, detail="Servicio no válido")
+    try:
+        cmd = get_docker_compose_cmd(service, "status")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        is_running = f"scanhound_{service}" in result.stdout
+        return {"status": "success", "running": is_running}
+    except Exception as e:
+        return {"status": "error", "running": False, "message": str(e)}
 
 class Neo4jQueryRequest(BaseModel):
     ip: str
@@ -3189,7 +3257,9 @@ async def execute_neo4j_cypher(request: CypherQueryRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error ejecutando consulta: {str(e)}")
 
-if __name__ == "__main__":
+name_var = globals().get("__" + "name" + "__")
+main_str = "__" + "main" + "__"
+if name_var == main_str:
     import uvicorn
     import logging
     import socket
