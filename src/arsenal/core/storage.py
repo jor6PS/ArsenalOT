@@ -437,6 +437,24 @@ class ScanStorage:
         if not is_internal_ip(host_ip):
             # IP pública mundialmente enrutable, no guardar en la base de datos
             return False
+        ip_obj = ipaddress.ip_address(host_ip)
+        is_private = True
+        if not subnet:
+            for private_net in [
+                ipaddress.ip_network('10.0.0.0/8'),
+                ipaddress.ip_network('172.16.0.0/12'),
+                ipaddress.ip_network('192.168.0.0/16'),
+                ipaddress.ip_network('169.254.0.0/16'),
+                ipaddress.ip_network('127.0.0.0/8'),
+                ipaddress.ip_network('::1/128'),
+                ipaddress.ip_network('fc00::/7'),
+                ipaddress.ip_network('fe80::/10'),
+            ]:
+                if ip_obj in private_net:
+                    subnet = str(private_net)
+                    break
+            if not subnet:
+                subnet = "Private IP (unknown subnet)"
         
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -449,21 +467,6 @@ class ScanStorage:
             print(f"⚠️  El escaneo {scan_id} no existe")
             conn.close()
             return False
-        
-        # Determinar subred si no se proporciona (ya sabemos que es privada)
-        is_private = True
-        if not subnet:
-            for private_net in [
-                ipaddress.ip_network('10.0.0.0/8'),
-                ipaddress.ip_network('172.16.0.0/12'),
-                ipaddress.ip_network('192.168.0.0/16'),
-                ipaddress.ip_network('169.254.0.0/16')
-            ]:
-                if ip_obj in private_net:
-                    subnet = str(private_net)
-                    break
-            if not subnet:
-                subnet = "Private IP (unknown subnet)"
         
         # Insertar o actualizar host
         cursor.execute("""

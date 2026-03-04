@@ -1016,22 +1016,28 @@ async def import_nmap_xml(
         hosts_processed = 0
         ports_processed = 0
         
-        # Subredes privadas para determinar subnet
+        # Subredes internas para determinar subnet
         private_subnets = [
-            ipaddress.ip_network(subnet) for subnet in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16']
+            ipaddress.ip_network(s) for s in [
+                '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16',
+                '169.254.0.0/16', '127.0.0.0/8', '::1/128', 'fc00::/7', 'fe80::/10'
+            ]
         ]
-        
+
+        def get_subnet_label(ip_str):
+            try:
+                ip_o = ipaddress.ip_address(ip_str)
+                for net in private_subnets:
+                    if ip_o in net:
+                        return str(net)
+                return "Public IP"
+            except ValueError:
+                return "Unknown"
+
         for host_ip, host_data in parsed_data['hosts'].items():
             try:
                 # Determinar subred
-                subnet = "Public IP"
-                for private_net in private_subnets:
-                    try:
-                        if ipaddress.ip_address(host_ip) in private_net:
-                            subnet = str(private_net)
-                            break
-                    except:
-                        pass
+                subnet = get_subnet_label(host_ip)
                 
                 # Obtener hostname
                 hostname = host_data.get('hostname') or None
@@ -1281,12 +1287,26 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         img_dir.mkdir(parents=True, exist_ok=True)
         source_dir.mkdir(parents=True, exist_ok=True)
         
-        # Subredes privadas para determinar subnet
+        # Subredes internas para determinar subnet
         private_subnets = [
-            ipaddress.ip_network(subnet) for subnet in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16']
+            ipaddress.ip_network(s) for s in [
+                '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16',
+                '169.254.0.0/16', '127.0.0.0/8', '::1/128', 'fc00::/7', 'fe80::/10'
+            ]
         ]
-        
+
+        def get_subnet(ip_str):
+            try:
+                ip_o = ipaddress.ip_address(ip_str)
+                for net in private_subnets:
+                    if ip_o in net:
+                        return str(net)
+                return "Public IP"
+            except ValueError:
+                return "Unknown"
+
         discovered_ips = set()
+
         
         # ============================================================================
         # PASO 1: HOST DISCOVERY (si está habilitado)
@@ -1324,14 +1344,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 for host_ip in discovered_ips:
                     try:
                         # Determinar subred
-                        subnet = "Public IP"
-                        for private_net in private_subnets:
-                            try:
-                                if ipaddress.ip_address(host_ip) in private_net:
-                                    subnet = str(private_net)
-                                    break
-                            except:
-                                pass
+                        subnet = get_subnet(host_ip)
                         
                         storage.save_discovered_host(
                             scan_id=scan_id,
@@ -1419,14 +1432,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 for host_ip, host_data in parsed_data['hosts'].items():
                     try:
                         # Determinar subred
-                        subnet = "Public IP"
-                        for private_net in private_subnets:
-                            try:
-                                if ipaddress.ip_address(host_ip) in private_net:
-                                    subnet = str(private_net)
-                                    break
-                            except:
-                                pass
+                        subnet = get_subnet(host_ip)
                         
                         # Obtener hostname
                         hostname = host_data.get('hostname') or None
