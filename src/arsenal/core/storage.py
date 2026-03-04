@@ -14,6 +14,27 @@ from typing import Dict, Optional, List
 import ipaddress
 
 
+def is_internal_ip(ip_str: str) -> bool:
+    """
+    Returns True if the IP should be treated as internal/non-public.
+    Correctly handles: private RFC-1918, loopback (127.x), link-local (169.254.x),
+    IPv6 loopback (::1), ULA (fc00::/7), and other reserved ranges.
+    Python's built-in ip_obj.is_private does NOT include loopback in Python < 3.11.
+    """
+    try:
+        ip_obj = ipaddress.ip_address(ip_str)
+        return (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+            or ip_obj.is_multicast
+        )
+    except ValueError:
+        return False
+
+
 class ScanStorage:
     """Gestor de almacenamiento de resultados de escaneos."""
     
@@ -412,14 +433,9 @@ class ScanStorage:
         el host aparezca en los resultados aunque no tenga puertos abiertos.
         Solo guarda direcciones IP privadas (filtra IPs públicas).
         """
-        # Validar que es IP privada antes de proceder
-        try:
-            ip_obj = ipaddress.ip_address(host_ip)
-            if ip_obj.is_global and not ip_obj.is_private and not ip_obj.is_loopback and not ip_obj.is_link_local and not ip_obj.is_reserved:
-                # IP pública mundialmente enrutable, no guardar en la base de datos
-                return False
-        except ValueError:
-            # IP inválida, no guardar
+        # Validar que es IP interna antes de proceder
+        if not is_internal_ip(host_ip):
+            # IP pública mundialmente enrutable, no guardar en la base de datos
             return False
         
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
@@ -504,16 +520,11 @@ class ScanStorage:
         - Las versiones se almacenan en scan_results.version
         - Los scripts de Nmap se almacenan en scan_results.scripts_json
         """
-        # Validar que es IP privada antes de proceder
-        try:
-            ip_obj = ipaddress.ip_address(host_ip)
-            if ip_obj.is_global and not ip_obj.is_private and not ip_obj.is_loopback and not ip_obj.is_link_local and not ip_obj.is_reserved:
-                # IP pública mundialmente enrutable, no guardar en la base de datos
-                return False
-            is_private = True
-        except ValueError:
-            # IP inválida, no guardar
+        # Validar que es IP interna antes de proceder
+        if not is_internal_ip(host_ip):
+            # IP pública mundialmente enrutable, no guardar en la base de datos
             return False
+        is_private = True
         
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")

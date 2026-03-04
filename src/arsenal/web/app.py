@@ -1822,8 +1822,15 @@ def process_pcap_file(scan_id: int, pcap_file: str, organization: str, location:
             try:
                 # Validar IP y verificar que sea privada
                 ip_obj = ipaddress.ip_address(ip)
-                if not ip_obj.is_private:
-                    # IP pública, saltar
+                if not (
+                    ip_obj.is_private
+                    or ip_obj.is_loopback
+                    or ip_obj.is_link_local
+                    or ip_obj.is_reserved
+                    or ip_obj.is_unspecified
+                    or ip_obj.is_multicast
+                ):
+                    # IP pública mundialmente enrutable, saltar
                     continue
                 
                 # Determinar subred

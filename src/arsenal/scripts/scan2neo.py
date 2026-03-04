@@ -9,9 +9,26 @@ from py2neo import Graph, Node, Relationship
 import argparse
 import sqlite3
 import os
+import ipaddress
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from getpass import getpass
+
+
+def is_internal_ip(ip_str: str) -> bool:
+    """Returns True for all non-globally-routable IP addresses (loopback, private, link-local, etc.)"""
+    try:
+        ip_obj = ipaddress.ip_address(ip_str)
+        return (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+            or ip_obj.is_multicast
+        )
+    except ValueError:
+        return False
 
 
 def connect_to_neo4j(ip: str, username: str = None, password: str = None) -> Graph:
@@ -150,9 +167,10 @@ def get_combined_scans_data(db_path: str, org: str = None, location: str = None)
             FROM scan_results sr
             JOIN hosts h ON h.id = sr.host_id
             WHERE sr.scan_id = ?
-            AND (h.is_private = 1 OR h.is_private IS NULL)
             ORDER BY h.ip_address, sr.port
         """, (scan_id,)).fetchall()
+        # Filtrar en Python para garantizar solo IPs internas (el flag is_private en BD puede ser incorrecto)
+        results = [r for r in results if is_internal_ip(r['ip_address'])]
         
         # También obtener hosts que fueron escaneados pero no tienen puertos abiertos
         # Buscar hosts que están en la tabla hosts pero no tienen scan_results para este scan_id
@@ -189,14 +207,13 @@ def get_combined_scans_data(db_path: str, org: str = None, location: str = None)
                             SELECT h.id, h.ip_address, h.hostname, h.subnet
                             FROM hosts h
                             WHERE h.ip_address = ?
-                            AND (h.is_private = 1 OR h.is_private IS NULL)
                             AND NOT EXISTS (
                                 SELECT 1 FROM scan_results sr 
                                 WHERE sr.host_id = h.id AND sr.scan_id = ?
                             )
                         """, (target_ip, scan_id)).fetchone()
                         
-                        if host_check:
+                        if host_check and is_internal_ip(host_check[1]):
                             # Crear un objeto tipo Row para mantener consistencia
                             host_row = RowDict({
                                 'ip_address': host_check[1],
@@ -228,7 +245,6 @@ def get_combined_scans_data(db_path: str, org: str = None, location: str = None)
                     SELECT DISTINCT h.id, h.ip_address, h.hostname, h.subnet
                     FROM hosts h
                     WHERE (h.first_seen <= ? AND h.last_seen >= ?)
-                    AND (h.is_private = 1 OR h.is_private IS NULL)
                     AND NOT EXISTS (
                         SELECT 1 FROM scan_results sr 
                         WHERE sr.host_id = h.id AND sr.scan_id = ?
