@@ -98,21 +98,23 @@
             Neo4j</h3>
 
         <form id="neo4jForm" style="background: transparent;">
+            <!-- Organización fijada al contexto actual (oculta) -->
+            <input type="hidden" id="neo4j_org" name="organization" value="{{ org_name | default('') }}">
+
+            {% if org_name %}
+            <div
+                style="margin-bottom: 1rem; padding: 0.6rem 1rem; background: rgba(78,205,196,0.08); border: 1px solid rgba(78,205,196,0.3); border-radius: 6px; font-size: 0.9rem; color: var(--text-secondary);">
+                🏢 Exportando organización: <strong style="color: var(--text-primary);">{{ org_name }}</strong>
+            </div>
+            {% endif %}
+
             <div
                 style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
                 <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
-                    <label for="neo4j_org"
-                        style="font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 500;">Organización</label>
-                    <select id="neo4j_org" name="organization" style="font-size: 0.9rem; padding: 0.5rem;">
-                        <option value="">Todas</option>
-                    </select>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
                     <label for="neo4j_location"
-                        style="font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 500;">Ubicación</label>
+                        style="font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 500;">Origen (from)</label>
                     <select id="neo4j_location" name="location" style="font-size: 0.9rem; padding: 0.5rem;">
-                        <option value="">Todas</option>
+                        <option value="">Todos los orígenes</option>
                     </select>
                 </div>
             </div>
@@ -331,14 +333,10 @@
     async function loadOrganizations() {
         try {
             const orgNameContext = "{{ org_name | default('') }}";
-            const select = document.getElementById('neo4j_org');
             const dashboardSelect = document.getElementById('dashboardOrgFilter');
 
             if (orgNameContext) {
                 const options = `<option value="${orgNameContext}" selected>${orgNameContext}</option>`;
-                select.innerHTML = options;
-                select.disabled = true;
-
                 if (dashboardSelect) {
                     dashboardSelect.innerHTML = options;
                     dashboardSelect.disabled = true;
@@ -347,10 +345,6 @@
                 const response = await fetch('/api/organizations');
                 const orgs = await response.json();
 
-                const options = '<option value="">Todas</option>' +
-                    orgs.map(org => `<option value="${org.name}">${org.name}</option>`).join('');
-
-                select.innerHTML = options;
                 if (dashboardSelect) {
                     dashboardSelect.innerHTML = '<option value="">Todas las organizaciones</option>' +
                         orgs.map(org => `<option value="${org.name}">${org.name}</option>`).join('');
@@ -361,25 +355,21 @@
         }
     }
 
-    async function loadLocations(organization = null) {
+    async function loadLocations() {
         try {
-            const url = organization
-                ? `/api/locations?organization=${encodeURIComponent(organization)}`
+            const org = document.getElementById('neo4j_org').value;
+            const url = org
+                ? `/api/locations?organization=${encodeURIComponent(org)}`
                 : '/api/locations';
             const response = await fetch(url);
             const locations = await response.json();
             const select = document.getElementById('neo4j_location');
-            select.innerHTML = '<option value="">Todas</option>' +
+            select.innerHTML = '<option value="">Todos los orígenes</option>' +
                 locations.map(loc => `<option value="${loc.location}">${loc.location}</option>`).join('');
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error cargando orígenes:', error);
         }
     }
-
-    // Actualizar ubicaciones cuando cambia la organización
-    document.getElementById('neo4j_org').addEventListener('change', function () {
-        loadLocations(this.value || null);
-    });
 
     // Función para obtener credenciales Neo4j
     function getNeo4jCredentials() {
@@ -1580,7 +1570,7 @@
 
     // --- NEO4J & NEODASH DOCKER CONTROLS ---
     async function toggleDockerService(service) {
-        const svcLabel = service === 'neo4j' ? 'Neo4j' : 'NeoDash';
+        const svcLabel = service === 'neo4j' ? 'Neo4j' : 'Neodash';
         const btn = document.getElementById(`btn${svcLabel}`);
         const isRunning = btn.getAttribute('data-running') === 'true';
         const action = isRunning ? 'stop' : 'start';
@@ -1614,7 +1604,7 @@
         try {
             const response = await fetch(`/api/docker/${service}/status`);
             const data = await response.json();
-            const svcLabel = service === 'neo4j' ? 'Neo4j' : 'NeoDash';
+            const svcLabel = service === 'neo4j' ? 'Neo4j' : 'Neodash';
             const btn = document.getElementById(`btn${svcLabel}`);
             const icon = document.getElementById(`icon${svcLabel}`);
             const text = document.getElementById(`text${svcLabel}`);
