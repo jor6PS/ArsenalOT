@@ -3199,6 +3199,107 @@ async def get_similar_devices(request: Neo4jQueryRequest):
         traceback.print_exc()
         return []
 
+@app.post("/api/neo4j/post-intelligence/{org_name}")
+async def run_post_intelligence(org_name: str):
+    """
+    Ejecuta capa de post-inteligencia:
+    1. Vincula IPs a redes customizadas (tabla networks), relacionando Network con SEG y ORG.
+    2. Vincula IPs idénticas detectadas en distintos segmentos.
+    """
+    try:
+        # 1. Recuperar redes de SQLite para esta organización
+        conn = sqlite3.connect(str(storage.db_path))
+        conn.row_factory = sqlite3.Row
+        networks_db = conn.execute(
+            "SELECT network_name, network_range, system_name FROM networks WHERE organization_name = ?",
+            (org_name,)
+        ).fetchall()
+        conn.close()
+
+        summary = []
+        
+        # Conectar a Neo4j (local por defecto como definimos en el HTML)
+        # Usaremos credenciales por defecto neo4j/password o sin auth
+        graph = get_neo4j_graph("127.0.0.1", "neo4j", "password")
+
+        networks_created = 0
+        ips_linked_to_nets = 0
+
+        # --- FASE 1: Redes Customizadas ---
+        if networks_db:
+            # Obtener todas las IPs de la organizacion desde Neo4j
+            query_ips = "MATCH (ip:IP {org: $org}) RETURN ip.IP as ip_addr, ip.SEG as seg, id(ip) as node_id"
+            neo_ips = graph.run(query_ips, org=org_name).data()
+
+            for net_row in networks_db:
+                net_name = net_row["network_name"]
+                net_range = net_row["network_range"]
+                sys_name = net_row["system_name"] or ""
+                
+                try:
+                    network_obj = ipaddress.ip_network(net_range, strict=False)
+                except ValueError:
+                    continue # Ignorar rangos inválidos
+                
+                # Identificar qué IPs caen en esta red
+                matching_ips = []
+                for node in neo_ips:
+                    try:
+                        ip_obj = ipaddress.ip_address(node["ip_addr"])
+                        if ip_obj in network_obj:
+                            matching_ips.append(node)
+                    except ValueError:
+                        pass
+                
+                if matching_ips:
+                    # Crear el nodo Network y conectarlo a las IPs correspondientes
+                    # Además conectarlo al segmento donde se descubrió la IP y a la organización
+                    for m_ip in matching_ips:
+                        query_create_link = """
+                        MATCH (ip:IP) WHERE id(ip) = $node_id
+                        MATCH (org:ORG {org: $org})
+                        MATCH (seg:SEG {SEG: $seg, org: $org})
+                        MERGE (net:Network {name: $net_name, range: $net_range, org: $org})
+                        ON CREATE SET net.system = $sys_name
+                        MERGE (ip)-[:BELONGS_TO_NETWORK]->(net)
+                        MERGE (seg)-[:HAS_NETWORK]->(net)
+                        MERGE (org)-[:HAS_NETWORK]->(net)
+                        """
+                        graph.run(query_create_link, 
+                                  node_id=m_ip["node_id"], 
+                                  org=org_name, 
+                                  seg=m_ip["seg"],
+                                  net_name=net_name, 
+                                  net_range=net_range, 
+                                  sys_name=sys_name)
+                        
+                        ips_linked_to_nets += 1
+                    
+                    networks_created += 1
+
+            summary.append(f"Redes detectadas: Se vincularon {ips_linked_to_nets} IPs a {networks_created} redes personalizadas (relacionadas con sus SEG y ORG).")
+        else:
+            summary.append("No se encontraron redes personalizadas configuradas en la base de datos para esta organización.")
+
+        # --- FASE 2: Dispositivos Multi-Segmento ---
+        query_cross_segment = """
+        MATCH (ip1:IP {org: $org}), (ip2:IP {org: $org})
+        WHERE ip1.IP = ip2.IP AND id(ip1) < id(ip2) AND ip1.SEG <> ip2.SEG
+        MERGE (ip1)-[r:SAME_DEVICE {reason: 'Misma IP en distintos segmentos'}]-(ip2)
+        RETURN count(r) as cross_links
+        """
+        result_cross = graph.run(query_cross_segment, org=org_name).data()
+        cross_links = result_cross[0]['cross_links'] if result_cross else 0
+        summary.append(f"Dispositivos Multi-Segmento: Se identificaron {cross_links} enlaces entre IPs idénticas vistas desde distintos orígenes.")
+
+        return {"status": "success", "summary": summary}
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error en post-inteligencia: {str(e)}")
+
+
 @app.post("/api/neo4j/dashboard/duplicate-ips")
 async def get_duplicate_ips(request: Neo4jQueryRequest):
     """Encuentra IPs que aparecen en múltiples ubicaciones de la misma organización."""

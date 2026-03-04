@@ -133,6 +133,34 @@
         </div>
     </div>
 
+    <!-- Capa de Post-Inteligencia -->
+    <div
+        style="margin-top: 1.5rem; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+        <h2
+            style="font-size: 1.15rem; color: #0369a1; margin-bottom: 0.75rem; border-bottom: 2px solid #bae6fd; padding-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+            🧠 Capa de Post-Inteligencia
+        </h2>
+
+        <p style="font-size: 0.95rem; color: #0c4a6e; margin-bottom: 1rem;">
+            Aplica consultas Cypher avanzadas sobre los datos ya exportados a Neo4j para correlacionar endpoints,
+            detectar dispositivos multi-segmento y vincular IPs a las redes personalizadas de la organización.
+        </p>
+
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <button type="button" class="btn btn-primary" id="btnPostIntel" onclick="runPostIntelligence()"
+                style="font-size: 0.95rem; padding: 0.6rem 1.5rem; background-color: #0284c7; border-color: #0284c7;">
+                🧪 Ejecutar Post-Inteligencia
+            </button>
+            <span id="postIntelSpinner" class="spinner hidden"
+                style="width: 20px; height: 20px; border-width: 3px; border-top-color: #0284c7;"></span>
+            <span id="postIntelStatusText" style="font-size: 0.9rem; color: #0369a1; font-weight: 500;"></span>
+        </div>
+
+        <div id="postIntelResults" class="hidden"
+            style="margin-top: 1rem; font-size: 0.85rem; background: #f0f9ff; padding: 0.75rem; border-radius: 4px; border: 1px solid #bae6fd; color: #0369a1; overflow-y: auto; max-height: 200px;">
+        </div>
+    </div>
+
     <details
         style="margin-top: 1.5rem; background: #fee2e2; border: 2px solid #ef4444; border-radius: 6px; overflow: hidden;">
         <summary
@@ -1633,6 +1661,65 @@
     setInterval(() => { checkDockerService('neo4j'); checkDockerService('neodash'); }, 5000);
     checkDockerService('neo4j');
     checkDockerService('neodash');
+
+    // Post-Intelligence integration
+    async function runPostIntelligence() {
+        const btn = document.getElementById('btnPostIntel');
+        const spinner = document.getElementById('postIntelSpinner');
+        const statusText = document.getElementById('postIntelStatusText');
+        const resultsDiv = document.getElementById('postIntelResults');
+
+        const orgName = document.getElementById('neo4j_org').value;
+        if (!orgName) {
+            alert("No hay una organización seleccionada en el contexto actual.");
+            return;
+        }
+
+        btn.disabled = true;
+        spinner.classList.remove('hidden');
+        statusText.textContent = "Ejecutando consultas Cypher avanzadas...";
+        statusText.style.color = "#0369a1";
+        resultsDiv.classList.add('hidden');
+        resultsDiv.innerHTML = "";
+
+        try {
+            const response = await fetch(`/api/neo4j/post-intelligence/${encodeURIComponent(orgName)}`, {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                spinner.classList.add('hidden');
+                statusText.textContent = "¡Análisis de Post-Inteligencia completado!";
+                statusText.style.color = "#15803d";
+
+                // Show details
+                resultsDiv.classList.remove('hidden');
+                let resultsHtml = `<ul style="margin:0; padding-left: 1.2rem;">`;
+                if (data.summary) {
+                    data.summary.forEach(msg => {
+                        resultsHtml += `<li style="margin-bottom: 0.25rem;">${msg}</li>`;
+                    });
+                }
+                resultsHtml += `</ul>`;
+                resultsDiv.innerHTML = resultsHtml;
+
+                showToast('Capa de post-inteligencia aplicada correctamente.', 'success');
+            } else {
+                throw new Error(data.message || data.detail || 'Error desconocido');
+            }
+        } catch (error) {
+            spinner.classList.add('hidden');
+            statusText.textContent = "Error durante la ejecución.";
+            statusText.style.color = "#b91c1c";
+            resultsDiv.classList.remove('hidden');
+            resultsDiv.innerHTML = `<div style="color: #b91c1c;">${error.message}</div>`;
+            showToast(`Error: ${error.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
 
 </script>
 {% endblock %}
