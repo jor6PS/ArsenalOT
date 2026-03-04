@@ -114,6 +114,7 @@ class ScanConfig(BaseModel):
     nmap_it_ports: bool = True
     custom_ports: Optional[str] = None
     custom_nmap_command: Optional[str] = None
+    custom_host_discovery_command: Optional[str] = None
     screenshots: bool = False
     source_code: bool = False
     # Opciones para escaneos pasivos
@@ -1288,8 +1289,30 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         if config.host_discovery:
             print(f"[Scan {scan_id}] 🔍 Iniciando descubrimiento de hosts...")
             try:
-                host_discovery = HostDiscovery(interface=config.interface)
-                discovered_ips = host_discovery.discover_hosts(config.target_range)
+                if config.custom_host_discovery_command:
+                    print(f"[Scan {scan_id}] 📡 Ejecutando comando personalizado de descubrimiento: {config.custom_host_discovery_command}")
+                    import shlex
+                    # Execute custom command
+                    cmd_args = shlex.split(config.custom_host_discovery_command)
+                    result = subprocess.run(
+                        cmd_args,
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        check=False
+                    )
+                    
+                    # Extract IPs using HostDiscovery utility
+                    host_discovery = HostDiscovery(interface=config.interface)
+                    if result.returncode == 0 or result.stdout:
+                        discovered_ips = host_discovery.extract_ips_from_output(result.stdout)
+                    
+                    if result.returncode != 0 and not discovered_ips:
+                        print(f"[Scan {scan_id}] ⚠️ El comando de descubrimiento devolvió error y no se encontraron IPs")
+                else:
+                    host_discovery = HostDiscovery(interface=config.interface)
+                    discovered_ips = host_discovery.discover_hosts(config.target_range)
+                
                 print(f"[Scan {scan_id}] ✅ Descubiertos {len(discovered_ips)} hosts")
                 
                 # Guardar hosts descubiertos en la BD
@@ -1334,20 +1357,43 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 print(f"[Scan {scan_id}] 📋 Escaneando rango: {target_str}")
             
             try:
-                # Crear scanner de puertos
-                port_scanner = PortScanner(output_file=str(nmap_xml_path))
-                
-                # Ejecutar escaneo Nmap
-                xml_file = port_scanner.scan(
-                    target_range=target_str,
-                    speed=config.nmap_speed,
-                    ot_ports=config.nmap_ot_ports,
-                    it_ports=config.nmap_it_ports,
-                    custom_ports=config.custom_ports,
-                    enable_versions=config.nmap_versions,
-                    enable_vulns=config.nmap_vulns,
-                    output_file=str(nmap_xml_path)
-                )
+                if config.custom_nmap_command:
+                    print(f"[Scan {scan_id}] 📡 Ejecutando comando Nmap personalizado: {config.custom_nmap_command}")
+                    import shlex
+                    
+                    # Ensure -oX flag is added to save results
+                    cmd_str = config.custom_nmap_command
+                    if '-oX' not in cmd_str:
+                        cmd_str += f" -oX {nmap_xml_path}"
+                    
+                    cmd_args = shlex.split(cmd_str)
+                    
+                    result = subprocess.run(
+                        cmd_args,
+                        capture_output=True,
+                        text=True,
+                        check=False
+                    )
+                    
+                    if result.returncode == 0 or (os.path.exists(nmap_xml_path) and os.path.getsize(nmap_xml_path) > 0):
+                        xml_file = str(nmap_xml_path)
+                    else:
+                        raise Exception(f"Comando Nmap manual falló con código {result.returncode}: {result.stderr[:500] if result.stderr else 'Sin error'}")
+                else:
+                    # Crear scanner de puertos
+                    port_scanner = PortScanner(output_file=str(nmap_xml_path))
+                    
+                    # Ejecutar escaneo Nmap
+                    xml_file = port_scanner.scan(
+                        target_range=target_str,
+                        speed=config.nmap_speed,
+                        ot_ports=config.nmap_ot_ports,
+                        it_ports=config.nmap_it_ports,
+                        custom_ports=config.custom_ports,
+                        enable_versions=config.nmap_versions,
+                        enable_vulns=config.nmap_vulns,
+                        output_file=str(nmap_xml_path)
+                    )
                 
                 if not xml_file or not Path(xml_file).exists():
                     raise Exception("Nmap no generó el archivo XML de salida")

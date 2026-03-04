@@ -180,6 +180,24 @@
                 </label>
             </div>
 
+            <!-- Comando Descubrimiento Editable Preview -->
+            <div id="hostDiscoveryCommandPreview" class="nmap-command-preview"
+                style="display: block; margin-top: 1rem; margin-bottom: 1.5rem; padding: 1rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <label style="font-weight: 600; color: #e2e8f0; font-size: 0.95rem;">🔧 Comando Descubrimiento
+                        Editable:</label>
+                    <button type="button" onclick="copyHostDiscoveryCommand()"
+                        style="padding: 0.25rem 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">
+                        📋 Copiar
+                    </button>
+                </div>
+                <textarea id="hostDiscoveryCommandText" name="custom_host_discovery_command"
+                    style="width: 100%; min-height: 80px; padding: 0.75rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #60a5fa; font-family: 'Courier New', monospace; font-size: 0.9rem; resize: vertical;"
+                    spellcheck="false">El comando aparecerá aquí cuando configures el rango</textarea>
+                <small style="color: #94a3b8; font-size: 0.8rem; margin-top: 0.5rem; display: block;">* arp-scan se
+                    usará por defecto en modo root. Puedes modificar libremente este comando.</small>
+            </div>
+
             <div class="checkbox-group">
                 <label class="checkbox-label">
                     <input type="checkbox" id="nmap" name="nmap" checked>
@@ -264,6 +282,16 @@
                     <span>📄 Código Fuente</span>
                     <small>Extracción de código HTML de servicios web</small>
                 </label>
+            </div>
+
+            <div id="internalModulesInfo"
+                style="margin-top: 1rem; margin-bottom: 1.5rem; padding: 1rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px;">
+                <p style="margin: 0; color: #94a3b8; font-size: 0.85rem;">
+                    <strong>ℹ️ Nota sobre Módulos Internos:</strong><br>
+                    Las <strong>Capturas de Pantalla</strong> y la extracción de <strong>Código Fuente</strong> no
+                    utilizan comandos de terminal editables. Se ejecutan internamente usando scripts de Python (Selenium
+                    y Requests).
+                </p>
             </div>
         </div>
 
@@ -558,6 +586,37 @@
         return cmd.join(' ');
     }
 
+    function buildHostDiscoveryCommand() {
+        const scanMode = document.getElementById('scan_mode').value;
+        const hdEnabled = document.getElementById('host_discovery').checked;
+
+        if (scanMode !== 'active' || !hdEnabled) {
+            return null;
+        }
+
+        const targetRange = document.getElementById('target_range').value || 'TARGET_IP';
+        return `arp-scan --localnet ${targetRange}`;
+    }
+
+    function updateHostDiscoveryCommand() {
+        const scanMode = document.getElementById('scan_mode').value;
+        const hdEnabled = document.getElementById('host_discovery').checked;
+        const previewDiv = document.getElementById('hostDiscoveryCommandPreview');
+        const commandText = document.getElementById('hostDiscoveryCommandText');
+
+        if (scanMode === 'active' && hdEnabled) {
+            const cmd = buildHostDiscoveryCommand();
+            if (cmd) {
+                commandText.value = cmd;
+                previewDiv.style.display = 'block';
+            } else {
+                previewDiv.style.display = 'none';
+            }
+        } else {
+            previewDiv.style.display = 'none';
+        }
+    }
+
     function updateNmapCommand() {
         const scanMode = document.getElementById('scan_mode').value;
         const nmapEnabled = document.getElementById('nmap').checked;
@@ -596,13 +655,37 @@
         });
     }
 
+    function copyHostDiscoveryCommand() {
+        const commandText = document.getElementById('hostDiscoveryCommandText').value;
+        navigator.clipboard.writeText(commandText).then(() => {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✓ Copiado';
+            btn.style.color = '#10b981';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.color = '#94a3b8';
+            }, 2000);
+        }).catch(err => {
+            console.error('Error copiando comando:', err);
+            alert('Error al copiar el comando');
+        });
+    }
+
     // Event listeners para actualizar el comando cuando cambian las opciones
     document.getElementById('scan_mode').addEventListener('change', function () {
         toggleScanMode();
         updateNmapCommand();
+        updateHostDiscoveryCommand();
     });
 
-    document.getElementById('target_range').addEventListener('input', updateNmapCommand);
+    document.getElementById('target_range').addEventListener('input', () => {
+        updateNmapCommand();
+        updateHostDiscoveryCommand();
+    });
+
+    document.getElementById('host_discovery').addEventListener('change', updateHostDiscoveryCommand);
+
     document.getElementById('nmap_speed').addEventListener('change', updateNmapCommand);
     document.getElementById('nmap_versions').addEventListener('change', updateNmapCommand);
     document.getElementById('nmap_vulns').addEventListener('change', updateNmapCommand);
@@ -648,6 +731,7 @@
             nmap_it_ports: formData.has('nmap_it_ports'),
             custom_ports: formData.get('custom_ports') || null,
             custom_nmap_command: formData.get('custom_nmap_command') || null,
+            custom_host_discovery_command: formData.get('custom_host_discovery_command') || null,
             screenshots: formData.has('screenshots'),
             source_code: formData.has('source_code'),
             pcap_filter: formData.get('pcap_filter') || null
