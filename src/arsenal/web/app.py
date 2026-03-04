@@ -2641,24 +2641,21 @@ async def clear_neo4j_database(config: Neo4jConfig):
             raise HTTPException(status_code=400, detail=f"Error conectando a Neo4j: {str(e)}")
         
         # Eliminar todos los nodos y relaciones
-        try:
-            # Primero eliminar todas las relaciones
-            graph.run("MATCH ()-[r]->() DELETE r")
-            # Luego eliminar todos los nodos
-            graph.run("MATCH (n) DELETE n")
-            
-            # Verificar que se eliminó todo
-            node_count = graph.run("MATCH (n) RETURN count(n) as count").evaluate()
-            rel_count = graph.run("MATCH ()-[r]->() RETURN count(r) as count").evaluate()
-            
-            return {
-                "status": "success",
-                "message": f"Base de datos Neo4j limpiada correctamente. Nodos restantes: {node_count}, Relaciones restantes: {rel_count}",
-                "nodes_deleted": True,
-                "relationships_deleted": True
-            }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error eliminando datos de Neo4j: {str(e)}")
+        # Primero eliminar todas las relaciones
+        graph.run("MATCH ()-[r]->() DELETE r")
+        # Luego eliminar todos los nodos
+        graph.run("MATCH (n) DELETE n")
+        
+        # Verificar que se eliminó todo
+        node_count = graph.run("MATCH (n) RETURN count(n) as count").evaluate()
+        rel_count = graph.run("MATCH ()-[r]->() RETURN count(r) as count").evaluate()
+        
+        return {
+            "status": "success",
+            "message": f"Base de datos Neo4j limpiada correctamente. Nodos restantes: {node_count}, Relaciones restantes: {rel_count}",
+            "nodes_deleted": True,
+            "relationships_deleted": True
+        }
     except HTTPException:
         raise
     except Exception as e:
