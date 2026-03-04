@@ -3220,7 +3220,7 @@ async def run_post_intelligence(org_name: str):
         
         # Conectar a Neo4j (local por defecto como definimos en el HTML)
         # Usaremos credenciales por defecto neo4j/password o sin auth
-        graph = get_neo4j_graph("127.0.0.1", "neo4j", "password")
+        graph = get_neo4j_graph("127.0.0.1", "neo4j", "neo4j1")
 
         networks_created = 0
         ips_linked_to_nets = 0
