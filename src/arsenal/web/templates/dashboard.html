@@ -901,17 +901,19 @@
 
     function clearFilters() {
         currentFilters = {
-            organization: '',
+            organization: document.getElementById('filterOrg').tagName === 'INPUT' ? document.getElementById('filterOrg').value : '',
             location: '',
             scan_id: ''
         };
 
-        document.getElementById('filterOrg').value = '';
+        if (document.getElementById('filterOrg').tagName !== 'INPUT') {
+            document.getElementById('filterOrg').value = '';
+        }
         document.getElementById('filterLocation').value = '';
         document.getElementById('filterScan').value = '';
 
-        loadLocations();
-        loadScans();
+        loadLocations(currentFilters.organization || null);
+        loadScans(currentFilters.organization || null);
         loadStats();
         loadRecentScans();
     }
@@ -1094,11 +1096,11 @@
 
     // Cargar datos al inicio
     loadOrganizations();
-    loadLocations();
-    loadScans();
+    const initOrg = currentFilters.organization || (document.getElementById('filterOrg') ? document.getElementById('filterOrg').value : '');
+    loadLocations(initOrg || null);
+    loadScans(initOrg || null, null);
     loadStats();
     loadRecentScans();
-    const initOrg = currentFilters.organization || document.getElementById('filterOrg').value;
     if (initOrg) {
         loadNetworks(initOrg);
     }
