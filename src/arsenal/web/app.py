@@ -1438,7 +1438,7 @@ async def status_local_service(service: str):
     try:
         cmd = get_docker_compose_cmd(service, "status")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        is_running = f"scanhound_{service}" in result.stdout
+        is_running = f"arsenalot_{service}" in result.stdout
         return {"status": "success", "running": is_running}
     except Exception as e:
         return {"status": "error", "running": False, "message": str(e)}

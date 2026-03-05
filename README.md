@@ -1,6 +1,5 @@
-# ScanHound (ArsenalOT)
-
-ScanHound (también conocido como ArsenalOT) es una herramienta avanzada de escaneo y descubrimiento de redes, diseñada para detectar activos y servicios (con enfoque especial en redes OT/Industriales). 
+# ArsenalOT
+ArsenalOT es una herramienta avanzada de escaneo y descubrimiento de redes, diseñada para detectar activos y servicios (con enfoque especial en redes OT/Industriales). 
 
 Esta herramienta permite no solo obtener información detallada sobre los puertos, servicios y vulnerabilidades presentes en una red, sino también **representar estos datos visualmente** utilizando bases de datos orientadas a grafos (Neo4j), permitiendo un análisis de relaciones y topología de red avanzado a través de dashboards interactivos.
 
@@ -38,7 +37,7 @@ Para instalar la aplicación, sigue estos pasos desde la consola:
 ```bash
 # 1. Clona el repositorio (Si no lo has hecho ya)
 # git clone <URL_DEL_REPO>
-# cd ScanHound
+# cd ArsenalOT
 
 # 2. Crea tu entorno virtual (¡Git lo ignorará de tus commits automáticamente!)
 python3 -m venv venv
@@ -46,7 +45,7 @@ python3 -m venv venv
 # 3. Activa el entorno virtual. Tienes que realizar este paso cada vez que abras una nueva terminal
 source venv/bin/activate
 
-# 4. Instala las dependencias de Python necesarias para hacer volar ScanHound
+# 4. Instala las dependencias de Python necesarias para hacer volar ArsenalOT
 pip install -r requirements.txt
 ```
 
@@ -55,8 +54,8 @@ pip install -r requirements.txt
 ## Ejecución y Modo de Uso
 
 ### Iniciar la Plataforma (Interfaz Web)
-El método principal e ideal para utilizar ScanHound es a través de su interfaz web.
-Asegúrate de que estás en la carpeta raíz (`ScanHound`) y ejecuta nuestro lanzador unificado:
+El método principal e ideal para utilizar ArsenalOT es a través de su interfaz web.
+Asegúrate de que estás en la carpeta raíz (`ArsenalOT`) y ejecuta nuestro lanzador unificado:
 
 ```bash
 ./start.sh
@@ -69,7 +68,7 @@ A continuación, abre un navegador web en: **`http://localhost:8000`** para inic
 
 ### Visualización Avanzada (Importar resultados en Neo4j)
 
-ScanHound permite llevar los resultados encontrados (hosts, puertos vulnerables, subredes enteras, etc.) hacia **Neo4j** para generar el mapa completo de tu organización en una base de datos grafo. Aunque desde la web es posible elvantar los servicios de Neo4j y NeoDash ttambién se puede levantar en local con docker de la sigueinte manera:
+ArsenalOT permite llevar los resultados encontrados (hosts, puertos vulnerables, subredes enteras, etc.) hacia **Neo4j** para generar el mapa completo de tu organización en una base de datos grafo. Aunque desde la web es posible elvantar los servicios de Neo4j y NeoDash ttambién se puede levantar en local con docker de la sigueinte manera:
 
 **1. Preparar la Base de Datos Neo4j y NeoDash:**
 En una consola secundaria, si tienes Neo4J de forma nativa:
@@ -82,8 +81,8 @@ Para dotar a los resultados de pantallas preconstruidas por nosotros, usamos el 
 sudo docker run -it --rm -p 5005:5005 neo4jlabs/neodash
 ```
 
-**2. Importar los Resultados de ScanHound a Neo4j:**
-Podemos instruirle desde el sistema ScanHound a enviar todo lo analizado a Neo4J:
+**2. Importar los Resultados de ArsenalOT a Neo4j:**
+Podemos instruirle desde el sistema ArsenalOT a enviar todo lo analizado a Neo4J:
 ```bash
 python3 src/arsenal/scripts/scan2neo.py -r <IP_Neo4j>
 ```
@@ -91,12 +90,6 @@ python3 src/arsenal/scripts/scan2neo.py -r <IP_Neo4j>
 Podrás acceder a dashboards en NeoDash entrando a `http://localhost:5005` y cargando o importando el archivo de configuración **`dashboard.json`**. 
 
 Tus mapas de red empezarán a visualizarse orgánicamente, creando relaciones, marcando servicios críticos descubiertos e incorporándose al grafo total de la organización.
-
-![Grafo Estado actual](https://github.com/jor6PS/ScanHound/blob/main/images/grafo_scanhound_4.png?raw=true)
-
-![Captura adicional](https://github.com/jor6PS/ScanHound/blob/main/images/Captura%20de%20pantalla%202023-06-12%20140444.png?raw=true)
-
-![Dashboard Demo (NeoDash)](https://github.com/jor6PS/ScanHound/blob/main/images/NeoDash%20-%20Neo4j%20Dashboard%20Builder%20%E2%80%94%20Mozilla%20Firefox%202023-06-12%2013-56-03.gif)
 
 ---
 
@@ -114,4 +107,4 @@ Futuras utilidades y mejoras abiertas a la comunidad:
 - [~] Implementar escala logarítmica en el gráfico comparativo entre organizaciones.
 - [x] Actualizar el README general.
 
-¡Gracias por usar ScanHound! 🚀
+¡Gracias por usar ArsenalOT! 🚀

@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Script de inicio seguro para ArsenalOT / ScanHound
+# Script de inicio seguro para ArsenalOT
 echo "================================================="
-echo "🚀 Iniciando ArsenalOT / ScanHound"
+echo "🚀 Iniciando ArsenalOT"
 echo "================================================="
 
 # 1. Comprobar si existe el entorno virtual

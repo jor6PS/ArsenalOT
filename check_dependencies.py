@@ -12,7 +12,7 @@ def check_command(command, description):
         return False
 
 def main():
-    print("=== Verificador de Dependencias de ScanHound ===\n")
+    print("=== Verificador de Dependencias de ArsenalOT ===\n")
     
     critical = [
         ("nmap", "Escaneo de red principal"),

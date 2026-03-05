@@ -3,7 +3,7 @@ version: '3.8'
 services:
   neo4j:
     image: neo4j:latest
-    container_name: scanhound_neo4j
+    container_name: arsenalot_neo4j
     ports:
       - "7474:7474" # HTTP
       - "7687:7687" # Bolt
@@ -19,7 +19,7 @@ services:
 
   neodash:
     image: neo4jlabs/neodash:latest
-    container_name: scanhound_neodash
+    container_name: arsenalot_neodash
     ports:
       - "5005:5005" # Default NeoDash port
     volumes:
