@@ -1,0 +1,29 @@
+# Entornos virtuales Python
+venv/
+myenv/
+env/
+.env/
+venv.bak/
+
+# Compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Configuración y secretos
+.env
+secret.key
+config.local.json
+
+# Bases de datos y archivos de salida
+*.sqlite
+*.sqlite3
+*.db
+scans/
+reports/
+
+# IDEs y sistemas operativos
+.vscode/
+.idea/
+*.swp
+.DS_Store

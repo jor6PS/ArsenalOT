@@ -1,145 +1,107 @@
-# ScanHound
+# ScanHound (ArsenalOT)
 
-## Índice
-- [Introducción](#introduccion)
-- [Modo de uso](#modo-de-uso)
-  - [Escaneo](#escaneo)
-  - [Ejemplos de uso](#ejemplos-de-uso)
-  - [Importar resultados en Neo4j](#importar-resultados-en-neo4j)
-- [Preparar el entorno](#preparar-el-entorno)
-- [Instalación](#instalacion)
-- [TODO](#todo)
+ScanHound (también conocido como ArsenalOT) es una herramienta avanzada de escaneo y descubrimiento de redes, diseñada para detectar activos y servicios (con enfoque especial en redes OT/Industriales). 
 
-## Introducción
-ScanHound es una herramienta de escaneo de redes que permite detectar servicios abiertos y representarlos visualmente en Neo4j y en un DashBoard con consultas preestablecidas. Consta de una aplicación web centralizada:
-1. **web_app.py**: Aplicación web FastAPI que proporciona una interfaz para realizar escaneos detallados y visualizar resultados.
-2. **start.sh**: Script de inicio seguro que asegura que las dependencias de Python y los permisos `sudo` (necesarios para Nmap/tshark) están en orden.
+Esta herramienta permite no solo obtener información detallada sobre los puertos, servicios y vulnerabilidades presentes en una red, sino también **representar estos datos visualmente** utilizando bases de datos orientadas a grafos (Neo4j), permitiendo un análisis de relaciones y topología de red avanzado a través de dashboards interactivos.
 
-## Modo de uso
+## Capacidades Principales
+- **Descubrimiento de Activos**: Utiliza múltiples técnicas ARP e ICMP para un mapeo rápido y preciso de la red para focalizar el escaneo posterior y reducir tiempos.
+- **Escaneo de Servicios Flexible**: Perfiles que van desde escaneos rápidos y estándar hasta escaneos sigilosos (lentos para no saturar la red) o enfocados exclusivamente en entornos industriales (telemetría Modbus, S7, Ethernet/IP, etc.).
+- **Captura Pasiva**: Soporte para análisis pasivo de tráfico de red (PCAP).
+- **Exportación e Integración**: Almacenamiento local SQLite, exportación a JSON y **volcado directo a Neo4j** para visualización avanzada de grafos de red.
+- **Interfaz Web Moderna**: Centralización de los escaneos gestionados por un backend FastAPI y un entorno visual amigable y centralizado.
 
-### Iniciar la Plataforma
-Para comenzar a usar ScanHound / ArsenalOT, simplemente ejecuta el script de inicio:
+---
 
-```bash
-./start.sh
-```
+## Requisitos e Instalación
 
-Este script detectará tu entorno virtual, solicitará permisos de administrador y lanzará la interfaz web en `http://0.0.0.0:8000`.
+### 1. Dependencias del Sistema (Linux)
+Se requiere tener instaladas las siguientes herramientas en tu sistema operativo:
 
-### Escaneo
-Desde la interfaz web, puedes realizar diferentes tipos de escaneos. Por detrás, el sistema permite:
+**Críticas:**
+- **`nmap`** (Obligatorio para los escaneos activos de puertos y de servicios).
 
-Descubrimiento de activos:
+**Recomendadas/Opcionales:**
+- **`arp-scan`** (Mejora radicalmente el descubrimiento local de hosts mediante peticiones por debajo de la capa de red).
+- **`tshark` / Wireshark** (Necesario para escaneos pasivos y capturar tráfico real de los protocolos de red).
+- **`firefox` y `geckodriver`** (Usado de forma interna para obtener capturas de pantalla automáticas de los servicios web descubiertos en la red).
 
-- Diferentes técnicas de descubrimiento ARP e ICMP para focalizar el escaneo posterior y reducir tiempo
-
-Descubrimiento de servicios:
-
-- **Rápido**: Escaneo rápido de puertos y servicios
-- **Normal**: Escaneo estandard
-- **Lento**: Escaneo lento para ocasiones en las que se pueda saturar la red
-- **OT/Industrial**: Escaneo enfocado a redes industriales (puertos de telemetría como Modbus, S7, Ethernet/IP, etc.)
-- Además cuenta con captura de tráfico pasivo (PCAP) opcional.
-
-Esto generará escaneos y guardará los resultados en una base de datos local SQLite y exportará a demanda a formato JSON o importará a bases de datos orientadas a grafos.
-
-### Importar resultados en Neo4j
-Para cargar los resultados en la base de datos Neo4j, ejecuta el siguiente comando:
-
-```bash
-python3 scan2neo.py -r <IP_Neo4j>
-```
-
-Los resultados se representarán en Neo4j de la siguiente manera:
-
-![Estado actual](https://github.com/jor6PS/ScanHound/blob/main/images/grafo_scanhound_4.png?raw=true)
-
-![Estado actual 2](https://github.com/jor6PS/ScanHound/blob/main/images/Captura%20de%20pantalla%202023-06-12%20140444.png?raw=true)
-
-NeoDash mantiene una comunicación constante con Neo4j y ofrece un dashboard interactivo para visualizar los escaneos:
-
-![Dashboard](https://github.com/jor6PS/ScanHound/blob/main/images/NeoDash%20-%20Neo4j%20Dashboard%20Builder%20%E2%80%94%20Mozilla%20Firefox%202023-06-12%2013-56-03.gif)
-
-
-### Preparar el entorno 
-
-Intalar y Ejecutar Neo4j:
-```bash
-sudo neo4j console
-```
-Ejecutar NeoDash y conectarno a nuestra BBDD Neo4j para visualizar los dashboards:
-```bash
-sudo docker run -it --rm -p 5005:5005 neo4jlabs/neodash
-```
-
-Acceder a la web desde http://localhost:5005 e importar el archivo **dashboard.json**
-
-## Instalación
-
-### Dependencias de Python
-
-Se ha preparado un fichero con las dependencias requeriments.txt, para intalarlas ejecutar:
-```bash
-pip install -r requirements.txt
-```
-Si da error preparar un entorno virtual e instalar las dependencias:
-
-```bash
-python3 -m venv myenv
-source myenv/bin/activate
-pip install -r requirements.txt
-```
-
-### Dependencias del Sistema
-
-La aplicación requiere las siguientes herramientas del sistema:
-
-**Dependencias críticas:**
-- `nmap`: Herramienta esencial para escaneos de red
-  ```bash
-  # Ubuntu/Debian
-  sudo apt-get update && sudo apt-get install -y nmap
-  
-  # RedHat/CentOS/Fedora
-  sudo yum install -y nmap
-  
-  # Arch Linux
-  sudo pacman -S nmap
-  ```
-
-**Dependencias opcionales (recomendadas):**
-- `arp-scan`: Mejora la precisión del descubrimiento de hosts
-  ```bash
-  # Ubuntu/Debian
-  sudo apt-get update && sudo apt-get install -y arp-scan
-  ```
-
-- `tshark` (Wireshark): Necesario para escaneos pasivos de tráfico de red
-  ```bash
-  # Ubuntu/Debian
-  sudo apt-get update && sudo apt-get install -y wireshark-common tshark
-  
-  # RedHat/CentOS/Fedora
-  sudo yum install -y wireshark
-  
-  # Arch Linux
-  sudo pacman -S wireshark-cli
-  ```
-
-- `firefox` y `geckodriver`: Para capturas de pantalla de servicios web
-  ```bash
-  # Ubuntu/Debian
-  sudo apt-get update && sudo apt-get install -y firefox-esr firefox-geckodriver
-  ```
-
-**Nota:** Puedes verificar todas las dependencias ejecutando:
+Puedes validar el estado de tus dependencias ejecutando en tu terminal nuestro comando asistente:
 ```bash
 python3 check_dependencies.py
 ```
 
-Este script verificará automáticamente qué dependencias están instaladas y te proporcionará instrucciones de instalación para las que faltan.
+### 2. Entorno y Dependencias de Python
 
-## TODO
+Para instalar la aplicación, sigue estos pasos desde la consola:
+
+```bash
+# 1. Clona el repositorio (Si no lo has hecho ya)
+# git clone <URL_DEL_REPO>
+# cd ScanHound
+
+# 2. Crea tu entorno virtual (¡Git lo ignorará de tus commits automáticamente!)
+python3 -m venv venv
+
+# 3. Activa el entorno virtual. Tienes que realizar este paso cada vez que abras una nueva terminal
+source venv/bin/activate
+
+# 4. Instala las dependencias de Python necesarias para hacer volar ScanHound
+pip install -r requirements.txt
+```
+
+---
+
+## Ejecución y Modo de Uso
+
+### Iniciar la Plataforma (Interfaz Web)
+El método principal e ideal para utilizar ScanHound es a través de su interfaz web.
+Asegúrate de que estás en la carpeta raíz (`ScanHound`) y ejecuta nuestro lanzador unificado:
+
+```bash
+./start.sh
+```
+El script detectará tu entorno de Python local para aislar la ejecución, verificará que estés con un usuario con ciertos privilegios y lanzará todo el motor que da vida a este software (FastAPI en entorno productivo Gunicorn / Uvicorn).
+
+A continuación, abre un navegador web en: **`http://localhost:8000`** para iniciar y gestionar tus escaneos.
+
+---
+
+### Visualización Avanzada (Importar resultados en Neo4j)
+
+ScanHound permite llevar los resultados encontrados (hosts, puertos vulnerables, subredes enteras, etc.) hacia **Neo4j** para generar el mapa completo de tu organización en una base de datos grafo. Aunque desde la web es posible elvantar los servicios de Neo4j y NeoDash ttambién se puede levantar en local con docker de la sigueinte manera:
+
+**1. Preparar la Base de Datos Neo4j y NeoDash:**
+En una consola secundaria, si tienes Neo4J de forma nativa:
+```bash
+sudo neo4j console
+```
+
+Para dotar a los resultados de pantallas preconstruidas por nosotros, usamos el cliente NeoDash como frontend conectándose a nuestra BBDD Neo4j:
+```bash
+sudo docker run -it --rm -p 5005:5005 neo4jlabs/neodash
+```
+
+**2. Importar los Resultados de ScanHound a Neo4j:**
+Podemos instruirle desde el sistema ScanHound a enviar todo lo analizado a Neo4J:
+```bash
+python3 src/arsenal/scripts/scan2neo.py -r <IP_Neo4j>
+```
+
+Podrás acceder a dashboards en NeoDash entrando a `http://localhost:5005` y cargando o importando el archivo de configuración **`dashboard.json`**. 
+
+Tus mapas de red empezarán a visualizarse orgánicamente, creando relaciones, marcando servicios críticos descubiertos e incorporándose al grafo total de la organización.
+
+![Grafo Estado actual](https://github.com/jor6PS/ScanHound/blob/main/images/grafo_scanhound_4.png?raw=true)
+
+![Captura adicional](https://github.com/jor6PS/ScanHound/blob/main/images/Captura%20de%20pantalla%202023-06-12%20140444.png?raw=true)
+
+![Dashboard Demo (NeoDash)](https://github.com/jor6PS/ScanHound/blob/main/images/NeoDash%20-%20Neo4j%20Dashboard%20Builder%20%E2%80%94%20Mozilla%20Firefox%202023-06-12%2013-56-03.gif)
+
+---
+
+## TODO List
+Futuras utilidades y mejoras abiertas a la comunidad:
 
 - [ ] Guardar información del escaneo ping en CSV para cada escaneo.
 - [ ] Incluir el modo `--industrial-hardcore` para realizar solo el escaneo ICMP sin escaneo de servicios.
@@ -150,8 +112,6 @@ Este script verificará automáticamente qué dependencias están instaladas y t
 - [ ] Mostrar la cantidad de subredes /24 encontradas.
 - [~] Incluir un departamento nuevo para el control de cambios entre escaneos con fechas diferentes.
 - [~] Implementar escala logarítmica en el gráfico comparativo entre organizaciones.
-- [x] Actualizar el README.
-
----
+- [x] Actualizar el README general.
 
 ¡Gracias por usar ScanHound! 🚀

@@ -74,6 +74,7 @@ class ScanStorage:
                 scan_type TEXT NOT NULL,
                 target_range TEXT NOT NULL,
                 interface TEXT,
+                myip TEXT,
                 nmap_command TEXT,
                 started_at TIMESTAMP NOT NULL,
                 completed_at TIMESTAMP,
@@ -304,6 +305,11 @@ class ScanStorage:
         except sqlite3.OperationalError:
             pass
         
+        try:
+            cursor.execute("ALTER TABLE scans ADD COLUMN myip TEXT")
+        except sqlite3.OperationalError:
+            pass
+        
         # Agregar columna discovery_method a scan_results si no existe
         try:
             cursor.execute("ALTER TABLE scan_results ADD COLUMN discovery_method TEXT")
@@ -352,7 +358,7 @@ class ScanStorage:
         conn.close()
     
     def start_scan(self, organization: str, location: str, scan_type: str,
-                   target_range: str, interface: str = None, 
+                   target_range: str, interface: str = None, myip: str = None,
                    nmap_command: str = None, created_by: str = None,
                    enable_version_detection: bool = False,
                    enable_vulnerability_scan: bool = False,
@@ -372,12 +378,12 @@ class ScanStorage:
         cursor.execute("""
             INSERT INTO scans 
             (organization_name, location, scan_type, target_range, 
-             interface, nmap_command, started_at, status, created_by,
+             interface, myip, nmap_command, started_at, status, created_by,
              enable_version_detection, enable_vulnerability_scan,
              enable_screenshots, enable_source_code, scan_mode, pcap_file)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
         """, (organization.upper(), location.upper(), scan_type, target_range,
-              interface, nmap_command, datetime.now(), created_by,
+              interface, myip, nmap_command, datetime.now(), created_by,
               enable_version_detection, enable_vulnerability_scan,
               enable_screenshots, enable_source_code, scan_mode, pcap_file))
         
@@ -423,6 +429,23 @@ class ScanStorage:
         scan_dir = self._get_scan_directory(organization, location, scan_id, timestamp)
         scan_dir.mkdir(parents=True, exist_ok=True)
         return scan_dir
+
+    def _get_matching_network(self, organization: str, ip_str: str) -> str:
+        """Busca si una IP pertenece a una red de la organización definida por el usuario.
+        Devuelve el rango de red si hay match, de lo contrario None."""
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+            networks = self.get_networks(organization)
+            for net in networks:
+                try:
+                    net_obj = ipaddress.ip_network(net['network_range'])
+                    if ip_obj in net_obj:
+                        return net['network_range']
+                except ValueError:
+                    continue
+        except ValueError:
+            pass
+        return None
     
     def save_discovered_host(self, scan_id: int, host_ip: str, 
                              discovery_method: str = 'host_discovery',
@@ -439,7 +462,26 @@ class ScanStorage:
             return False
         ip_obj = ipaddress.ip_address(host_ip)
         is_private = True
-        if not subnet:
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys = ON")
+        cursor = conn.cursor()
+        
+        # Validar que el escaneo existe
+        scan = cursor.execute("SELECT id, organization_name FROM scans WHERE id = ?", (scan_id,)).fetchone()
+        if not scan:
+            print(f"⚠️  El escaneo {scan_id} no existe")
+            conn.close()
+            return False
+            
+        # Determinar subnet dinámica basada en las redes definidas (Preferencia sobre default)
+        organization_name = scan[1]
+        matched_network = self._get_matching_network(organization_name, host_ip)
+        
+        if matched_network:
+            subnet = matched_network
+        elif not subnet:
+            # Fallback original
             for private_net in [
                 ipaddress.ip_network('10.0.0.0/8'),
                 ipaddress.ip_network('172.16.0.0/12'),
@@ -455,18 +497,6 @@ class ScanStorage:
                     break
             if not subnet:
                 subnet = "Private IP (unknown subnet)"
-        
-        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys = ON")
-        cursor = conn.cursor()
-        
-        # Validar que el escaneo existe
-        scan_exists = cursor.execute("SELECT id FROM scans WHERE id = ?", (scan_id,)).fetchone()
-        if not scan_exists:
-            print(f"⚠️  El escaneo {scan_id} no existe")
-            conn.close()
-            return False
         
         # Insertar o actualizar host
         cursor.execute("""
@@ -534,12 +564,18 @@ class ScanStorage:
         conn.execute("PRAGMA foreign_keys = ON")
         cursor = conn.cursor()
         
-        # Validar que el escaneo existe
-        scan_exists = cursor.execute("SELECT id FROM scans WHERE id = ?", (scan_id,)).fetchone()
-        if not scan_exists:
+        # Validar que el escaneo existe y traer organización
+        scan = cursor.execute("SELECT id, organization_name FROM scans WHERE id = ?", (scan_id,)).fetchone()
+        if not scan:
             print(f"⚠️  El escaneo {scan_id} no existe")
             conn.close()
             return False
+            
+        # Determinar subnet
+        organization_name = scan[1]
+        matched_network = self._get_matching_network(organization_name, host_ip)
+        if matched_network:
+            subnet = matched_network
         
         # Preparar datos adicionales del host
         hostnames_json = None
@@ -919,10 +955,35 @@ class ScanStorage:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO networks (organization_name, system_name, network_name, network_range)
+                INSERT INTO networks (organization_name, network_name, network_range, system_name)
                 VALUES (?, ?, ?, ?)
-            """, (organization, system_name, network_name, network_range))
-            return cursor.lastrowid
+            """, (organization.upper(), network_name, network_range, system_name))
+            
+            network_id = cursor.lastrowid
+            
+            # Auto-asignación retroactiva
+            # Buscar todos los hosts que hayan sido escaneados bajo esta organización
+            # y que caigan matemáticamente en el nuevo rango. Actualizarles "subnet".
+            cursor.execute("""
+                SELECT DISTINCT h.id, h.ip_address
+                FROM hosts h
+                JOIN scan_results sr ON sr.host_id = h.id
+                JOIN scans s ON sr.scan_id = s.id
+                WHERE s.organization_name = ?
+            """, (organization.upper(),))
+            
+            org_hosts = cursor.fetchall()
+            net_obj = ipaddress.ip_network(network_range)
+            
+            for h_id, h_ip in org_hosts:
+                try:
+                    ip_obj = ipaddress.ip_address(h_ip)
+                    if ip_obj in net_obj:
+                        cursor.execute("UPDATE hosts SET subnet = ? WHERE id = ?", (network_range, h_id))
+                except ValueError:
+                    pass
+            
+            return network_id
 
     def delete_network(self, network_id: int) -> bool:
         """Elimina una red registrada."""

@@ -1,0 +1,995 @@
+import sqlite3
+import threading
+import subprocess
+import os
+import shutil
+import ipaddress
+import json
+import time
+import asyncio
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, Dict
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+
+from arsenal.core.scanners import HostDiscovery, PortScanner, PassiveCapture, ServiceDetection
+from arsenal.web.core.models import ScanConfig
+from arsenal.web.core.deps import storage, running_scans, running_processes
+from arsenal.web.core.websockets import manager
+
+router = APIRouter()
+
+# Añadir get_interface_ip from core if needed
+from arsenal.scripts.check_env import check_dependencies
+
+# helper definition (was top of app.py)
+import socket
+import fcntl
+import struct
+def get_interface_ip(ifname: str) -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        return socket.inet_ntoa(fcntl.ioctl(
+            s.fileno(), 0x8915, struct.pack('256s', ifname[:15].encode('utf-8'))
+        )[20:24])
+    except Exception:
+        return None
+
+@router.get("/api/scans/list")
+async def get_scans_list(organization: Optional[str] = None, location: Optional[str] = None):
+    """Obtiene lista de escaneos para dropdowns."""
+    try:
+        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        query = "SELECT id, organization_name, location, target_range, started_at, scan_mode, scan_type FROM scans WHERE 1=1"
+        params = []
+        
+        if organization:
+            query += " AND organization_name = ?"
+            params.append(organization.upper())
+        
+        if location:
+            query += " AND location = ?"
+            params.append(location.upper())
+        
+        query += " ORDER BY started_at DESC LIMIT 100"
+        
+        scans = cursor.execute(query, params).fetchall()
+        conn.close()
+        
+        result = []
+        for scan in scans:
+            # Formatear target_range: si es pasivo y es "0.0.0.0/0", mostrar "Escaneo Pasivo"
+            # sqlite3.Row no tiene método .get(), usar acceso directo con manejo de None
+            target_range_val = scan["target_range"] if scan["target_range"] is not None else ""
+            scan_mode_val = scan["scan_mode"] if scan["scan_mode"] is not None else "active"
+            scan_type_val = scan["scan_type"] if scan["scan_type"] is not None else None
+            
+            target_display = target_range_val
+            
+            if scan_mode_val == "passive" and (target_display == "0.0.0.0/0" or not target_display):
+                target_display = "🎧 Escaneo Pasivo"
+            elif scan_mode_val == "passive":
+                target_display = f"🎧 Pasivo: {target_display}"
+            
+            result.append({
+                "id": scan["id"],
+                "organization": scan["organization_name"],
+                "location": scan["location"],
+                "target": target_display,
+                "target_range": target_range_val,  # Mantener original para uso interno
+                "scan_mode": scan_mode_val,
+                "scan_type": scan_type_val,
+                "started_at": scan["started_at"]
+            })
+        
+        return result
+    except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"❌ Error en /api/scans/list: {e}")
+        print(error_detail)
+        raise HTTPException(status_code=500, detail=f"Error obteniendo lista de escaneos: {str(e)}")
+
+@router.get("/api/scans")
+async def get_scans(
+    organization: Optional[str] = None, 
+    location: Optional[str] = None,
+    scan_id: Optional[int] = None,
+    status: Optional[str] = None
+):
+    """Obtiene lista de escaneos. Detecta automáticamente escaneos zombie."""
+    from datetime import timedelta
+    
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    cursor = conn.cursor()
+    
+    # Detectar y limpiar escaneos zombie automáticamente
+    # Escaneos con vulnerabilidades pueden tardar más (4 horas)
+    # Escaneos normales (2 horas)
+    # IMPORTANTE: Solo marcar como zombie si NO está en running_processes (no está realmente en ejecución)
+    # y NO se ha actualizado en el último tiempo y NO hay actividad reciente
+    cutoff_time_normal = datetime.now() - timedelta(hours=2)
+    cutoff_time_vulns = datetime.now() - timedelta(hours=4)
+    
+    # Buscar escaneos zombie (normales) - solo si no tienen resultados, son muy antiguos Y no están en ejecución
+    zombies_normal = cursor.execute("""
+        SELECT s.id FROM scans s
+        WHERE s.status = 'running' 
+        AND s.started_at < ?
+        AND s.enable_vulnerability_scan = 0
+        AND NOT EXISTS (
+            SELECT 1 FROM scan_results sr WHERE sr.scan_id = s.id
+        )
+    """, (cutoff_time_normal.isoformat(),)).fetchall()
+    
+    # Buscar escaneos zombie (con vulnerabilidades) - solo si no tienen resultados, son muy antiguos Y no están en ejecución
+    zombies_vulns = cursor.execute("""
+        SELECT s.id FROM scans s
+        WHERE s.status = 'running' 
+        AND s.started_at < ?
+        AND s.enable_vulnerability_scan = 1
+        AND NOT EXISTS (
+            SELECT 1 FROM scan_results sr WHERE sr.scan_id = s.id
+        )
+    """, (cutoff_time_vulns.isoformat(),)).fetchall()
+    
+    zombies = list(zombies_normal) + list(zombies_vulns)
+    
+    if zombies:
+        for zombie in zombies:
+            scan_id = zombie['id']
+            scan_id_str = str(scan_id)
+            
+            # NO marcar como zombie si el thread está realmente en ejecución
+            if scan_id_str in running_scans:
+                thread = running_scans[scan_id_str]
+                # Verificar si el thread sigue vivo
+                if thread.is_alive():
+                    continue  # Saltar este escaneo, está realmente en ejecución
+            
+            # NO marcar como zombie si el proceso está realmente en ejecución (para escaneos pasivos)
+            if scan_id_str in running_processes:
+                process = running_processes[scan_id_str]
+                # Verificar si el proceso sigue vivo
+                if process.poll() is None:  # None significa que el proceso sigue ejecutándose
+                    continue  # Saltar este escaneo, está realmente en ejecución
+            
+            # Verificar si hay resultados
+            hosts_count = cursor.execute("""
+                SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
+            """, (scan_id,)).fetchone()[0]
+            
+            ports_count = cursor.execute("""
+                SELECT COUNT(*) FROM scan_results WHERE scan_id = ?
+            """, (scan_id,)).fetchone()[0]
+            
+            # Si hay resultados, marcar como completado, si no, como fallido
+            if hosts_count > 0 or ports_count > 0:
+                status = 'completed'
+                error_message = None
+            else:
+                status = 'failed'
+                error_message = "Escaneo zombie detectado y limpiado automáticamente."
+            
+            cursor.execute("""
+                UPDATE scans
+                SET status = ?, completed_at = ?, hosts_discovered = ?,
+                    ports_found = ?, error_message = ?
+                WHERE id = ?
+            """, (status, datetime.now().isoformat(), hosts_count, ports_count, 
+                  error_message, scan_id))
+        
+        conn.commit()
+        print(f"🧹 Limpiados {len(zombies)} escaneo(s) zombie automáticamente")
+    
+    # Obtener escaneos
+    query = "SELECT * FROM scans WHERE 1=1"
+    params = []
+    
+    if organization:
+        query += " AND organization_name = ?"
+        params.append(organization.upper())
+        
+    if location:
+        query += " AND location = ?"
+        params.append(location.upper())
+        
+    if scan_id:
+        query += " AND id = ?"
+        params.append(scan_id)
+    
+    if status:
+        query += " AND status = ?"
+        params.append(status)
+    
+    query += " ORDER BY started_at DESC LIMIT 50"
+    
+    scans = cursor.execute(query, params).fetchall()
+    conn.close()
+    
+    # Enriquecer con información de si está realmente en ejecución
+    result = []
+    for scan in scans:
+        scan_dict = dict(scan)
+        scan_id_str = str(scan_dict['id'])
+        
+        # Verificar si está realmente en ejecución
+        if scan_dict['status'] == 'running':
+            if scan_id_str in running_processes:
+                process = running_processes[scan_id_str]
+                if process.poll() is None:  # Proceso sigue vivo
+                    scan_dict['is_really_running'] = True
+                else:
+                    # Proceso terminó pero no se actualizó el estado
+                    scan_dict['is_really_running'] = False
+            else:
+                scan_dict['is_really_running'] = False
+        else:
+            scan_dict['is_really_running'] = False
+        
+        result.append(scan_dict)
+    
+    return result
+
+def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
+    """Ejecuta el escaneo en background usando scanners directamente."""
+    try:
+        # Importar módulos de screenshots/source code si están disponibles
+        try:
+            from protocols.web import take_screenshot, get_source
+            WEB_PROTOCOLS_AVAILABLE = True
+        except ImportError:
+            WEB_PROTOCOLS_AVAILABLE = False
+            take_screenshot = None
+            get_source = None
+        
+        # Actualizar progreso inicial
+        try:
+            conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+            conn.execute("PRAGMA journal_mode=WAL")
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE scans 
+                SET status = 'running', hosts_discovered = 0, ports_found = 0
+                WHERE id = ?
+            """, (scan_id,))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[Scan {scan_id}] Error actualizando estado inicial: {e}")
+        
+        # Obtener directorio del escaneo
+        scan_dir = storage.get_scan_directory(config.organization, config.location, scan_id)
+        evidence_dir = scan_dir / "evidence"
+        img_dir = evidence_dir / "img"
+        source_dir = evidence_dir / "source"
+        nmap_xml_path = evidence_dir / "nmap_scan.xml"
+        
+        # Crear directorios necesarios
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        img_dir.mkdir(parents=True, exist_ok=True)
+        source_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Subredes internas para determinar subnet
+        private_subnets = [
+            ipaddress.ip_network(s) for s in [
+                '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16',
+                '169.254.0.0/16', '127.0.0.0/8', '::1/128', 'fc00::/7', 'fe80::/10'
+            ]
+        ]
+
+        def get_subnet(ip_str):
+            try:
+                ip_o = ipaddress.ip_address(ip_str)
+                for net in private_subnets:
+                    if ip_o in net:
+                        return str(net)
+                return "Public IP"
+            except ValueError:
+                return "Unknown"
+
+        discovered_ips = set()
+
+        
+        # ============================================================================
+        # PASO 1: HOST DISCOVERY (si está habilitado)
+        # ============================================================================
+        if config.host_discovery:
+            print(f"[Scan {scan_id}] 🔍 Iniciando descubrimiento de hosts...")
+            try:
+                if config.custom_host_discovery_command:
+                    print(f"[Scan {scan_id}] 📡 Ejecutando comando personalizado de descubrimiento: {config.custom_host_discovery_command}")
+                    import shlex
+                    # Execute custom command
+                    cmd_args = shlex.split(config.custom_host_discovery_command)
+                    result = subprocess.run(
+                        cmd_args,
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        check=False
+                    )
+                    
+                    # Extract IPs using HostDiscovery utility
+                    host_discovery = HostDiscovery(interface=config.interface)
+                    if result.returncode == 0 or result.stdout:
+                        discovered_ips = host_discovery.extract_ips_from_output(result.stdout)
+                    
+                    if result.returncode != 0 and not discovered_ips:
+                        print(f"[Scan {scan_id}] ⚠️ El comando de descubrimiento devolvió error y no se encontraron IPs")
+                else:
+                    host_discovery = HostDiscovery(interface=config.interface)
+                    discovered_ips = host_discovery.discover_hosts(config.target_range)
+                
+                print(f"[Scan {scan_id}] ✅ Descubiertos {len(discovered_ips)} hosts")
+                
+                # Guardar hosts descubiertos en la BD
+                for host_ip in discovered_ips:
+                    try:
+                        # Determinar subred
+                        subnet = get_subnet(host_ip)
+                        
+                        storage.save_discovered_host(
+                            scan_id=scan_id,
+                            host_ip=host_ip,
+                            discovery_method='host_discovery',
+                            subnet=subnet
+                        )
+                    except Exception as e:
+                        print(f"[Scan {scan_id}] ⚠️  Error guardando host {host_ip}: {e}")
+            except Exception as e:
+                print(f"[Scan {scan_id}] ⚠️  Error en host discovery: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # ============================================================================
+        # PASO 2: NMAP SCAN (si está habilitado)
+        # ============================================================================
+        if config.nmap:
+            print(f"[Scan {scan_id}] 🔍 Iniciando escaneo Nmap...")
+            
+            # Determinar targets: usar IPs descubiertas si hay, sino usar el rango
+            if discovered_ips:
+                targets = sorted(list(discovered_ips))
+                target_str = ' '.join(targets)
+                print(f"[Scan {scan_id}] 📋 Escaneando {len(targets)} hosts descubiertos...")
+            else:
+                target_str = config.target_range
+                print(f"[Scan {scan_id}] 📋 Escaneando rango: {target_str}")
+            
+            try:
+                if config.custom_nmap_command:
+                    print(f"[Scan {scan_id}] 📡 Ejecutando comando Nmap personalizado: {config.custom_nmap_command}")
+                    import shlex
+                    
+                    # Ensure -oX flag is added to save results
+                    cmd_str = config.custom_nmap_command
+                    if '-oX' not in cmd_str:
+                        cmd_str += f" -oX {nmap_xml_path}"
+                    
+                    cmd_args = shlex.split(cmd_str)
+                    
+                    result = subprocess.run(
+                        cmd_args,
+                        capture_output=True,
+                        text=True,
+                        check=False
+                    )
+                    
+                    if result.returncode == 0 or (os.path.exists(nmap_xml_path) and os.path.getsize(nmap_xml_path) > 0):
+                        xml_file = str(nmap_xml_path)
+                    else:
+                        raise Exception(f"Comando Nmap manual falló con código {result.returncode}: {result.stderr[:500] if result.stderr else 'Sin error'}")
+                else:
+                    # Crear scanner de puertos
+                    port_scanner = PortScanner(output_file=str(nmap_xml_path))
+                    
+                    # Ejecutar escaneo Nmap
+                    xml_file = port_scanner.scan(
+                        target_range=target_str,
+                        speed=config.nmap_speed,
+                        ot_ports=config.nmap_ot_ports,
+                        it_ports=config.nmap_it_ports,
+                        custom_ports=config.custom_ports,
+                        enable_versions=config.nmap_versions,
+                        enable_vulns=config.nmap_vulns,
+                        output_file=str(nmap_xml_path)
+                    )
+                
+                if not xml_file or not Path(xml_file).exists():
+                    raise Exception("Nmap no generó el archivo XML de salida")
+                
+                print(f"[Scan {scan_id}] ✅ Nmap completado. Procesando resultados...")
+                
+                # Procesar resultados XML
+                parser = NmapXMLParser(nmap_xml_path)
+                parsed_data = parser.parse()
+                
+                total_hosts = len(parsed_data['hosts'])
+                hosts_processed = 0
+                ports_processed = 0
+                
+                print(f"[Scan {scan_id}] 📊 Procesando {total_hosts} host(s)...")
+                
+                # Procesar cada host
+                for host_ip, host_data in parsed_data['hosts'].items():
+                    try:
+                        # Determinar subred
+                        subnet = get_subnet(host_ip)
+                        
+                        # Obtener hostname
+                        hostname = host_data.get('hostname') or None
+                        
+                        # Preparar datos adicionales del host
+                        host_additional_data = {
+                            'hostnames': host_data.get('hostnames', []),
+                            'mac_address': host_data.get('mac_address'),
+                            'vendor': host_data.get('vendor'),
+                            'os': host_data.get('os', {}),
+                            'host_scripts': host_data.get('host_scripts', {})
+                        }
+                        
+                        # Si no hay puertos abiertos, registrar el host de todas formas
+                        if not host_data.get('ports'):
+                            storage.save_host_result(
+                                scan_id=scan_id,
+                                host_ip=host_ip,
+                                port=None,
+                                protocol=None,
+                                state=host_data.get('status', 'up'),
+                                service_data={},
+                                subnet=subnet,
+                                hostname=hostname,
+                                host_data=host_additional_data,
+                                discovery_method='nmap'
+                            )
+                            hosts_processed += 1
+                            continue
+                        
+                        # Procesar puertos
+                        for port_key, port_data in host_data['ports'].items():
+                            # Extraer número de puerto y protocolo
+                            if isinstance(port_key, str) and '/' in port_key:
+                                port_num_str, proto = port_key.split('/', 1)
+                                port_num = int(port_num_str)
+                            else:
+                                port_num = int(port_key) if isinstance(port_key, str) else port_key
+                                proto = port_data.get('protocol', 'tcp')
+                            
+                            # Preparar datos del servicio
+                            service_data = {
+                                'name': port_data.get('name', ''),
+                                'product': port_data.get('product', ''),
+                                'version': port_data.get('version', ''),
+                                'extrainfo': port_data.get('extrainfo', ''),
+                                'cpe': port_data.get('cpe', ''),
+                                'reason': port_data.get('reason', ''),
+                                'reason_ttl': port_data.get('reason_ttl', ''),
+                                'conf': port_data.get('conf', 0),
+                                'scripts': port_data.get('scripts', {})
+                            }
+                            
+                            # Guardar resultado en base de datos
+                            storage.save_host_result(
+                                scan_id=scan_id,
+                                host_ip=host_ip,
+                                port=port_num,
+                                protocol=proto,
+                                state=port_data['state'],
+                                service_data=service_data,
+                                subnet=subnet,
+                                hostname=hostname,
+                                host_data=host_additional_data,
+                                discovery_method='nmap'
+                            )
+                            ports_processed += 1
+                            
+                            # Procesar vulnerabilidades de scripts NSE
+                            scripts = port_data.get('scripts', {})
+                            for script_id, script_output in scripts.items():
+                                if isinstance(script_output, dict):
+                                    output_text = script_output.get('output', '')
+                                    script_data = script_output
+                                else:
+                                    output_text = str(script_output)
+                                    script_data = {}
+                                
+                                # Extraer vulnerabilidades
+                                vulnerabilities = VulnerabilityParser.extract_vulnerabilities(
+                                    script_id, output_text, script_data
+                                )
+                                
+                                # Guardar cada vulnerabilidad
+                                for vuln in vulnerabilities:
+                                    storage.save_vulnerability(
+                                        scan_id=scan_id,
+                                        host_ip=host_ip,
+                                        port=port_num,
+                                        protocol=proto,
+                                        vulnerability_type=vuln.get('type', 'unknown'),
+                                        title=vuln.get('title', ''),
+                                        description=vuln.get('description', ''),
+                                        severity=vuln.get('severity', 'info'),
+                                        cvss_score=vuln.get('cvss', None),
+                                        references=vuln.get('references', ''),
+                                        script_id=script_id,
+                                        script_output=output_text
+                                    )
+                            
+                            # Screenshots (si está habilitado y es servicio web)
+                            if config.screenshots and WEB_PROTOCOLS_AVAILABLE and take_screenshot:
+                                if port_num in [80, 443, 8080, 8443, 8000] or 'http' in service_data.get('name', '').lower():
+                                    try:
+                                        screenshot = take_screenshot(host_ip, port_num, str(img_dir))
+                                        if screenshot:
+                                            storage.save_enrichment(
+                                                scan_id=scan_id,
+                                                host_ip=host_ip,
+                                                port=port_num,
+                                                protocol=proto,
+                                                enrichment_type='Screenshot',
+                                                data=screenshot,
+                                                file_path=str(img_dir / f"{host_ip}_{port_num}.png")
+                                            )
+                                    except Exception as e:
+                                        print(f"[Scan {scan_id}] ⚠️  Error tomando screenshot de {host_ip}:{port_num}: {e}")
+                            
+                            # Source code (si está habilitado y es servicio web)
+                            if config.source_code and WEB_PROTOCOLS_AVAILABLE and get_source:
+                                if port_num in [80, 443, 8080, 8443, 8000] or 'http' in service_data.get('name', '').lower():
+                                    try:
+                                        source = get_source(host_ip, port_num, str(source_dir))
+                                        if source:
+                                            storage.save_enrichment(
+                                                scan_id=scan_id,
+                                                host_ip=host_ip,
+                                                port=port_num,
+                                                protocol=proto,
+                                                enrichment_type='Websource',
+                                                data=source,
+                                                file_path=str(source_dir / f"{host_ip}_{port_num}.txt")
+                                            )
+                                    except Exception as e:
+                                        print(f"[Scan {scan_id}] ⚠️  Error obteniendo source code de {host_ip}:{port_num}: {e}")
+                        
+                        hosts_processed += 1
+                    except Exception as e:
+                        print(f"[Scan {scan_id}] ⚠️  Error procesando host {host_ip}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
+                
+                print(f"[Scan {scan_id}] ✅ Procesados {hosts_processed} hosts y {ports_processed} puertos")
+                
+            except Exception as e:
+                print(f"[Scan {scan_id}] ❌ Error en escaneo Nmap: {e}")
+                import traceback
+                traceback.print_exc()
+                raise
+        
+        # Contar hosts y puertos finales
+        try:
+            conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+            conn.execute("PRAGMA journal_mode=WAL")
+            cursor = conn.cursor()
+            
+            hosts_count = cursor.execute("""
+                SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
+            """, (scan_id,)).fetchone()[0]
+            
+            ports_count = cursor.execute("""
+                SELECT COUNT(*) FROM scan_results WHERE scan_id = ? AND port IS NOT NULL
+            """, (scan_id,)).fetchone()[0]
+            
+            conn.close()
+            storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count)
+            print(f"[Scan {scan_id}] ✅ ESCANEO COMPLETADO EXITOSAMENTE")
+            print(f"[Scan {scan_id}]    Hosts descubiertos: {hosts_count}")
+            print(f"[Scan {scan_id}]    Puertos encontrados: {ports_count}")
+        except Exception as e:
+            print(f"[Scan {scan_id}] ⚠️  Error contando resultados finales: {e}")
+            import traceback
+            traceback.print_exc()
+            # Intentar contar resultados aunque haya error, para no marcar como failed prematuramente
+            try:
+                conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+                conn.execute("PRAGMA journal_mode=WAL")
+                cursor = conn.cursor()
+                hosts_count = cursor.execute("""
+                    SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
+                """, (scan_id,)).fetchone()[0]
+                ports_count = cursor.execute("""
+                    SELECT COUNT(*) FROM scan_results WHERE scan_id = ? AND port IS NOT NULL
+                """, (scan_id,)).fetchone()[0]
+                conn.close()
+                storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count)
+            except:
+                # Solo si realmente no podemos contar, completar sin parámetros
+                storage.complete_scan(scan_id)
+            
+    except Exception as e:
+        error_msg = f"Error ejecutando escaneo: {str(e)}"
+        print(f"\n[Scan {scan_id}] ❌ ERROR CRÍTICO")
+        print(f"[Scan {scan_id}]    {error_msg}")
+        import traceback
+        traceback.print_exc()
+        storage.complete_scan(scan_id, error_message=error_msg[:1000])
+    finally:
+        # Limpiar procesos de los diccionarios
+        if str(scan_id) in running_processes:
+            del running_processes[str(scan_id)]
+        if str(scan_id) in running_scans:
+            del running_scans[str(scan_id)]
+
+def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
+    """Ejecuta un escaneo pasivo capturando tráfico usando PassiveCapture."""
+    import time
+    
+    # Obtener información del escaneo
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.execute("PRAGMA journal_mode=WAL")
+    cursor = conn.cursor()
+    scan_info = cursor.execute("""
+        SELECT organization_name, location FROM scans WHERE id = ?
+    """, (scan_id,)).fetchone()
+    conn.close()
+    
+    if not scan_info:
+        print(f"[Scan {scan_id}] ❌ Escaneo no encontrado en BD")
+        return
+    
+    organization, location = scan_info
+    
+    # Actualizar estado a running
+    try:
+        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE scans 
+            SET status = 'running', hosts_discovered = 0, ports_found = 0
+            WHERE id = ?
+        """, (scan_id,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Scan {scan_id}] Error actualizando estado inicial: {e}")
+        return
+    
+    # Obtener directorio del escaneo
+    scan_dir = storage.get_scan_directory(organization, location, scan_id)
+    pcap_dir = scan_dir / "pcap"
+    pcap_dir.mkdir(exist_ok=True)
+    
+    # Generar nombre de archivo pcap
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    pcap_file = pcap_dir / f"capture_{scan_id:06d}_{timestamp}.pcap"
+    
+    # Actualizar BD con la ruta del pcap
+    try:
+        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE scans SET pcap_file = ? WHERE id = ?
+        """, (str(pcap_file), scan_id))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Scan {scan_id}] Error guardando ruta del pcap: {e}")
+    
+    print(f"[Scan {scan_id}] 🎧 Iniciando captura pasiva...")
+    print(f"[Scan {scan_id}]    Interfaz: {config.interface}")
+    print(f"[Scan {scan_id}]    Filtro: {config.pcap_filter or 'Ninguno'}")
+    print(f"[Scan {scan_id}]    Archivo: {pcap_file}\n")
+    
+    try:
+        # Usar PassiveCapture para iniciar la captura
+        passive_capture = PassiveCapture(interface=config.interface)
+        process = passive_capture.start_capture(
+            output_file=str(pcap_file),
+            filter=config.pcap_filter,
+            duration=86400  # 24 horas máximo
+        )
+        
+        # Guardar proceso para poder cancelarlo
+        running_processes[str(scan_id)] = process
+        
+        print(f"[Scan {scan_id}] ✅ Captura iniciada (PID: {process.pid})")
+        
+        # Procesar pcap periódicamente mientras se captura
+        last_process_time = time.time()
+        process_interval = 30  # Procesar cada 30 segundos
+        
+        while True:
+            # Verificar si el proceso sigue corriendo
+            if process.poll() is not None:
+                # Proceso terminó
+                return_code = process.returncode
+                if return_code != 0:
+                    error_msg = f"tshark terminó con código {return_code}"
+                    print(f"[Scan {scan_id}] ❌ {error_msg}")
+                    storage.complete_scan(scan_id, error_message=error_msg)
+                else:
+                    # Proceso completado normalmente
+                    print(f"[Scan {scan_id}] ✅ Captura completada")
+                    # Procesar pcap final
+                    process_pcap_file(scan_id, str(pcap_file), organization, location)
+                break
+            
+            # Procesar pcap periódicamente
+            current_time = time.time()
+            if current_time - last_process_time >= process_interval:
+                if pcap_file.exists() and pcap_file.stat().st_size > 0:
+                    try:
+                        process_pcap_file(scan_id, str(pcap_file), organization, location)
+                        last_process_time = current_time
+                    except Exception as e:
+                        print(f"[Scan {scan_id}] ⚠️  Error procesando pcap: {e}")
+            
+            # Pequeña pausa
+            time.sleep(1)
+            
+            # Verificar si el escaneo fue cancelado (marcado como tal en BD)
+            try:
+                conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+                conn.execute("PRAGMA journal_mode=WAL")
+                cursor = conn.cursor()
+                status = cursor.execute("SELECT status FROM scans WHERE id = ?", (scan_id,)).fetchone()
+                conn.close()
+                if status and status[0] != 'running':
+                    # Escaneo fue cancelado o completado
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except:
+                        process.kill()
+                    break
+            except Exception:
+                pass
+        
+        # Procesar pcap final si aún existe
+        if pcap_file.exists() and pcap_file.stat().st_size > 0:
+            try:
+                process_pcap_file(scan_id, str(pcap_file), organization, location)
+            except Exception as e:
+                print(f"[Scan {scan_id}] ⚠️  Error procesando pcap final: {e}")
+        
+        # Contar hosts y puertos finales
+        try:
+            conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+            conn.execute("PRAGMA journal_mode=WAL")
+            cursor = conn.cursor()
+            
+            hosts_count = cursor.execute("""
+                SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
+            """, (scan_id,)).fetchone()[0]
+            
+            ports_count = cursor.execute("""
+                SELECT COUNT(*) FROM scan_results WHERE scan_id = ? AND port IS NOT NULL
+            """, (scan_id,)).fetchone()[0]
+            
+            conn.close()
+            storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count)
+            print(f"[Scan {scan_id}] ✅ ESCANEO PASIVO COMPLETADO")
+            print(f"[Scan {scan_id}]    Hosts descubiertos: {hosts_count}")
+            print(f"[Scan {scan_id}]    Puertos encontrados: {ports_count}")
+        except Exception as e:
+            print(f"[Scan {scan_id}] ⚠️  Error contando resultados finales: {e}")
+            storage.complete_scan(scan_id)
+            
+    except Exception as e:
+        error_msg = f"Error ejecutando escaneo pasivo: {str(e)}"
+        print(f"\n[Scan {scan_id}] ❌ ERROR CRÍTICO")
+        print(f"[Scan {scan_id}]    {error_msg}")
+        import traceback
+        traceback.print_exc()
+        storage.complete_scan(scan_id, error_message=error_msg[:1000])
+    finally:
+        # Limpiar procesos de los diccionarios
+        if str(scan_id) in running_processes:
+            del running_processes[str(scan_id)]
+        if str(scan_id) in running_scans:
+            del running_scans[str(scan_id)]
+
+def process_pcap_file(scan_id: int, pcap_file: str, organization: str, location: str):
+    """Procesa un archivo pcap usando PassiveCapture y guarda resultados en la BD."""
+    try:
+        # Usar PassiveCapture para extraer conexiones
+        passive_capture = PassiveCapture()
+        connections = passive_capture.extract_connections(pcap_file)
+        
+        print(f"[Scan {scan_id}] 📊 Procesando {len(connections)} conexiones del pcap...")
+        
+        # Subredes privadas para determinar subnet
+        private_subnets = [
+            ipaddress.ip_network(subnet) for subnet in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16']
+        ]
+        
+        # Guardar conexiones en la BD (solo IPs privadas)
+        for ip, port, protocol in connections:
+            try:
+                # Validar IP y verificar que sea privada
+                ip_obj = ipaddress.ip_address(ip)
+                if not (
+                    ip_obj.is_private
+                    or ip_obj.is_loopback
+                    or ip_obj.is_link_local
+                    or ip_obj.is_reserved
+                    or ip_obj.is_unspecified
+                    or ip_obj.is_multicast
+                ):
+                    # IP pública mundialmente enrutable, saltar
+                    continue
+                
+                # Determinar subred
+                subnet = "Private IP (unknown subnet)"
+                for private_net in private_subnets:
+                    try:
+                        if ip_obj in private_net:
+                            subnet = str(private_net)
+                            break
+                    except:
+                        pass
+                
+                # Guardar host si no existe (solo IPs privadas)
+                storage.save_discovered_host(scan_id, ip, discovery_method='passive_capture', subnet=subnet)
+                
+                # Guardar puerto descubierto
+                conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA foreign_keys = ON")
+                cursor = conn.cursor()
+                
+                # Obtener host_id
+                host_row = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (ip,)).fetchone()
+                if host_row:
+                    host_id = host_row[0]
+                    
+                    # Verificar si ya existe este resultado
+                    existing = cursor.execute("""
+                        SELECT id FROM scan_results 
+                        WHERE scan_id = ? AND host_id = ? AND port = ? AND protocol = ?
+                    """, (scan_id, host_id, port, protocol)).fetchone()
+                    
+                    if not existing:
+                        # Guardar resultado
+                        cursor.execute("""
+                            INSERT INTO scan_results 
+                            (scan_id, host_id, port, protocol, state, discovered_at, discovery_method)
+                            VALUES (?, ?, ?, ?, 'open', datetime('now'), ?)
+                        """, (scan_id, host_id, port, protocol, 'passive_capture'))
+                        conn.commit()
+                    
+                conn.close()
+            except (ValueError, ipaddress.AddressValueError):
+                continue  # IP inválida, saltar
+            except Exception as e:
+                print(f"[Scan {scan_id}] ⚠️  Error guardando {ip}:{port}/{protocol}: {e}")
+                continue
+        
+        print(f"[Scan {scan_id}] ✅ Procesamiento de pcap completado")
+        
+    except Exception as e:
+        print(f"[Scan {scan_id}] ❌ Error procesando pcap: {e}")
+        import traceback
+        traceback.print_exc()
+
+@router.websocket("/ws/scan/{scan_id}")
+async def websocket_scan_progress(websocket: WebSocket, scan_id: str):
+    """WebSocket para recibir progreso del escaneo."""
+    await manager.connect(websocket, scan_id)
+    try:
+        last_status = None
+        last_hosts = -1
+        last_ports = -1
+        
+        # Obtener estado del escaneo desde la BD periódicamente
+        while True:
+            try:
+                # Obtener progreso real del escaneo
+                conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                scan = cursor.execute(
+                    """SELECT status, hosts_discovered, ports_found, error_message, 
+                              started_at, completed_at, target_range 
+                       FROM scans WHERE id = ?""",
+                    (scan_id,)
+                ).fetchone()
+                conn.close()
+                
+                if scan:
+                    # Calcular tiempo transcurrido
+                    started = datetime.fromisoformat(scan["started_at"]) if scan["started_at"] else None
+                    elapsed = None
+                    if started:
+                        elapsed_seconds = (datetime.now() - started).total_seconds()
+                        elapsed = f"{int(elapsed_seconds // 60)}m {int(elapsed_seconds % 60)}s"
+                    
+                    # Solo enviar si cambió algo
+                    current_hosts = scan["hosts_discovered"] or 0
+                    current_ports = scan["ports_found"] or 0
+                    
+                    if (scan["status"] != last_status or 
+                        current_hosts != last_hosts or 
+                        current_ports != last_ports):
+                        
+                        message = {
+                            "type": "progress",
+                            "status": scan["status"],
+                            "hosts_discovered": current_hosts,
+                            "ports_found": current_ports,
+                            "error_message": scan["error_message"],
+                            "elapsed_time": elapsed,
+                            "target": scan["target_range"],
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        
+                        try:
+                            await manager.send_progress(scan_id, message)
+                        except Exception:
+                            # Conexión cerrada, salir del loop
+                            break
+                        last_status = scan["status"]
+                        last_hosts = current_hosts
+                        last_ports = current_ports
+                    
+                    # Si el escaneo terminó, enviar mensaje final y cerrar
+                    if scan["status"] in ["completed", "failed"]:
+                        final_message = {
+                            "type": "completed" if scan["status"] == "completed" else "failed",
+                            "status": scan["status"],
+                            "hosts_discovered": current_hosts,
+                            "ports_found": current_ports,
+                            "error_message": scan["error_message"],
+                            "message": "Escaneo completado exitosamente" if scan["status"] == "completed" else f"Escaneo falló: {scan['error_message'] or 'Error desconocido'}"
+                        }
+                        try:
+                            await manager.send_progress(scan_id, final_message)
+                            await asyncio.sleep(0.5)  # Dar tiempo para enviar el mensaje final
+                        except Exception:
+                            pass  # Conexión ya cerrada, continuar
+                        break
+                else:
+                    # Escaneo no encontrado
+                    try:
+                        await manager.send_progress(scan_id, {
+                            "type": "error",
+                            "message": f"Escaneo {scan_id} no encontrado"
+                        })
+                    except Exception:
+                        pass  # Conexión cerrada
+                    break
+                
+                await asyncio.sleep(2)  # Actualizar cada 2 segundos
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                # Error obteniendo progreso, enviar mensaje de error
+                error_msg = {
+                    "type": "error",
+                    "message": f"Error obteniendo progreso: {str(e)}"
+                }
+                try:
+                    await manager.send_progress(scan_id, error_msg)
+                except:
+                    pass
+                await asyncio.sleep(2)
+    except WebSocketDisconnect:
+        pass  # Cliente desconectado normalmente
+    except asyncio.CancelledError:
+        pass  # Conexión cancelada (servidor cerrando)
+    except Exception as e:
+        print(f"Error en WebSocket para scan {scan_id}: {e}")
+    finally:
+        # Siempre limpiar la conexión
+        manager.disconnect(scan_id)
+
