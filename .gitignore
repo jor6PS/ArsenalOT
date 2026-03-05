@@ -21,6 +21,7 @@ config.local.json
 *.db
 scans/
 reports/
+results/
 
 # IDEs y sistemas operativos
 .vscode/
