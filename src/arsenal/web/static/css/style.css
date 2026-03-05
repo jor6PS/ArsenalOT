@@ -14,27 +14,33 @@
     --bg-surface: rgba(22, 27, 34, 0.65);
     --bg-surface-hover: rgba(30, 36, 44, 0.85);
     --bg-surface-active: rgba(45, 52, 62, 0.95);
-    
+
     /* Acentos - Indigo y Emerald suaves */
-    --accent-primary: #6366F1;   /* Indigo */
+    --accent-primary: #6366F1;
+    /* Indigo */
     --accent-primary-hover: #4F46E5;
-    --accent-secondary: #0EA5E9; /* Sky Blue */
-    
+    --accent-secondary: #0EA5E9;
+    /* Sky Blue */
+
     /* Colores Críticos / Estado */
-    --success: #10B981;    /* Emerald */
+    --success: #10B981;
+    /* Emerald */
     --success-bg: rgba(16, 185, 129, 0.15);
-    --warning: #F59E0B;    /* Amber */
+    --warning: #F59E0B;
+    /* Amber */
     --warning-bg: rgba(245, 158, 11, 0.15);
-    --danger: #EF4444;     /* Red */
+    --danger: #EF4444;
+    /* Red */
     --danger-bg: rgba(239, 68, 68, 0.15);
-    --info: #3B82F6;       /* Blue */
+    --info: #3B82F6;
+    /* Blue */
     --info-bg: rgba(59, 130, 246, 0.15);
 
     /* Textos */
     --text-primary: #F8FAFC;
     --text-secondary: #94A3B8;
     --text-muted: #64748B;
-    
+
     /* Bordes y Sombras - Glassmorphism */
     --border-color: rgba(255, 255, 255, 0.08);
     --border-highlight: rgba(255, 255, 255, 0.12);
@@ -49,23 +55,24 @@ body {
     line-height: 1.6;
     min-height: 100vh;
     position: relative;
-    overflow-x: hidden;
+    /* overflow-x: hidden; Removido porque rompe position: sticky en CSS */
     /** Patrón sutil estilo malla para darle textura al fondo **/
-    background-image: 
+    background-image:
         radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.08), transparent 25%),
         radial-gradient(circle at 85% 30%, rgba(14, 165, 233, 0.06), transparent 25%);
 }
 
-/* Navbar - Glassmorphism */
 .navbar {
     background: rgba(11, 14, 20, 0.8);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border-bottom: 1px solid var(--border-color);
-    padding: 1rem 0;
+    padding: 0.5rem 0;
+    /* Compacto, antes 1rem */
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 102;
+    /* Nav principal siempre por encima */
 }
 
 .nav-container {
@@ -119,6 +126,8 @@ body {
     padding: 0 2rem;
     position: relative;
     z-index: 1;
+    overflow: visible;
+    /* Asegura sticky */
 }
 
 .page-title {
@@ -192,7 +201,8 @@ body {
 }
 
 /* Forms */
-.scan-form, .neo4j-form {
+.scan-form,
+.neo4j-form {
     background: var(--bg-surface);
     backdrop-filter: var(--glass-blur);
     border: 1px solid var(--border-color);
@@ -423,9 +433,17 @@ body {
     line-height: 1.4;
 }
 
-.progress-messages .success { color: var(--success); }
-.progress-messages .error { color: var(--danger); }
-.progress-messages .info { color: var(--info); }
+.progress-messages .success {
+    color: var(--success);
+}
+
+.progress-messages .error {
+    color: var(--danger);
+}
+
+.progress-messages .info {
+    color: var(--info);
+}
 
 /* Tables */
 .table-container {
@@ -447,7 +465,8 @@ thead {
     border-bottom: 1px solid var(--border-color);
 }
 
-th, td {
+th,
+td {
     padding: 1.25rem 1.5rem;
     text-align: left;
     border-bottom: 1px solid var(--border-color);
@@ -508,9 +527,20 @@ tr:last-child td {
 }
 
 @keyframes pulse {
-    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
-    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    }
+
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
+    }
+
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    }
 }
 
 .status-failed {
@@ -572,7 +602,9 @@ tr:last-child td {
 }
 
 /* Utilities */
-.hidden { display: none !important; }
+.hidden {
+    display: none !important;
+}
 
 .loading {
     text-align: center;
@@ -629,25 +661,232 @@ tr:last-child td {
     background: rgba(255, 255, 255, 0.25);
 }
 
+/* ================================================================
+   ORG PHASE TABS — Barra de fases de organización
+   ================================================================ */
+
+/* Wrapper pegajoso principal */
+.org-sticky-wrapper {
+    position: sticky;
+    top: 56px;
+    /* Ajuste para debajo del navbar compacto */
+    z-index: 101;
+    margin: -2rem calc(50% - 50vw) 0;
+    padding: 0 calc(50vw - 50% + 2rem);
+    width: 100vw;
+    background: rgba(11, 14, 20, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Contenedor principal del header de organización */
+.org-phase-header {
+    background: transparent;
+    padding-top: 0.5rem;
+}
+
+/* Fila superior: nombre de org + back link */
+.org-phase-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.2rem 0 0;
+    /* Más compacto */
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.org-back-link {
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.org-back-link:hover {
+    color: var(--text-primary);
+    background: var(--bg-surface-hover);
+}
+
+.org-phase-icon {
+    font-size: 1.2rem;
+}
+
+.org-phase-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1rem;
+    letter-spacing: -0.2px;
+}
+
+/* Barra de pestañas de fases */
+.phase-tabs {
+    display: flex;
+    gap: 0;
+    padding-top: 0.5rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.phase-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.phase-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1.25rem;
+    /* Más compacto, antes 0.7rem */
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s ease;
+    position: relative;
+    cursor: pointer;
+    border-radius: 0;
+    user-select: none;
+}
+
+.phase-tab:hover:not(.phase-tab--disabled):not(.phase-tab--active) {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Tab activo: Inicio */
+.phase-tab--active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent-primary);
+    font-weight: 600;
+}
+
+/* Tab activo: Reconocimiento */
+.phase-tab--active.phase-tab--recon {
+    border-bottom-color: #06b6d4;
+    /* cyan */
+    color: #06b6d4;
+}
+
+.phase-tab--active.phase-tab--recon .phase-tab-icon {
+    filter: none;
+}
+
+/* Tab desactivado */
+.phase-tab--disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.phase-tab-icon {
+    font-size: 1rem;
+}
+
+.phase-tab-label {
+    font-size: 0.9rem;
+}
+
+.phase-tab-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+    padding: 0.1rem 0.4rem;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* ================================================================
+   SECTION TABS — Sub-tabs dentro de una fase (ej: Reconocimiento)
+   ================================================================ */
+
+.section-tabs {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 0.5rem 0 0;
+    /* padding horizontal limpio */
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    margin-top: 0;
+}
+
+.section-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.section-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 1rem;
+    /* Compacto, antes 0.45 */
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    white-space: nowrap;
+    border-radius: 6px 6px 0 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+    margin-bottom: -1px;
+    transition: all 0.2s ease;
+    position: relative;
+    background: transparent;
+}
+
+.section-tab:hover:not(.section-tab--active) {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.section-tab--active {
+    color: #06b6d4;
+    font-weight: 600;
+    background: rgba(6, 182, 212, 0.1);
+    border-color: rgba(6, 182, 212, 0.2);
+    border-bottom: 2px solid #06b6d4;
+}
+
+/* Separador visual entre el header de tabs y el contenido */
+.org-phase-header+.main-content>*:first-child,
+.section-tabs+* {
+    margin-top: 1.5rem;
+}
+
+/* ================================================================
+   Responsive para tabs
+   ================================================================ */
 /* Responsive */
 @media (max-width: 768px) {
     .nav-container {
         flex-direction: column;
         gap: 1rem;
     }
-    
+
     .nav-menu {
         width: 100%;
         justify-content: center;
         flex-wrap: wrap;
     }
-    
+
     .filters-section {
         flex-direction: column;
         align-items: stretch;
     }
-    
-    .scan-form, .neo4j-form {
+
+    .scan-form,
+    .neo4j-form {
         padding: 1.5rem;
     }
 

@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Exportar a Neo4j - ArsenalOT{% endblock %}
+{% block title %}Neo4j - {{ org_name }} | ArsenalOT{% endblock %}
 
 {% block content %}
-<div class="neo4j-page">
-    <h1 class="page-title">🔗 Exportar a Neo4j</h1>
+{% set active_phase = 'recon' %}
+{% set active_section = 'neo4j' %}
+{% include "org_tabs.html" %}
 
+<div class="neo4j-page" style="margin-top: 1.5rem;">
     <div class="info-box">
         <p>Esta herramienta exporta los resultados de los escaneos a una base de datos Neo4j para visualización en
             grafos.</p>
@@ -133,33 +135,7 @@
         </div>
     </div>
 
-    <!-- Capa de Post-Inteligencia -->
-    <div
-        style="margin-top: 1.5rem; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-        <h2
-            style="font-size: 1.15rem; color: #0369a1; margin-bottom: 0.75rem; border-bottom: 2px solid #bae6fd; padding-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-            🧠 Capa de Post-Inteligencia
-        </h2>
-
-        <p style="font-size: 0.95rem; color: #0c4a6e; margin-bottom: 1rem;">
-            Aplica consultas Cypher avanzadas sobre los datos ya exportados a Neo4j para correlacionar endpoints,
-            detectar dispositivos multi-segmento y vincular IPs a las redes personalizadas de la organización.
-        </p>
-
-        <div style="display: flex; gap: 1rem; align-items: center;">
-            <button type="button" class="btn btn-primary" id="btnPostIntel" onclick="runPostIntelligence()"
-                style="font-size: 0.95rem; padding: 0.6rem 1.5rem; background-color: #0284c7; border-color: #0284c7;">
-                🧪 Ejecutar Post-Inteligencia
-            </button>
-            <span id="postIntelSpinner" class="spinner hidden"
-                style="width: 20px; height: 20px; border-width: 3px; border-top-color: #0284c7;"></span>
-            <span id="postIntelStatusText" style="font-size: 0.9rem; color: #0369a1; font-weight: 500;"></span>
-        </div>
-
-        <div id="postIntelResults" class="hidden"
-            style="margin-top: 1rem; font-size: 0.85rem; background: #f0f9ff; padding: 0.75rem; border-radius: 4px; border: 1px solid #bae6fd; color: #0369a1; overflow-y: auto; max-height: 200px;">
-        </div>
-    </div>
+    <!-- Capa de Post-Inteligencia removida a petición del usuario -->
 
     <details
         style="margin-top: 1.5rem; background: #fee2e2; border: 2px solid #ef4444; border-radius: 6px; overflow: hidden;">
@@ -183,161 +159,9 @@
         </div>
     </details>
 
-    <!-- Cargar Dashboard Neo4j -->
-    <div class="glass-card" style="margin-top: 1.5rem; padding: 1.5rem;">
-        <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">📊 Dashboard
-            Neo4j</h3>
-        <p style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--text-secondary);">
-            Visualiza estadísticas y gráficos interactivos de los datos en Neo4j.
-        </p>
-        <button type="button" id="loadDashboardBtn" class="btn"
-            style="background: #4ECDC4; color: white; padding: 0.6rem 1.5rem; font-size: 0.95rem;" disabled>
-            📊 Cargar Dashboard
-        </button>
-    </div>
+    <!-- Dashboard Neo4j removido (NeoDash preferido) -->
 
-    <!-- Dashboard Neo4j -->
-    <div id="neo4jDashboard" style="margin-top: 3rem; display: none;">
-        <h2 class="page-title" style="margin-bottom: 1.5rem;">📊 Dashboard Neo4j</h2>
-
-        <div
-            style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
-            <div
-                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                <div>
-                    <label style="font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 500; display: block;">Filtrar
-                        por Organización</label>
-                    <select id="dashboardOrgFilter" style="width: 100%; padding: 0.5rem; font-size: 0.9rem;">
-                        <option value="">Todas las organizaciones</option>
-                    </select>
-                </div>
-                <div style="display: flex; align-items: flex-end;">
-                    <button onclick="loadDashboard()" class="btn btn-primary"
-                        style="padding: 0.6rem 1.5rem; font-size: 0.9rem;">
-                        🔄 Actualizar Dashboard
-                    </button>
-                </div>
-            </div>
-
-            <!-- Estadísticas generales -->
-            <div id="dashboardStats"
-                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
-                <!-- Se llenará dinámicamente -->
-            </div>
-        </div>
-
-        <!-- Gráficos -->
-        <div
-            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-            <div class="glass-card" style="padding: 1.5rem;">
-                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🏢 Hosts
-                    por Organización</h3>
-                <canvas id="hostsByOrgChart" style="max-height: 300px;"></canvas>
-            </div>
-
-            <div class="glass-card" style="padding: 1.5rem;">
-                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🔌 Top
-                    Puertos</h3>
-                <canvas id="topPortsChart" style="max-height: 300px;"></canvas>
-            </div>
-
-            <div class="glass-card" style="padding: 1.5rem;">
-                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">⚠️
-                    Vulnerabilidades por Severidad</h3>
-                <canvas id="vulnsBySeverityChart" style="max-height: 300px;"></canvas>
-            </div>
-
-            <div class="glass-card" style="padding: 1.5rem;">
-                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🔧 Top
-                    Servicios</h3>
-                <canvas id="topServicesChart" style="max-height: 300px;"></canvas>
-            </div>
-        </div>
-
-        <!-- Grafos adicionales -->
-        <div
-            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-            <div class="glass-card" style="padding: 1.5rem;">
-                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🔗
-                    Dispositivos Similares</h3>
-                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                    IPs agrupadas por puertos y servicios similares que probablemente sean el mismo tipo de activo
-                </p>
-                <div id="similarDevicesGraph"
-                    style="width: 100%; height: 600px; border: 1px solid var(--border-color); border-radius: 6px; background: white;">
-                </div>
-            </div>
-
-            <div class="glass-card" style="padding: 1.5rem;">
-                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">📍 IPs
-                    en Múltiples Ubicaciones</h3>
-                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                    IPs descubiertas en diferentes ubicaciones de la misma organización
-                </p>
-                <div id="duplicateIPsGraph"
-                    style="width: 100%; height: 600px; border: 1px solid var(--border-color); border-radius: 6px; background: white;">
-                </div>
-            </div>
-        </div>
-
-        <!-- Grafo de Red -->
-        <div class="glass-card" style="padding: 1.5rem; margin-bottom: 2rem;">
-            <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem; color: var(--accent-yellow);">🕸️ Grafo de Red Interactivo
-            </h3>
-
-            <!-- Filtros de nodos -->
-            <div
-                style="margin-bottom: 1rem; padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 6px; border: 1px solid var(--border-color);">
-                <p style="margin: 0 0 0.75rem 0; font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">
-                    <strong>Filtrar tipos de nodos:</strong>
-                </p>
-                <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center;">
-                    <label
-                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
-                        <input type="checkbox" class="node-filter" data-type="ORG" checked style="cursor: pointer;">
-                        <span style="color: #00BFFF;">●</span> Organizaciones
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
-                        <input type="checkbox" class="node-filter" data-type="SEG" checked style="cursor: pointer;">
-                        <span style="color: #4ECDC4;">●</span> Segmentos
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
-                        <input type="checkbox" class="node-filter" data-type="Subred" checked style="cursor: pointer;">
-                        <span style="color: #9B59B6;">●</span> Subredes
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
-                        <input type="checkbox" class="node-filter" data-type="IP" checked style="cursor: pointer;">
-                        <span style="color: #F38181;">●</span> IPs
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
-                        <input type="checkbox" class="node-filter" data-type="Port" checked style="cursor: pointer;">
-                        <span style="color: #FFE66D;">●</span> Puertos
-                    </label>
-                    <button type="button" id="fitGraphBtn" class="btn"
-                        style="background: #4ECDC4; color: white; padding: 0.35rem 0.6rem; font-size: 1rem; margin-left: auto; line-height: 1; min-width: 32px;"
-                        title="Ajustar vista al contenido">
-                        ⛶
-                    </button>
-                    <button type="button" id="selectAllNodesBtn" class="btn"
-                        style="background: #6B7280; color: white; padding: 0.4rem 0.8rem; font-size: 0.85rem;">
-                        Seleccionar Todos
-                    </button>
-                    <button type="button" id="deselectAllNodesBtn" class="btn"
-                        style="background: #6B7280; color: white; padding: 0.4rem 0.8rem; font-size: 0.85rem;">
-                        Deseleccionar Todos
-                    </button>
-                </div>
-            </div>
-
-            <div id="networkGraph"
-                style="height: 600px; border: 1px solid var(--border-color); border-radius: 4px; background: white;">
-            </div>
-        </div>
-    </div>
+    <!-- Dashboard Neo4j y Grafos removidos a petición del usuario -->
 </div>
 
 <!-- Chart.js -->

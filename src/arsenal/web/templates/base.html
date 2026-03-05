@@ -21,12 +21,8 @@
                 </a>
             </div>
             <ul class="nav-menu">
-                {% if org_name and '/recon' in request.url.path %}
-                <li><a href="/pentest/{{ org_name | urlencode }}/recon" class="nav-link">Dashboard (Recon)</a></li>
-                <li><a href="/pentest/{{ org_name | urlencode }}/recon/scan" class="nav-link">Nuevo Escaneo</a></li>
-                <li><a href="/pentest/{{ org_name | urlencode }}/recon/results" class="nav-link">Resultados</a></li>
-                <li><a href="/pentest/{{ org_name | urlencode }}/recon/neo4j" class="nav-link">Neo4j</a></li>
-                {% endif %}
+                <li><a href="/" class="nav-link">Dashboard</a></li>
+                <li><a href="/pentest" class="nav-link">Organizaciones</a></li>
             </ul>
         </div>
     </nav>

@@ -19,6 +19,7 @@ class ScanConfig(BaseModel):
     custom_ports: Optional[str] = None
     custom_nmap_command: Optional[str] = None
     custom_host_discovery_command: Optional[str] = None
+    ioxid: bool = False
     screenshots: bool = False
     source_code: bool = False
     # Opciones para escaneos pasivos
@@ -36,3 +37,9 @@ class NetworkCreateRequest(BaseModel):
     network_name: str
     network_range: str
     system_name: Optional[str] = None
+
+class CriticalDeviceRequest(BaseModel):
+    organization: str
+    name: str
+    ips: str         # IPs separadas por comas: "192.168.1.1, 10.0.0.5"
+    reason: str

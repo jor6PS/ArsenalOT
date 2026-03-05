@@ -1,9 +1,11 @@
+import csv
+import io
 import sqlite3
 from typing import Optional
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
-from arsenal.web.core.models import NetworkCreateRequest
+from arsenal.web.core.models import NetworkCreateRequest, CriticalDeviceRequest
 from arsenal.web.core.deps import storage
 
 router = APIRouter()
@@ -251,3 +253,139 @@ async def delete_network(network_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error eliminando red: {str(e)}")
+
+
+# ------------------------------------------------------------------ #
+#  DISPOSITIVOS CRÍTICOS                                              #
+# ------------------------------------------------------------------ #
+
+@router.get("/api/critical-devices")
+async def get_critical_devices(organization: str):
+    """Obtiene los dispositivos críticos de una organización."""
+    try:
+        devices = storage.get_critical_devices(organization)
+        return devices
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/critical-devices")
+async def create_critical_device(req: CriticalDeviceRequest):
+    """Añade un dispositivo crítico."""
+    try:
+        new_id = storage.add_critical_device(
+            organization=req.organization,
+            name=req.name,
+            ips=req.ips,
+            reason=req.reason,
+        )
+        return {"status": "success", "id": new_id, "message": "Dispositivo crítico añadido"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/api/critical-devices/{device_id}")
+async def delete_critical_device(device_id: int):
+    """Elimina un dispositivo crítico por ID."""
+    try:
+        deleted = storage.delete_critical_device(device_id)
+        if deleted:
+            return {"status": "success", "message": "Dispositivo crítico eliminado"}
+        raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ------------------------------------------------------------------ #
+#  EXPORT CSV DE RESULTADOS                                           #
+# ------------------------------------------------------------------ #
+
+@router.get("/api/results/export-csv")
+async def export_results_csv(
+    organization: Optional[str] = None,
+    location: Optional[str] = None,
+    scan_id: Optional[int] = None,
+):
+    """Exporta los resultados filtrados en formato CSV."""
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    cursor = conn.cursor()
+
+    where = "WHERE 1=1"
+    params = []
+    if organization:
+        where += " AND s.organization_name = ?"
+        params.append(organization.upper())
+    if location:
+        where += " AND s.location = ?"
+        params.append(location.upper())
+    if scan_id:
+        where += " AND sr.scan_id = ?"
+        params.append(scan_id)
+
+    query = f"""
+        SELECT
+            h.ip_address,
+            h.hostname,
+            sr.port,
+            sr.protocol,
+            sr.service_name,
+            sr.product,
+            sr.version,
+            s.organization_name,
+            s.location,
+            sr.discovery_method,
+            s.id AS scan_id
+        FROM scan_results sr
+        JOIN hosts h ON h.id = sr.host_id
+        JOIN scans s ON s.id = sr.scan_id
+        {where}
+        ORDER BY h.ip_address, sr.port
+    """
+    rows = cursor.execute(query, params).fetchall()
+    
+    # Obtener IPs críticas para marcar en el CSV
+    critical_ips = set()
+    if organization:
+        crit_devs = storage.get_critical_devices(organization)
+        for d in crit_devs:
+            for ip in d['ips'].split(','):
+                ip_clean = ip.strip()
+                if ip_clean:
+                    critical_ips.add(ip_clean)
+
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["IP", "Hostname", "Puerto", "Protocolo", "Servicio",
+                     "Producto", "Versión", "Organización", "Ubicación",
+                     "Origen Descubrimiento", "Scan ID", "Crítico"])
+    for row in rows:
+        writer.writerow([
+            row["ip_address"] or "",
+            row["hostname"] or "",
+            row["port"] or "",
+            row["protocol"] or "",
+            row["service_name"] or "",
+            row["product"] or "",
+            row["version"] or "",
+            row["organization_name"] or "",
+            row["location"] or "",
+            row["discovery_method"] or "",
+            row["scan_id"] or "",
+            "SÍ" if row["ip_address"] in critical_ips else "No"
+        ])
+
+    csv_content = output.getvalue()
+    org_label = (organization or "all").lower()
+    filename = f"resultados_{org_label}.csv"
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers=headers,
+    )

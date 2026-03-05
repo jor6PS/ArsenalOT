@@ -15,17 +15,28 @@ Esta herramienta permite no solo obtener información detallada sobre los puerto
 ## Requisitos e Instalación
 
 ### 1. Dependencias del Sistema (Linux)
-Se requiere tener instaladas las siguientes herramientas en tu sistema operativo:
+ArsenalOT requiere varias herramientas del sistema para funcionar al 100%. Ejecuta los siguientes comandos en tu terminal Linux:
 
-**Críticas:**
-- **`nmap`** (Obligatorio para los escaneos activos de puertos y de servicios).
+**Instalación unificada:**
+```bash
+sudo apt-get update
+sudo apt-get install -y nmap tshark arp-scan firefox-esr
+```
 
-**Recomendadas/Opcionales:**
-- **`arp-scan`** (Mejora radicalmente el descubrimiento local de hosts mediante peticiones por debajo de la capa de red).
-- **`tshark` / Wireshark** (Necesario para escaneos pasivos y capturar tráfico real de los protocolos de red).
-- **`firefox` y `geckodriver`** (Usado de forma interna para obtener capturas de pantalla automáticas de los servicios web descubiertos en la red).
+**Herramientas incluidas:**
+- **`nmap`** (Crítico): Escaneo de puertos y servicios.
+- **`tshark`** (Opcional): Captura pasiva de tráfico.
+- **`arp-scan`** (Opcional): Descubrimiento rápido en red local.
+- **`firefox-esr`** (Opcional): Necesario para capturas de pantalla automáticas.
 
-Puedes validar el estado de tus dependencias ejecutando en tu terminal nuestro comando asistente:
+**Configuración de permisos para tshark:**
+Durante la instalación de `tshark`, selecciona **SÍ** cuando pregunte si los usuarios sin privilegios pueden capturar paquetes. Luego añade tu usuario al grupo:
+```bash
+sudo usermod -a -G wireshark $USER
+```
+*(Es posible que sea necesario cerrar sesión y volver a entrar para que el cambio de grupo surta efecto).*
+
+Puedes validar el estado de tus dependencias ejecutando:
 ```bash
 python3 check_dependencies.py
 ```

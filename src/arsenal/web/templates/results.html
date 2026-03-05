@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Resultados - ArsenalOT{% endblock %}
+{% block title %}Resultados - {{ org_name }} | ArsenalOT{% endblock %}
 
 {% block content %}
-<div class="results-page">
-    <h1 class="page-title">📊 Resultados de Escaneos</h1>
+{% set active_phase = 'recon' %}
+{% set active_section = 'results' %}
+{% include "org_tabs.html" %}
 
+<div class="results-page" style="margin-top: 1.5rem;">
     <!-- Estadísticas -->
     <!-- Estadísticas -->
     <div class="stats-grid glass-card" style="margin-bottom: 2rem; padding: 1.5rem;">
@@ -135,6 +137,10 @@
             </select>
             <input type="text" id="columnFilterValue" placeholder="Valor a filtrar..."
                 style="padding: 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; min-width: 150px;">
+            <button onclick="exportCSV()" class="btn btn-success"
+                style="padding: 0.75rem 1.1rem; white-space: nowrap; display: flex; align-items: center; gap: 0.4rem;">
+                📅 Exportar CSV
+            </button>
         </div>
 
         <table id="resultsTable">
@@ -156,6 +162,8 @@
                     </th>
                     <th class="sortable" data-column="has_source_code">Web Source <span class="sort-indicator">⇅</span>
                     </th>
+                    <th>Interfaces</th>
+                    <th class="sortable" data-column="is_critical">Crítico <span class="sort-indicator">⇅</span></th>
                 </tr>
             </thead>
             <tbody id="resultsBody">
@@ -168,6 +176,36 @@
 </div>
 
 <script>
+    // Set of critical IPs loaded once from API
+    let criticalIps = new Set();
+
+    async function loadCriticalIps() {
+        const org = "{{ org_name | default('') }}";
+        if (!org) return;
+        try {
+            const resp = await fetch(`/api/critical-devices?organization=${encodeURIComponent(org)}`);
+            const devices = await resp.json();
+            criticalIps = new Set();
+            devices.forEach(d => {
+                d.ips.split(',').forEach(ip => {
+                    const t = ip.trim();
+                    if (t) criticalIps.add(t);
+                });
+            });
+        } catch (e) { console.error('Error cargando IPs críticas:', e); }
+    }
+
+    function exportCSV() {
+        const org = document.getElementById('filterOrg').value;
+        const loc = document.getElementById('filterLocation') ? document.getElementById('filterLocation').value : '';
+        const scan = document.getElementById('filterScan').value;
+        const params = new URLSearchParams();
+        if (org) params.append('organization', org);
+        if (loc) params.append('location', loc);
+        if (scan) params.append('scan_id', scan);
+        window.location.href = `/api/results/export-csv?${params}`;
+    }
+
     async function loadOrganizations() {
         try {
             const orgNameContext = "{{ org_name | default('') }}";
@@ -254,6 +292,9 @@
         if (scanId) params.append('scan_id', scanId);
 
         try {
+            // Cargar IPs críticas primero para el marcado de filas
+            await loadCriticalIps();
+
             const response = await fetch(`/api/results?${params}`);
             allResults = await response.json();
 
@@ -336,12 +377,22 @@
             });
         }
 
-        // Renderizar resultados
+        // Renderizar resultados con scroll infinito o paginación si es necesario, pero aquí es tabla simple
         const tbody = document.getElementById('resultsBody');
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="12" class="empty">No hay resultados</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13" class="empty">No hay resultados</td></tr>';
         } else {
             tbody.innerHTML = filtered.map(r => {
+                // Formatear Interfaces
+                let interfacesHtml = '-';
+                if (r.interfaces_json) {
+                    try {
+                        const interfaces = JSON.parse(r.interfaces_json);
+                        if (Array.isArray(interfaces) && interfaces.length > 0) {
+                            interfacesHtml = `<div class="interfaces-list">${interfaces.map(ip => `<span class="interface-badge">${ip}</span>`).join('')}</div>`;
+                        }
+                    } catch (e) { console.error('Error parsing interfaces_json:', e); }
+                }
                 // Botón de screenshot (solo si hay puerto)
                 let screenshotButton = '-';
                 if (r.has_screenshot && r.port) {
@@ -373,9 +424,14 @@
                     discoveryMethodDisplay = methodLabels[r.discovery_method] || r.discovery_method;
                 }
 
+                // Dispositivo crítico (priorizar flag de la API, fallback a local)
+                const isCritical = r.is_critical || criticalIps.has(r.ip_address);
+                const rowStyle = isCritical ? ' style="border-left: 3px solid #ef4444; background: rgba(239,68,68,0.05);"' : '';
+                const criticalBadge = isCritical ? ' <span title="Dispositivo Crítico" style="color:#ef4444;font-size:0.9rem;">🚨</span>' : '';
+
                 return `
-                    <tr>
-                        <td>${r.ip_address || '-'}</td>
+                    <tr${rowStyle}>
+                        <td>${r.ip_address || '-'}${criticalBadge}</td>
                         <td>${r.hostname || '-'}</td>
                         <td>${portDisplay}</td>
                         <td>${protocolDisplay}</td>
@@ -387,6 +443,8 @@
                         <td>${discoveryMethodDisplay}</td>
                         <td style="text-align: center;">${screenshotButton}</td>
                         <td style="text-align: center;">${sourceButton}</td>
+                        <td style="font-size: 0.85rem;">${interfacesHtml}</td>
+                        <td style="text-align: center;">${r.is_critical ? '🚨 SÍ' : 'No'}</td>
                     </tr>
                 `;
             }).join('');
@@ -978,6 +1036,22 @@
 
     .modal-body {
         padding: 1rem;
+    }
+
+    .interfaces-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        max-width: 250px;
+    }
+
+    .interface-badge {
+        background: #1e293b;
+        color: #60a5fa;
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        border: 1px solid #334155;
     }
 </style>
 {% endblock %}

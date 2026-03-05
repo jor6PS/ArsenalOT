@@ -124,9 +124,22 @@ class ScanStorage:
         except sqlite3.OperationalError:
             pass  # Columna ya existe
 
+        # Tabla de dispositivos críticos
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS critical_devices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_name TEXT NOT NULL,
+                name TEXT NOT NULL,
+                ips TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (organization_name) REFERENCES organizations(name) ON DELETE CASCADE
+            )
+        """)
+
         
         # Agregar columnas nuevas si no existen (migración)
-        for col in ['hostnames_json', 'mac_address', 'vendor', 'os_info_json', 'host_scripts_json']:
+        for col in ['hostnames_json', 'mac_address', 'vendor', 'os_info_json', 'host_scripts_json', 'interfaces_json']:
             try:
                 cursor.execute(f"ALTER TABLE hosts ADD COLUMN {col} TEXT")
             except sqlite3.OperationalError:
@@ -1157,4 +1170,82 @@ class ScanStorage:
             "orphaned_vulns_deleted": orphaned_vulns,
             "orphaned_enrichments_deleted": orphaned_enrichments
         }
+
+    # ------------------------------------------------------------------ #
+    #  DISPOSITIVOS CRÍTICOS                                               #
+    # ------------------------------------------------------------------ #
+
+    def get_critical_devices(self, organization: str) -> List[dict]:
+        """Devuelve los dispositivos críticos de una organización."""
+        conn = self._get_connection()
+        rows = conn.execute(
+            """SELECT id, organization_name, name, ips, reason, created_at
+               FROM critical_devices
+               WHERE organization_name = ?
+               ORDER BY created_at DESC""",
+            (organization.upper(),)
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    def add_critical_device(self, organization: str, name: str,
+                            ips: str, reason: str) -> int:
+        """Añade un dispositivo crítico. Devuelve el id insertado."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute(
+            "INSERT OR IGNORE INTO organizations (name, description) VALUES (?, '')",
+            (organization.upper(),)
+        )
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO critical_devices (organization_name, name, ips, reason)
+               VALUES (?, ?, ?, ?)""",
+            (organization.upper(), name, ips.strip(), reason)
+        )
+        new_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return new_id
+
+    def delete_critical_device(self, device_id: int) -> bool:
+        """Elimina un dispositivo crítico por id. Devuelve True si se borró."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        rows = conn.execute(
+            "DELETE FROM critical_devices WHERE id = ?", (device_id,)
+        ).rowcount
+        conn.commit()
+        conn.close()
+        return rows > 0
+
+    def get_critical_ips_for_org(self, organization: str) -> set:
+        """Devuelve un set de todas las IPs críticas de la organización."""
+        devices = self.get_critical_devices(organization)
+        ips = set()
+        for d in devices:
+            for ip in d["ips"].split(","):
+                ip = ip.strip()
+                if ip:
+                    ips.add(ip)
+        return ips
+
+    def add_host_interfaces(self, ip_address: str, interfaces: List[str]):
+        """Agrega o actualiza la lista de interfaces de red adicionales para un host."""
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            interfaces_json = json.dumps(interfaces)
+            
+            cursor.execute("""
+                UPDATE hosts 
+                SET interfaces_json = ?, last_seen = CURRENT_TIMESTAMP
+                WHERE ip_address = ?
+            """, (interfaces_json, ip_address))
+            
+            conn.commit()
+        finally:
+            conn.close()
+
 

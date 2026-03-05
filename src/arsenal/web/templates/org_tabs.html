@@ -1,0 +1,72 @@
+{#
+Partial: org_tabs.html
+Variables esperadas:
+- org_name: str — nombre de la organización
+- active_phase: str — 'inicio' | 'recon' | 'acceso' | 'explotacion'
+- active_section: str (opcional) — para sub-tabs de recon: 'dashboard' | 'scan' | 'results' | 'neo4j'
+#}
+
+{# ---- BARRA DE FASES ---- #}
+<div class="org-sticky-wrapper">
+  <div class="org-phase-header">
+    <div class="org-phase-title">
+      <a href="/pentest" class="org-back-link" title="Volver a organizaciones">⬅</a>
+      <span class="org-phase-icon">🏢</span>
+      <span class="org-phase-name">{{ org_name }}</span>
+    </div>
+
+    <nav class="phase-tabs">
+      <a href="/pentest/{{ org_name | urlencode }}"
+        class="phase-tab {% if active_phase == 'inicio' %}phase-tab--active{% endif %}">
+        <span class="phase-tab-icon">🏠</span>
+        <span class="phase-tab-label">Inicio</span>
+      </a>
+
+      <a href="/pentest/{{ org_name | urlencode }}/recon"
+        class="phase-tab {% if active_phase == 'recon' %}phase-tab--active phase-tab--recon{% endif %}">
+        <span class="phase-tab-icon">🔍</span>
+        <span class="phase-tab-label">Reconocimiento</span>
+      </a>
+
+      <span class="phase-tab phase-tab--disabled" title="En desarrollo">
+        <span class="phase-tab-icon">🔓</span>
+        <span class="phase-tab-label">Acceso Inicial</span>
+        <span class="phase-tab-badge">Próx.</span>
+      </span>
+
+      <span class="phase-tab phase-tab--disabled" title="En desarrollo">
+        <span class="phase-tab-icon">💣</span>
+        <span class="phase-tab-label">Explotación</span>
+        <span class="phase-tab-badge">Próx.</span>
+      </span>
+
+      <span class="phase-tab phase-tab--disabled" title="En desarrollo">
+        <span class="phase-tab-icon">📈</span>
+        <span class="phase-tab-label">Post-Explotación</span>
+        <span class="phase-tab-badge">Próx.</span>
+      </span>
+    </nav>
+  </div>
+
+  {# ---- SUB-TABS DE RECONOCIMIENTO (solo si estamos en esa fase) ---- #}
+  {% if active_phase == 'recon' %}
+  <nav class="section-tabs">
+    <a href="/pentest/{{ org_name | urlencode }}/recon"
+      class="section-tab {% if active_section == 'dashboard' %}section-tab--active{% endif %}">
+      <span>📊</span> Dashboard
+    </a>
+    <a href="/pentest/{{ org_name | urlencode }}/recon/scan"
+      class="section-tab {% if active_section == 'scan' %}section-tab--active{% endif %}">
+      <span>🚀</span> Nuevo Escaneo
+    </a>
+    <a href="/pentest/{{ org_name | urlencode }}/recon/results"
+      class="section-tab {% if active_section == 'results' %}section-tab--active{% endif %}">
+      <span>📋</span> Resultados
+    </a>
+    <a href="/pentest/{{ org_name | urlencode }}/recon/neo4j"
+      class="section-tab {% if active_section == 'neo4j' %}section-tab--active{% endif %}">
+      <span>🕸️</span> Neo4j
+    </a>
+  </nav>
+  {% endif %}
+</div>

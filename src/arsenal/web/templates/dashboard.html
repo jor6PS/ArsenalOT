@@ -1,49 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - ArsenalOT{% endblock %}
+{% block title %}Dashboard Reconocimiento - {{ org_name }} | ArsenalOT{% endblock %}
 
 {% block content %}
-<div class="dashboard">
-    <!-- Header de Organización Rediseñado -->
-    <div class="org-header glass-card"
-        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; padding: 1.5rem; border-left: 4px solid var(--accent-cyan);">
-        <div>
-            <h1
-                style="margin: 0; font-size: 2.2rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.75rem;">
-                🏢
-                {% if org_name %}
-                {{ org_name }}
-                <input type="hidden" id="filterOrg" value="{{ org_name }}">
-                {% else %}
-                Global Dashboard
-                <input type="hidden" id="filterOrg" value="">
-                {% endif %}
-            </h1>
-            <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 1rem;">
-                Panel de Reconocimiento y Gestión de Activos
-            </p>
-        </div>
+{% set active_phase = 'recon' %}
+{% set active_section = 'dashboard' %}
+{% include "org_tabs.html" %}
 
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end;">
-            <button class="btn btn-primary" onclick="exportData()"
-                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
-                <span>📥</span> Exportar Datos
-            </button>
-            <button class="btn btn-success" onclick="document.getElementById('importFileInput').click()"
-                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
-                <span>📤</span> Importar
-            </button>
-
-            {% if org_name %}
-            <button id="deleteOrgBtn" class="btn btn-danger" onclick="deleteOrganization()"
-                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
-                <span>🗑️</span> Eliminar Org.
-            </button>
-            {% endif %}
-            <input type="file" id="importFileInput" accept=".zip" style="display: none;" onchange="importData(event)">
-        </div>
-    </div>
-
+<div class="dashboard" style="margin-top: 1.5rem;">
+    <input type="hidden" id="filterOrg" value="{{ org_name }}">
     <!-- Panel de Redes -->
     <div class="networks-section glass-card" style="margin-bottom: 2rem; padding: 1.5rem;">
         <h3
@@ -83,6 +48,43 @@
                 </div>
                 <div id="networksList" style="display: flex; flex-direction: column; gap: 1rem;">
                     <div class="loading">Cargando redes...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dispositivos Críticos -->
+    <div class="glass-card" style="margin-bottom: 2rem; padding: 1.5rem; border-left: 3px solid #ef4444;">
+        <h3
+            style="margin-top: 0; margin-bottom: 1.5rem; color: #f87171; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+            <span>🚨</span> Dispositivos Críticos
+        </h3>
+        <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+            <!-- Formulario -->
+            <div
+                style="flex: 1; min-width: 250px; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid #3f1212;">
+                <h4 style="margin-top: 0; font-size: 1rem; color: var(--text-primary); margin-bottom: 1rem;">Añadir
+                    Dispositivo Crítico</h4>
+                <form id="addCriticalForm" onsubmit="event.preventDefault(); addCriticalDevice();"
+                    style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <input type="text" id="criticalName" placeholder="Nombre (ej. PLC Línea 1)" required
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                    <input type="text" id="criticalIps"
+                        placeholder="IPs separadas por coma (ej. 192.168.1.10, 10.0.0.5)" required
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                    <textarea id="criticalReason" placeholder="Motivo de criticidad (ej. Controla válvulas de planta)"
+                        required rows="2"
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; resize: vertical;"></textarea>
+                    <button type="submit" class="btn"
+                        style="margin-top: 0.5rem; padding: 0.6rem; background: #991b1b; color: white; border-color: #ef4444;">
+                        🚨 Añadir Dispositivo Crítico
+                    </button>
+                </form>
+            </div>
+            <!-- Lista -->
+            <div style="flex: 2; min-width: 300px;">
+                <div id="criticalDevicesList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div class="loading">Cargando dispositivos críticos...</div>
                 </div>
             </div>
         </div>
@@ -929,7 +931,6 @@
         document.getElementById('filterScan').value = '';
         loadLocations(org || null);
         loadScans(org || null, null);
-        updateDeleteButtons();
         applyFilters();
     });
 
@@ -941,26 +942,18 @@
         currentFilters.scan_id = '';
         document.getElementById('filterScan').value = '';
         loadScans(org || null, location || null);
-        updateDeleteButtons();
         applyFilters();
     });
 
     // Actualizar cuando cambia el escaneo
     document.getElementById('filterScan').addEventListener('change', function () {
         currentFilters.scan_id = this.value;
-        updateDeleteButtons();
         applyFilters();
     });
 
     // Actualizar visibilidad de botones de eliminación
     function updateDeleteButtons() {
-        const org = document.getElementById('filterOrg').value;
-        const location = document.getElementById('filterLocation').value;
-        const scanId = document.getElementById('filterScan').value;
-
-        document.getElementById('deleteOrgBtn').style.display = org ? 'block' : 'none';
-        document.getElementById('deleteLocationBtn').style.display = (org && location) ? 'block' : 'none';
-        document.getElementById('deleteScanBtn').style.display = scanId ? 'block' : 'none';
+        // Obsoleto: los botones de eliminación han sido movidos a pentest_phases.html
     }
 
     // Función para eliminar organización
@@ -1304,6 +1297,74 @@
     // Check initial state
     checkDockerService('neo4j');
     checkDockerService('neodash');
+
+    // ------------------------------------------------------------------ //
+    //  DISPOSITIVOS CRÍTICOS                                               //
+    // ------------------------------------------------------------------ //
+
+    async function loadCriticalDevices() {
+        const org = currentFilters.organization || "{{ org_name | default('') }}";
+        if (!org) {
+            document.getElementById('criticalDevicesList').innerHTML =
+                '<div style="color: var(--text-secondary); font-size: 0.9rem;">Selecciona una organización para ver los dispositivos críticos.</div>';
+            return;
+        }
+        try {
+            const resp = await fetch(`/api/critical-devices?organization=${encodeURIComponent(org)}`);
+            const devices = await resp.json();
+            const container = document.getElementById('criticalDevicesList');
+            if (!devices.length) {
+                container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.9rem;">No hay dispositivos críticos registrados.</div>';
+                return;
+            }
+            container.innerHTML = devices.map(d => `
+                <div style="background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; padding: 1rem; position: relative;">
+                    <button onclick="deleteCriticalDevice(${d.id})" title="Eliminar"
+                        style="position: absolute; top: 0.6rem; right: 0.6rem; background: none; border: none; color: #f87171; cursor: pointer; font-size: 1rem;">🗑️</button>
+                    <div style="font-weight: 600; color: #f87171; margin-bottom: 0.3rem;">🚨 ${d.name}</div>
+                    <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8; margin-bottom: 0.4rem;">${d.ips}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">${d.reason}</div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Error cargando dispositivos críticos:', e);
+        }
+    }
+
+    async function addCriticalDevice() {
+        const org = currentFilters.organization || "{{ org_name | default('') }}";
+        if (!org) { alert('Selecciona una organización primero.'); return; }
+        const name = document.getElementById('criticalName').value.trim();
+        const ips = document.getElementById('criticalIps').value.trim();
+        const reason = document.getElementById('criticalReason').value.trim();
+        if (!name || !ips || !reason) return;
+        try {
+            const resp = await fetch('/api/critical-devices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ organization: org, name, ips, reason })
+            });
+            if (!resp.ok) throw new Error(await resp.text());
+            document.getElementById('addCriticalForm').reset();
+            loadCriticalDevices();
+        } catch (e) {
+            alert('❌ Error añadiendo dispositivo crítico: ' + e.message);
+        }
+    }
+
+    async function deleteCriticalDevice(id) {
+        if (!confirm('¿Eliminar este dispositivo crítico?')) return;
+        try {
+            const resp = await fetch(`/api/critical-devices/${id}`, { method: 'DELETE' });
+            if (!resp.ok) throw new Error(await resp.text());
+            loadCriticalDevices();
+        } catch (e) {
+            alert('❌ Error eliminando dispositivo crítico: ' + e.message);
+        }
+    }
+
+    // Cargar dispositivos críticos al iniciar
+    loadCriticalDevices();
 
 </script>
 {% endblock %}

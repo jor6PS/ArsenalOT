@@ -75,6 +75,7 @@ from arsenal.web.core.websockets import ConnectionManager, manager
 
 from arsenal.web.core.deps import storage, running_scans, running_processes
 from arsenal.web.routes.api import router as api_router
+from arsenal.web.routes import scans as scans_module
 from arsenal.web.routes.scans import router as scans_router
 from arsenal.web.routes.export_import import router as export_import_router
 
@@ -277,27 +278,26 @@ async def start_scan(config: ScanConfig):
         scan_mode=config.scan_mode
     )
     
-    # Iniciar escaneo en background según el modo
+    # Registrar en diccionarios de ejecución según el tipo
     if config.scan_mode == "passive":
-        scan_thread = threading.Thread(
-            target=run_passive_scan_background,
-            args=(scan_id, config, str(scan_id)),
-            daemon=True
-        )
+        target_func = scans_module.run_passive_scan_background
     else:
-        scan_thread = threading.Thread(
-            target=run_scan_background,
-            args=(scan_id, config, str(scan_id)),
-            daemon=True
-        )
+        target_func = scans_module.run_scan_background
+
+    scan_thread = threading.Thread(
+        target=target_func,
+        args=(scan_id, config, str(scan_id)),
+        daemon=True
+    )
     scan_thread.start()
     running_scans[str(scan_id)] = scan_thread
     
     return {"scan_id": scan_id, "status": "started", "mode": config.scan_mode}
 
-@app.post("/api/scan/{scan_id}/cancel")
-async def cancel_scan(scan_id: int):
-    """Cancela un escaneo en ejecución (activo o pasivo)."""
+
+@app.post("/api/scan/{scan_id}/stop")
+async def stop_scan(scan_id: int):
+    """Detiene un escaneo en ejecución sin borrarlo."""
     scan_id_str = str(scan_id)
     
     # Verificar si el escaneo está en ejecución
@@ -314,9 +314,9 @@ async def cancel_scan(scan_id: int):
         if scan['status'] != 'running':
             raise HTTPException(status_code=400, detail=f"El escaneo no está en ejecución (estado: {scan['status']})")
         
-        # Si no está en running_processes pero está running, marcar como cancelado
-        storage.complete_scan(scan_id, error_message="Escaneo cancelado por el usuario")
-        return {"status": "success", "message": "Escaneo cancelado"}
+        # Si no está en running_processes pero está running, marcar como detenido
+        storage.complete_scan(scan_id, error_message="Escaneo detenido por el usuario")
+        return {"status": "success", "message": "Escaneo detenido"}
     
     # Obtener el proceso
     process = running_processes[scan_id_str]
@@ -329,8 +329,8 @@ async def cancel_scan(scan_id: int):
         except:
             process.kill()
         
-        # Marcar como cancelado en la BD
-        storage.complete_scan(scan_id, error_message="Escaneo cancelado por el usuario")
+        # Marcar como detenido en la BD
+        storage.complete_scan(scan_id, error_message="Escaneo detenido por el usuario")
         
         # Limpiar de los diccionarios
         if scan_id_str in running_processes:
@@ -338,9 +338,43 @@ async def cancel_scan(scan_id: int):
         if scan_id_str in running_scans:
             del running_scans[scan_id_str]
         
-        return {"status": "success", "message": "Escaneo cancelado correctamente"}
+        return {"status": "success", "message": "Escaneo detenido correctamente"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error cancelando escaneo: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deteniendo escaneo: {str(e)}")
+
+@app.post("/api/scan/{scan_id}/cancel")
+async def cancel_scan(scan_id: int):
+    """Cancela un escaneo en ejecución y lo borra completamente."""
+    scan_id_str = str(scan_id)
+    
+    # Detener el proceso si está en ejecución
+    if scan_id_str in running_processes:
+        process = running_processes[scan_id_str]
+        try:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except:
+                process.kill()
+        except:
+            pass
+        
+        # Limpiar de los diccionarios
+        if scan_id_str in running_processes:
+            del running_processes[scan_id_str]
+        
+    if scan_id_str in running_scans:
+        del running_scans[scan_id_str]
+        
+    try:
+        # Borrar el escaneo completamente
+        success = storage.delete_scan(scan_id)
+        if success:
+            return {"status": "success", "message": "Escaneo cancelado y borrado correctamente"}
+        else:
+            raise HTTPException(status_code=404, detail="Escaneo no encontrado para borrar")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error cancelando y borrando escaneo: {str(e)}")
 
 @app.get("/api/scan/{scan_id}/pcap")
 async def download_pcap(scan_id: int):
@@ -606,6 +640,7 @@ async def import_nmap_xml(
                 print(f"Error procesando host {host_ip}: {e}")
                 continue
         
+        
         # Marcar escaneo como completado
         storage.complete_scan(scan_id)
         
@@ -676,7 +711,7 @@ async def import_pcap(
         conn.close()
         
         # Procesar el PCAP usando la misma función que se usa en escaneos pasivos
-        process_pcap_file(scan_id, str(pcap_path), organization, location)
+        scans_module.process_pcap_file(scan_id, str(pcap_path), organization, location)
         
         # Contar hosts y puertos finales
         conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
@@ -718,8 +753,8 @@ async def get_scan_results_live(scan_id: int):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # Verificar que el escaneo existe y obtener status y error_message
-    scan = cursor.execute("SELECT id, status, error_message FROM scans WHERE id = ?", (scan_id,)).fetchone()
+    # Verificar que el escaneo existe y obtener metadata necesaria
+    scan = cursor.execute("SELECT id, status, error_message, organization_name FROM scans WHERE id = ?", (scan_id,)).fetchone()
     if not scan:
         conn.close()
         raise HTTPException(status_code=404, detail="Escaneo no encontrado")
@@ -738,6 +773,7 @@ async def get_scan_results_live(scan_id: int):
             s.id as scan_id,
             sr.id as scan_result_id,
             sr.state,
+            h.interfaces_json,
             COALESCE(sr.discovery_method, 'unknown') as discovery_method
         FROM scan_results sr
         JOIN hosts h ON h.id = sr.host_id
@@ -778,6 +814,24 @@ async def get_scan_results_live(scan_id: int):
         JOIN hosts h ON h.id = sr.host_id
         WHERE sr.scan_id = ?
     """, (scan_id,)).fetchone()
+
+    # Identificar IPs críticas de la organización para marcar los resultados
+    critical_ips = set()
+    try:
+        org_name = scan['organization_name']
+        if org_name:
+            critical_devices = storage.get_critical_devices(org_name)
+            for d in critical_devices:
+                for ip in d['ips'].split(','):
+                    ip_clean = ip.strip()
+                    if ip_clean:
+                        critical_ips.add(ip_clean)
+    except Exception as e:
+        print(f"⚠️  Error cargando IPs críticas en live results: {e}")
+    
+    # Enriquecer con flag is_critical
+    for res in enriched_results:
+        res['is_critical'] = res['ip_address'] in critical_ips
     
     conn.close()
     
@@ -820,6 +874,7 @@ async def get_results(
             s.id as scan_id,
             sr.id as scan_result_id,
             sr.state,
+            h.interfaces_json,
             COALESCE(sr.discovery_method, 'unknown') as discovery_method
         FROM scan_results sr
         JOIN hosts h ON h.id = sr.host_id
@@ -868,6 +923,26 @@ async def get_results(
         
         enriched_results.append(result_dict)
     
+    # Enriquecer con flag is_critical si se filtró por organización
+    if organization:
+        try:
+            critical_devices = storage.get_critical_devices(organization)
+            critical_ips = set()
+            for d in critical_devices:
+                for ip in d['ips'].split(','):
+                    ip_clean = ip.strip()
+                    if ip_clean:
+                        critical_ips.add(ip_clean)
+            
+            for res in enriched_results:
+                res['is_critical'] = res['ip_address'] in critical_ips
+        except Exception as e:
+            print(f"⚠️  Error cargando IPs críticas en results: {e}")
+    else:
+        # Si no hay organización en el filtro, marcar todos como False por defecto
+        for res in enriched_results:
+            res['is_critical'] = False
+
     conn.close()
     
     return enriched_results

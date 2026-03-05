@@ -1,10 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Nuevo Escaneo - ArsenalOT{% endblock %}
+{% block title %}Nuevo Escaneo - {{ org_name }} | ArsenalOT{% endblock %}
 
 {% block content %}
-<div class="scan-page">
-    <h1 class="page-title">🔍 Nuevo Escaneo</h1>
+{% set active_phase = 'recon' %}
+{% set active_section = 'scan' %}
+{% include "org_tabs.html" %}
+
+<div class="scan-page" style="margin-top: 1.5rem;">
 
     <!-- Sección de importación XML (colapsable, menos prominente) -->
     <details class="import-section glass-card" style="margin-bottom: 2rem; padding: 1.5rem;">
@@ -41,8 +44,8 @@
 
                 <div class="form-group" style="margin-bottom: 0;">
                     <label for="import_myip" style="font-size: 0.85rem;">Mi IP (Opcional)</label>
-                    <input type="text" id="import_myip" name="myip"
-                        placeholder="Ej: 192.168.1.10" style="font-size: 0.9rem; padding: 0.4rem;">
+                    <input type="text" id="import_myip" name="myip" placeholder="Ej: 192.168.1.10"
+                        style="font-size: 0.9rem; padding: 0.4rem;">
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
@@ -284,6 +287,14 @@
 
             <div class="checkbox-group">
                 <label class="checkbox-label">
+                    <input type="checkbox" id="ioxid" name="ioxid">
+                    <span>📌 Búsqueda de Interfaces Windows (IOXIDResolver)</span>
+                    <small>Descubre todas las IPs de la máquina mediante DCOM/RPC</small>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-label">
                     <input type="checkbox" id="source_code" name="source_code">
                     <span>📄 Código Fuente</span>
                     <small>Extracción de código HTML de servicios web</small>
@@ -330,8 +341,12 @@
         <span id="btnText">🚀 Iniciar Escaneo</span>
         <span id="btnSpinner" class="spinner hidden" style="display: none; margin-left: 0.5rem;">⏳</span>
     </button>
+    <button type="button" class="btn btn-warning hidden" id="stopScanBtn"
+        style="display: none; background-color: #eab308; color: #1e293b; border: none; font-weight: 600;">
+        ⏹️ Detener Escaneo
+    </button>
     <button type="button" class="btn btn-danger hidden" id="cancelScanBtn" style="display: none;">
-        ❌ Cancelar Escaneo
+        ❌ Cancelar y Borrar
     </button>
 </div>
 </form>
@@ -738,6 +753,7 @@
             custom_ports: formData.get('custom_ports') || null,
             custom_nmap_command: formData.get('custom_nmap_command') || null,
             custom_host_discovery_command: formData.get('custom_host_discovery_command') || null,
+            ioxid: formData.has('ioxid'),
             screenshots: formData.has('screenshots'),
             source_code: formData.has('source_code'),
             pcap_filter: formData.get('pcap_filter') || null
@@ -775,6 +791,10 @@
                 cancelBtn.style.display = 'inline-block';
                 cancelBtn.classList.remove('hidden');
 
+                const stopBtn = document.getElementById('stopScanBtn');
+                stopBtn.style.display = 'inline-block';
+                stopBtn.classList.remove('hidden');
+
                 // Guardar scan_id en sessionStorage para persistencia
                 sessionStorage.setItem('currentScanId', result.scan_id.toString());
 
@@ -798,11 +818,49 @@
         }
     });
 
-    // Manejar cancelación
+    // Manejar detención (solo parar proceso)
+    document.getElementById('stopScanBtn').addEventListener('click', async function () {
+        if (!currentScanId) return;
+
+        if (!confirm('¿Estás seguro de que quieres detener este escaneo? Los datos recolectados hasta ahora se guardarán.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/scan/${currentScanId}/stop`, {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                alert('✅ ' + result.message);
+
+                // Forzar actualización del estado visualmente
+                const statusDiv = document.getElementById('scanStatus');
+                if (statusDiv) {
+                    statusDiv.innerHTML = `<div class="success"><strong>✅ Escaneo detenido</strong><br>Los procesos han sido detenidos exitosamente.</div>`;
+                }
+
+                // Esperar un momento para que los websockets reciban el estado completado/detenido 
+                // antes de detener el seguimiento local
+                setTimeout(() => {
+                    stopProgressTracking();
+                }, 1500);
+            } else {
+                alert('❌ Error: ' + (result.detail || result.message));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error deteniendo escaneo: ' + error.message);
+        }
+    });
+
+    // Manejar cancelación (parar y borrar todo)
     document.getElementById('cancelScanBtn').addEventListener('click', async function () {
         if (!currentScanId) return;
 
-        if (!confirm('¿Estás seguro de que quieres cancelar este escaneo?')) {
+        if (!confirm('⚠️ ¿Estás seguro de que quieres cancelar y BORRAR completamente este escaneo? Todos los datos se perderán.')) {
             return;
         }
 
@@ -816,7 +874,7 @@
             if (response.ok) {
                 alert('✅ ' + result.message);
 
-                // Detener el seguimiento del progreso
+                // Detener el seguimiento del progreso inmediatamente
                 stopProgressTracking();
 
                 // Ocultar progreso
@@ -1062,6 +1120,11 @@
         const cancelBtn = document.getElementById('cancelScanBtn');
         cancelBtn.style.display = 'none';
         cancelBtn.classList.add('hidden');
+
+        const stopBtn = document.getElementById('stopScanBtn');
+        stopBtn.style.display = 'none';
+        stopBtn.classList.add('hidden');
+
         currentScanId = null;
         lastResultsHash = null;
         // Limpiar sessionStorage
@@ -1090,6 +1153,8 @@
                         document.getElementById('scanProgress').classList.remove('hidden');
                         document.getElementById('cancelScanBtn').style.display = 'inline-block';
                         document.getElementById('cancelScanBtn').classList.remove('hidden');
+                        document.getElementById('stopScanBtn').style.display = 'inline-block';
+                        document.getElementById('stopScanBtn').classList.remove('hidden');
                         startProgressTracking(currentScanId);
                         console.log(`✅ Reanudado seguimiento del escaneo ${scanIdToCheck}`);
                     }
@@ -1143,7 +1208,7 @@
                             <div>Puertos procesados: ${result.stats.ports_processed}</div>
                         </div>
                         <div style="margin-top: 0.5rem;">
-                            <a href="/results?scan_id=${result.scan_id}" class="btn btn-primary" style="display: inline-block; padding: 0.5rem 1rem; text-decoration: none;">
+                            <a href="/pentest/${encodeURIComponent(formData.get('organization'))}/recon/results?scan_id=${result.scan_id}" class="btn btn-primary" style="display: inline-block; padding: 0.5rem 1rem; text-decoration: none;">
                                 Ver Resultados
                             </a>
                         </div>
@@ -1214,7 +1279,7 @@
                             <div>Puertos procesados: ${result.stats.ports_processed}</div>
                         </div>
                         <div style="margin-top: 0.5rem;">
-                            <a href="/results?scan_id=${result.scan_id}" class="btn btn-primary" style="display: inline-block; padding: 0.5rem 1rem; text-decoration: none;">
+                            <a href="/pentest/${encodeURIComponent(formData.get('organization'))}/recon/results?scan_id=${result.scan_id}" class="btn btn-primary" style="display: inline-block; padding: 0.5rem 1rem; text-decoration: none;">
                                 Ver Resultados
                             </a>
                         </div>

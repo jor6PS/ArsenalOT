@@ -13,10 +13,18 @@ from typing import Optional, Dict
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
-from arsenal.core.scanners import HostDiscovery, PortScanner, PassiveCapture, ServiceDetection
+from arsenal.core.scanners import (
+    HostDiscovery,
+    PortScanner,
+    PassiveCapture,
+    ServiceDetection,
+    IOXIDResolverScanner
+)
 from arsenal.web.core.models import ScanConfig
 from arsenal.web.core.deps import storage, running_scans, running_processes
 from arsenal.web.core.websockets import manager
+from arsenal.core.parsers.nmap_parser import NmapXMLParser
+from arsenal.core.parsers.vulnerability_parser import VulnerabilityParser
 
 router = APIRouter()
 
@@ -242,7 +250,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
     try:
         # Importar módulos de screenshots/source code si están disponibles
         try:
-            from protocols.web import take_screenshot, get_source
+            from arsenal.core.protocols.web import take_screenshot, get_source
             WEB_PROTOCOLS_AVAILABLE = True
         except ImportError:
             WEB_PROTOCOLS_AVAILABLE = False
@@ -566,12 +574,259 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         continue
                 
                 print(f"[Scan {scan_id}] ✅ Procesados {hosts_processed} hosts y {ports_processed} puertos")
-                
             except Exception as e:
                 print(f"[Scan {scan_id}] ❌ Error en escaneo Nmap: {e}")
                 import traceback
                 traceback.print_exc()
                 raise
+
+        # ============================================================================
+        # PASO 3: IOXIDRESOLVER (si está habilitado)
+        # ============================================================================
+        if hasattr(config, 'ioxid') and config.ioxid:
+            print(f"[Scan {scan_id}] 📌 Iniciando escaneo IOXIDResolver...")
+            try:
+                ioxid_scanner = IOXIDResolverScanner()
+                
+                # Obtener hosts para IOXID:
+                # 1. Si hubo descubrimiento previo, usar esos hosts
+                # 2. Si no hubo o no devolvió nada, expandir el rango original
+                conn = sqlite3.connect(str(storage.db_path))
+                cursor = conn.cursor()
+                ioxid_targets = [row[0] for row in cursor.execute(
+                    "SELECT DISTINCT ip_address FROM hosts h JOIN scan_results sr ON h.id = sr.host_id WHERE sr.scan_id = ?",
+                    (scan_id,)
+                ).fetchall()]
+                conn.close()
+
+                if not ioxid_targets:
+                    # Sin hosts descubiertos todavía (Nmap/Discovery deshabilitado o falló)
+                    # Expandir rango manual para IOXID (máximo 256 IPs para seguridad)
+                    try:
+                        net = ipaddress.ip_network(config.target_range, strict=False)
+                        if net.num_addresses <= 256:
+                            ioxid_targets = [str(ip) for ip in net.hosts()]
+                            print(f"[Scan {scan_id}] 🌐 Sin hosts previos. Expandiendo rango {config.target_range} ({len(ioxid_targets)} IPs)")
+                        else:
+                            # Solo permitir la primera /24 si es muy grande
+                            first_24 = list(net.subnets(new_prefix=24))[0]
+                            ioxid_targets = [str(ip) for ip in first_24.hosts()]
+                            print(f"[Scan {scan_id}] ⚠️ Rango demasiado grande. Limitando a primera subred /24 ({len(ioxid_targets)} IPs)")
+                    except Exception:
+                        # Si es una sola IP
+                        ioxid_targets = [config.target_range]
+
+                print(f"[Scan {scan_id}] 📊 Escaneando interfaces en {len(ioxid_targets)} hosts...")
+                for host_ip in ioxid_targets:
+                    try:
+                        interfaces = ioxid_scanner.get_interfaces(host_ip)
+                        if interfaces:
+                            # Si es un host nuevo (no descubierto por Nmap/HD), registrarlo
+                            storage.save_discovered_host(scan_id, host_ip, discovery_method='ioxid')
+                            storage.add_host_interfaces(host_ip, interfaces)
+                            print(f"[Scan {scan_id}] ✅ IOXID {host_ip}: {len(interfaces)} interfaces")
+                    except Exception as e:
+                        pass
+            except Exception as e:
+                print(f"[Scan {scan_id}] ⚠️  Error en paso IOXIDResolver: {e}")
+
+        # ============================================================================
+        # PASO 4: ENRIQUECIMIENTO STANDALONE (si está habilitado y no se hizo en Paso 2)
+        # ============================================================================
+        if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE:
+            print(f"[Scan {scan_id}] 🌐 Iniciando fase de enriquecimiento standalone...")
+            
+            enrichment_targets = []
+            
+            # 1. Obtener todos los servicios web en el rango de este escaneo desde la BD
+            try:
+                conn = sqlite3.connect(str(storage.db_path))
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                query = """
+                    SELECT h.ip_address, sr.port, sr.protocol, sr.service_name, sr.product
+                    FROM hosts h
+                    JOIN scan_results sr ON h.id = sr.host_id
+                    WHERE sr.state = 'open' 
+                      AND (sr.port IN (80, 443, 8080, 8443, 8000, 8081, 8888) 
+                           OR sr.service_name LIKE '%http%')
+                """
+                all_web_services = cursor.execute(query).fetchall()
+                conn.close()
+                
+                print(f"[Scan {scan_id}] 🔍 Encontrados {len(all_web_services)} servicios web totales en la BD")
+                
+                # Filtrar por rango
+                # Normalizar target_range (puede ser CIDR, IP única o lista de IPs)
+                targets_to_check = [t.strip() for t in config.target_range.replace(',', ' ').split() if t.strip()]
+                
+                for svc in all_web_services:
+                    svc_ip_str = svc['ip_address']
+                    try:
+                        svc_ip = ipaddress.ip_address(svc_ip_str)
+                        matches = False
+                        
+                        for t in targets_to_check:
+                            try:
+                                if '/' in t:
+                                    # Es un rango CIDR
+                                    if svc_ip in ipaddress.ip_network(t, strict=False):
+                                        matches = True
+                                        break
+                                else:
+                                    # Intentar como IP única
+                                    if svc_ip == ipaddress.ip_address(t):
+                                        matches = True
+                                        break
+                            except ValueError:
+                                # Si no es IP ni CIDR, comparar literal
+                                if svc_ip_str == t:
+                                    matches = True
+                                    break
+                                    
+                        if matches:
+                            enrichment_targets.append(dict(svc))
+                    except ValueError:
+                        continue
+                            
+            except Exception as e:
+                print(f"[Scan {scan_id}] ⚠️ Error consultando BD para enriquecimiento: {e}")
+
+            if enrichment_targets:
+                print(f"[Scan {scan_id}] 📸 Procesando {len(enrichment_targets)} servicios web para enriquecimiento...")
+                
+                # Optimizaciones: 
+                # 1. Deduplicar objetivos (evitar procesar mismo IP:PORT varias veces)
+                unique_targets = []
+                seen_targets = set()
+                for t in enrichment_targets:
+                    key = (t['ip_address'], t['port'])
+                    if key not in seen_targets:
+                        unique_targets.append(t)
+                        seen_targets.add(key)
+                
+                print(f"[Scan {scan_id}] 🎯 Objetivos únicos tras deduplicar: {len(unique_targets)}")
+                
+                # 2. Inicializar driver compartido si los screenshots están habilitados
+                shared_driver = None
+                if config.screenshots and take_screenshot:
+                    try:
+                        from selenium import webdriver
+                        from selenium.webdriver.firefox.options import Options
+                        opts = Options()
+                        opts.add_argument("--headless")
+                        shared_driver = webdriver.Firefox(options=opts)
+                        print(f"[Scan {scan_id}] 🚀 Driver de Firefox compartido iniciado.")
+                    except Exception as e:
+                        print(f"[Scan {scan_id}] ⚠️ No se pudo iniciar el driver compartido de Firefox: {e}")
+
+                try:
+                    # 2.5 Cachear enriquecimientos existentes para evitar duplicados entre escaneos
+                    # Buscamos qué (ip, port, tipo) ya tienen enriquecimiento registrado en la BD para esta organización
+                    existing_enrichments = set()
+                    try:
+                        conn = sqlite3.connect(str(storage.db_path))
+                        cursor = conn.cursor()
+                        # Solo consideramos enriquecimientos exitosos (que tengan file_path o data) en esta organización
+                        cursor.execute("""
+                            SELECT h.ip_address, sr.port, e.enrichment_type
+                            FROM enrichments e
+                            JOIN scan_results sr ON e.scan_result_id = sr.id
+                            JOIN hosts h ON sr.host_id = h.id
+                            JOIN scans s ON sr.scan_id = s.id
+                            WHERE s.organization_name = ?
+                        """, (config.organization.upper(),))
+                        for row in cursor.fetchall():
+                            existing_enrichments.add((row[0], row[1], row[2]))
+                        conn.close()
+                    except Exception as e:
+                        print(f"[Scan {scan_id}] ⚠️ Error consultando enriquecimientos previos: {e}")
+
+                    for svc in unique_targets:
+                        host_ip = svc['ip_address']
+                        port_num = svc['port']
+                        proto = svc['protocol']
+                        
+                        # 3. Obtener Código Fuente
+                        source_obtained = False
+                        if config.source_code and get_source:
+                            # Check duplicado cross-scan
+                            if (host_ip, port_num, 'Websource') in existing_enrichments:
+                                print(f"[Scan {scan_id}] ⏩ Código fuente ya capturado en otro escaneo para {host_ip}:{port_num}, saltando.")
+                                source_obtained = True 
+                            else:
+                                try:
+                                    source = get_source(host_ip, port_num, str(source_dir))
+                                    if source:
+                                        source_obtained = True
+                                        # Registrar en el escaneo actual para que la UI lo vea
+                                        storage.save_host_result(scan_id=scan_id, host_ip=host_ip, port=port_num, protocol=proto, state='open', service_data={'name': svc.get('service_name', ''), 'product': svc.get('product', '')}, discovery_method='enrichment')
+                                        storage.save_enrichment(
+                                            scan_id=scan_id,
+                                            host_ip=host_ip,
+                                            port=port_num,
+                                            protocol=proto,
+                                            enrichment_type='Websource',
+                                            data=source,
+                                            file_path=str(source_dir / f"{host_ip}_{port_num}.txt")
+                                        )
+                                except Exception as e:
+                                    print(f"[Scan {scan_id}] ⚠️ Error obteniendo código de {host_ip}:{port_num}: {e}")
+                        
+                        # 4. Capturar Pantalla
+                        if config.screenshots and take_screenshot:
+                            # Check duplicado cross-scan
+                            if (host_ip, port_num, 'Screenshot') in existing_enrichments:
+                                print(f"[Scan {scan_id}] ⏩ Captura ya realizada en otro escaneo para {host_ip}:{port_num}, saltando.")
+                                continue
+
+                            # Si source_code falló COMPLETAMENTE (ni siquiera status), saltamos
+                            # Pero si get_source devolvió algo (aunque no sea 200), tiramos captura
+                            if config.source_code and not source_obtained:
+                                # Hacemos un último intento rápido de ver si el puerto responde a NADA 
+                                # para no lanzar Firefox en balde
+                                try:
+                                    import socket
+                                    with socket.create_connection((host_ip, port_num), timeout=1):
+                                        pass
+                                except:
+                                    continue # Puerto cerrado o no responde
+
+                            try:
+                                screenshot = take_screenshot(host_ip, port_num, str(img_dir), driver=shared_driver)
+                                if screenshot:
+                                    # Registrar en el escaneo actual
+                                    storage.save_host_result(scan_id=scan_id, host_ip=host_ip, port=port_num, protocol=proto, state='open', service_data={'name': svc.get('service_name', ''), 'product': svc.get('product', '')}, discovery_method='enrichment')
+                                    storage.save_enrichment(
+                                        scan_id=scan_id,
+                                        host_ip=host_ip,
+                                        port=port_num,
+                                        protocol=proto,
+                                        enrichment_type='Screenshot',
+                                        data=screenshot,
+                                        file_path=str(img_dir / f"{host_ip}_{port_num}.png")
+                                    )
+                            except Exception as e:
+                                print(f"[Scan {scan_id}] ⚠️ Error capturando imagen de {host_ip}:{port_num}: {e}")
+                finally:
+                    if shared_driver:
+                        try:
+                            shared_driver.quit()
+                            print(f"[Scan {scan_id}] 🛑 Driver de Firefox compartido cerrado.")
+                        except:
+                            pass
+            else:
+                if not config.nmap and not config.host_discovery:
+                    msg = f"No se han encontrado activos o servicios web en el rango {config.target_range} para procesar. Se recomienda ejecutar acompañado de un escaneo Nmap o descubrimiento de hosts."
+                    print(f"[Scan {scan_id}] ⚠️ {msg}")
+                    try:
+                        conn = sqlite3.connect(str(storage.db_path))
+                        conn.execute("UPDATE scans SET error_message = ? WHERE id = ?", (msg, scan_id))
+                        conn.commit()
+                        conn.close()
+                    except:
+                        pass
         
         # Contar hosts y puertos finales
         try:
@@ -992,4 +1247,73 @@ async def websocket_scan_progress(websocket: WebSocket, scan_id: str):
     finally:
         # Siempre limpiar la conexión
         manager.disconnect(scan_id)
+
+def run_ioxid_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
+    """Ejecuta el escaneo de IOXIDResolver en background."""
+    try:
+        # 1. Marcar como running
+        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        cursor = conn.cursor()
+        cursor.execute("UPDATE scans SET status = 'running' WHERE id = ?", (scan_id,))
+        conn.commit()
+        conn.close()
+
+        # 2. Obtener targets
+        # Si no hay targets conocidos, usamos el target_range
+        # Pero IOXID necesita IPs individuales.
+        targets = []
+        try:
+            # Intentar parsear como red
+            network = ipaddress.ip_network(config.target_range, strict=False)
+            targets = [str(ip) for ip in network.hosts()]
+            if not targets: # Caso /32
+                targets = [str(network.network_address)]
+        except ValueError:
+            # Es una lista de IPs o herencia de descubrimiento anterior
+            targets = [t.strip() for t in config.target_range.split(',') if t.strip()]
+
+        print(f"[Scan {scan_id}] 🔍 Iniciando IOXIDResolver en {len(targets)} targets...")
+        
+        hosts_discovered = 0
+        interfaces_found = 0
+
+        for ip in targets:
+            try:
+                scanner = IOXIDResolverScanner(ip)
+                interfaces = scanner.get_interfaces()
+                
+                if interfaces:
+                    print(f"[Scan {scan_id}] ✅ Descubiertas interfaces para {ip}: {interfaces}")
+                    # Guardar host en la base de datos si no existe
+                    storage.save_discovered_host(scan_id, ip, discovery_method='ioxid')
+                    
+                    # Obtener host_id
+                    conn = sqlite3.connect(str(storage.db_path))
+                    cursor = conn.cursor()
+                    host_id_row = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (ip,)).fetchone()
+                    conn.close()
+                    
+                    if host_id_row:
+                        host_id = host_id_row[0]
+                        storage.add_host_interfaces(host_id, interfaces)
+                        interfaces_found += len(interfaces)
+                    
+                    hosts_discovered += 1
+            except Exception as e:
+                print(f"[Scan {scan_id}] ⚠️ Error escaneando {ip}: {e}")
+
+        # 3. Finalizar
+        storage.complete_scan(scan_id, hosts_count=hosts_discovered)
+        print(f"[Scan {scan_id}] ✅ IOXIDResolver completado. Hosts con interfaces: {hosts_discovered}")
+
+    except Exception as e:
+        print(f"[Scan {scan_id}] ❌ ERROR en IOXIDResolver: {e}")
+        storage.complete_scan(scan_id, error_message=str(e))
+    finally:
+        if str(scan_id) in running_processes:
+            del running_processes[str(scan_id)]
+        if str(scan_id) in running_scans:
+            del running_scans[str(scan_id)]
+
 
