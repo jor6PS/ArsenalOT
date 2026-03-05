@@ -21,6 +21,11 @@ ArsenalOT requiere varias herramientas del sistema para funcionar al 100%. Ejecu
 ```bash
 sudo apt-get update
 sudo apt-get install -y nmap tshark arp-scan firefox-esr
+# Software capturas de pantalla
+wget https://github.com/mozilla/geckodriver/releases/download/v0.36.0/geckodriver-v0.36.0-linux64.tar.gz
+tar -xvzf geckodriver-v0.36.0-linux64.tar.gz
+sudo mv geckodriver /usr/local/bin/
+sudo chmod +x /usr/local/bin/geckodriver
 ```
 
 **Herramientas incluidas:**

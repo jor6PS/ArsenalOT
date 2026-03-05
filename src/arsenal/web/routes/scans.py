@@ -715,6 +715,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         from selenium import webdriver
                         from selenium.webdriver.firefox.options import Options
                         from selenium.webdriver.firefox.service import Service
+                        import os
                         
                         opts = Options()
                         opts.add_argument("--headless")
@@ -722,10 +723,21 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         opts.add_argument("--disable-dev-shm-usage")
                         opts.add_argument("--window-size=1920,1080")
                         
-                        # Fix for root/sudo execution
-                        os.environ["MOZ_DISABLE_CONTENT_SANDBOX"] = "1"
+                        # Ubicación del Firefox de Kali
+                        opts.binary_location = '/usr/bin/firefox-esr'
                         
-                        shared_driver = webdriver.Firefox(options=opts)
+                        # 1. Configuración de seguridad para root
+                        os.environ["MOZ_DISABLE_CONTENT_SANDBOX"] = "1"
+                        os.environ["HOME"] = "/tmp"
+                        
+                        # 2. LA CURA AL ERROR: Borramos el rastro del entorno gráfico del usuario kali
+                        os.environ.pop("XAUTHORITY", None)
+                        os.environ.pop("DISPLAY", None)
+                        
+                        # 3. Servicio usando el Geckodriver que descargamos
+                        servicio = Service(executable_path='/usr/local/bin/geckodriver', log_path='/tmp/geckodriver.log')
+                        
+                        shared_driver = webdriver.Firefox(service=servicio, options=opts)
                         print(f"[Scan {scan_id}] 🚀 Driver de Firefox compartido iniciado.")
                     except Exception as e:
                         print(f"[Scan {scan_id}] ⚠️ No se pudo iniciar el driver compartido de Firefox: {e}")
