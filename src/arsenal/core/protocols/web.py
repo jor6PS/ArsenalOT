@@ -18,9 +18,16 @@ def take_screenshot(host, port, folder_img_path, driver=None):
     
     if not local_driver:
         try:
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--window-size=1920,1080")
+            # Fix for root/sudo execution
+            os.environ["MOZ_DISABLE_CONTENT_SANDBOX"] = "1"
+            
             local_driver = webdriver.Firefox(options=options)
             should_quit = True
-        except Exception:
+        except Exception as e:
+            print(f"⚠️ Error iniciando Firefox: {e}")
             return None
             
     try:

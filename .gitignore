@@ -3,6 +3,7 @@ venv/
 myenv/
 env/
 .env/
+.venv/
 venv.bak/
 
 # Compilados de Python

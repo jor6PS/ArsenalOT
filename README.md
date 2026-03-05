@@ -27,7 +27,8 @@ sudo apt-get install -y nmap tshark arp-scan firefox-esr
 - **`nmap`** (Crítico): Escaneo de puertos y servicios.
 - **`tshark`** (Opcional): Captura pasiva de tráfico.
 - **`arp-scan`** (Opcional): Descubrimiento rápido en red local.
-- **`firefox-esr`** (Opcional): Necesario para capturas de pantalla automáticas.
+- **`firefox-esr`** (Opcional): Navegador para capturas de pantalla.
+- **`geckodriver`** (Opcional): Driver para Selenium (necesario para las capturas).
 
 **Configuración de permisos para tshark:**
 Durante la instalación de `tshark`, selecciona **SÍ** cuando pregunte si los usuarios sin privilegios pueden capturar paquetes. Luego añade tu usuario al grupo:

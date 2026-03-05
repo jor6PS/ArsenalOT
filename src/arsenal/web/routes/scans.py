@@ -714,12 +714,23 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     try:
                         from selenium import webdriver
                         from selenium.webdriver.firefox.options import Options
+                        from selenium.webdriver.firefox.service import Service
+                        
                         opts = Options()
                         opts.add_argument("--headless")
+                        opts.add_argument("--no-sandbox")
+                        opts.add_argument("--disable-dev-shm-usage")
+                        opts.add_argument("--window-size=1920,1080")
+                        
+                        # Fix for root/sudo execution
+                        os.environ["MOZ_DISABLE_CONTENT_SANDBOX"] = "1"
+                        
                         shared_driver = webdriver.Firefox(options=opts)
                         print(f"[Scan {scan_id}] 🚀 Driver de Firefox compartido iniciado.")
                     except Exception as e:
                         print(f"[Scan {scan_id}] ⚠️ No se pudo iniciar el driver compartido de Firefox: {e}")
+                        if "geckodriver" in str(e).lower():
+                            print(f"[Scan {scan_id}] 💡 Sugerencia: Instala geckodriver (sudo apt install firefox-geckodriver)")
 
                 try:
                     # 2.5 Cachear enriquecimientos existentes para evitar duplicados entre escaneos
