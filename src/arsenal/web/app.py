@@ -1328,6 +1328,7 @@ async def cleanup_orphaned_data():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error limpiando datos huérfanos: {str(e)}")
 
+@app.get("/api/export")
 @app.post("/api/export")
 async def export_scans(
     organization: Optional[str] = None,

@@ -65,8 +65,22 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'scan_results': [],
                 'hosts': [],
                 'vulnerabilities': [],
-                'enrichments': []
+                'enrichments': [],
+                'networks': [],
+                'critical_devices': []
             }
+            
+            # Obtener redes de la organización
+            networks = cursor.execute("""
+                SELECT * FROM networks WHERE organization_name = ?
+            """, (scan['organization_name'],)).fetchall()
+            export_data['networks'] = [dict(n) for n in networks]
+            
+            # Obtener dispositivos críticos
+            critical_devs = cursor.execute("""
+                SELECT * FROM critical_devices WHERE organization_name = ?
+            """, (scan['organization_name'],)).fetchall()
+            export_data['critical_devices'] = [dict(d) for d in critical_devs]
             
             # Obtener scan_results
             scan_results = cursor.execute("""
@@ -127,6 +141,19 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'enrichments': []
             }
             
+            # Obtener redes de la organización
+            networks = cursor.execute("""
+                SELECT * FROM networks WHERE organization_name = ?
+            """, (organization.upper(),)).fetchall()
+            export_data['networks'] = [dict(n) for n in networks]
+            
+            # Obtener dispositivos críticos
+            critical_devs = cursor.execute("""
+                SELECT * FROM critical_devices WHERE organization_name = ?
+            """, (organization.upper(),)).fetchall()
+            export_data['critical_devices'] = [dict(d) for d in critical_devs]
+            
+            
             scan_ids = [s['id'] for s in scans]
             if scan_ids:
                 placeholders = ','.join('?' * len(scan_ids))
@@ -183,6 +210,19 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'enrichments': []
             }
             
+            # Obtener redes de la organización
+            networks = cursor.execute("""
+                SELECT * FROM networks WHERE organization_name = ?
+            """, (organization.upper(),)).fetchall()
+            export_data['networks'] = [dict(n) for n in networks]
+            
+            # Obtener dispositivos críticos
+            critical_devs = cursor.execute("""
+                SELECT * FROM critical_devices WHERE organization_name = ?
+            """, (organization.upper(),)).fetchall()
+            export_data['critical_devices'] = [dict(d) for d in critical_devs]
+            
+            
             scan_ids = [s['id'] for s in scans]
             if scan_ids:
                 placeholders = ','.join('?' * len(scan_ids))
@@ -235,8 +275,18 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'scan_results': [dict(r) for r in scan_results],
                 'hosts': [dict(h) for h in hosts],
                 'vulnerabilities': [dict(v) for v in vulnerabilities],
-                'enrichments': [dict(e) for e in enrichments]
+                'enrichments': [dict(e) for e in enrichments],
+                'networks': [],
+                'critical_devices': []
             }
+            
+            # Obtener todas las redes
+            networks = cursor.execute("SELECT * FROM networks").fetchall()
+            export_data['networks'] = [dict(n) for n in networks]
+            
+            # Obtener todos los dispositivos críticos
+            critical_devs = cursor.execute("SELECT * FROM critical_devices").fetchall()
+            export_data['critical_devices'] = [dict(d) for d in critical_devs]
             
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
             
@@ -316,13 +366,16 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
             if export_data['type'] == 'all':
                 # Importar todo
                 for org in export_data.get('organizations', []):
+                    # Normalizar nombre
+                    org_name = org['name'].strip().upper()
                     cursor.execute("""
                         INSERT OR REPLACE INTO organizations (name, description, created_at)
                         VALUES (?, ?, ?)
-                    """, (org['name'], org.get('description'), org.get('created_at')))
+                    """, (org_name, org.get('description'), org.get('created_at')))
                     import_stats['organizations'] += 1
                 
                 _import_scan_data(cursor, export_data, import_stats)
+                _import_org_metadata(cursor, export_data, import_stats)
                 
                 # Copiar archivos
                 for item in temp_path.iterdir():
@@ -336,18 +389,31 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
             elif export_data['type'] == 'organization':
                 org = export_data.get('organization')
                 if org:
+                    if isinstance(org, dict):
+                        org_name_val = org.get('name', '').strip().upper()
+                        org_desc = org.get('description')
+                        org_created = org.get('created_at')
+                    else:
+                        org_name_val = str(org).strip().upper()
+                        org_desc = None
+                        org_created = datetime.now().isoformat()
+
                     cursor.execute("""
                         INSERT OR REPLACE INTO organizations (name, description, created_at)
                         VALUES (?, ?, ?)
-                    """, (org['name'], org.get('description'), org.get('created_at')))
+                    """, (org_name_val, org_desc, org_created))
                     import_stats['organizations'] += 1
                 
                 _import_scan_data(cursor, export_data, import_stats)
+                _import_org_metadata(cursor, export_data, import_stats)
                 
                 # Copiar archivos de la organización
-                org_name = export_data.get('organization', {}).get('name') or export_data.get('organization')
-                if isinstance(org_name, dict):
-                    org_name = org_name.get('name')
+                org_info = export_data.get('organization')
+                if isinstance(org_info, dict):
+                    org_name = org_info.get('name', '').strip().upper()
+                else:
+                    org_name = str(org_info).strip().upper() if org_info else None
+                
                 if org_name:
                     org_dir = temp_path / org_name.upper()
                     if org_dir.exists():
@@ -359,8 +425,9 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
                         import_stats['files_imported'] += 1
             
             elif export_data['type'] == 'location':
-                org_name = export_data.get('organization')
+                org_name = export_data.get('organization', '')
                 if org_name:
+                    org_name = org_name.strip().upper()
                     cursor.execute("""
                         INSERT OR IGNORE INTO organizations (name, description, created_at)
                         VALUES (?, ?, ?)
@@ -368,6 +435,7 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
                     import_stats['organizations'] += 1
                 
                 _import_scan_data(cursor, export_data, import_stats)
+                _import_org_metadata(cursor, export_data, import_stats)
                 
                 # Copiar archivos de la ubicación
                 location = export_data.get('location')
@@ -384,10 +452,11 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
             
             elif export_data['type'] == 'scan':
                 scan_meta = export_data.get('metadata', {})
-                org_name = scan_meta.get('organization_name')
-                location = scan_meta.get('location')
+                org_name = scan_meta.get('organization_name', '')
+                location = scan_meta.get('location', '')
                 
                 if org_name:
+                    org_name = org_name.strip().upper()
                     cursor.execute("""
                         INSERT OR IGNORE INTO organizations (name, description, created_at)
                         VALUES (?, ?, ?)
@@ -395,6 +464,7 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
                     import_stats['organizations'] += 1
                 
                 _import_scan_data(cursor, export_data, import_stats)
+                _import_org_metadata(cursor, export_data, import_stats)
                 
                 # Copiar archivos del escaneo
                 scans_dir = temp_path / 'scans'
@@ -425,11 +495,20 @@ def _import_scan_data(cursor, export_data: Dict, import_stats: Dict):
     # Importar hosts
     for host in export_data.get('hosts', []):
         cursor.execute("""
-            INSERT OR REPLACE INTO hosts 
+            INSERT INTO hosts 
             (id, ip_address, hostname, hostnames_json, mac_address, vendor,
              subnet, is_private, os_info_json, host_scripts_json,
              first_seen, last_seen)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ip_address) DO UPDATE SET
+                hostname = COALESCE(excluded.hostname, hostname),
+                hostnames_json = COALESCE(excluded.hostnames_json, hostnames_json),
+                mac_address = COALESCE(excluded.mac_address, mac_address),
+                vendor = COALESCE(excluded.vendor, vendor),
+                subnet = COALESCE(excluded.subnet, subnet),
+                os_info_json = COALESCE(excluded.os_info_json, os_info_json),
+                host_scripts_json = COALESCE(excluded.host_scripts_json, host_scripts_json),
+                last_seen = excluded.last_seen
         """, (
             host.get('id'), host['ip_address'], host.get('hostname'),
             host.get('hostnames_json'), host.get('mac_address'),
@@ -445,6 +524,10 @@ def _import_scan_data(cursor, export_data: Dict, import_stats: Dict):
         scans = [export_data['metadata']]
     
     for scan in scans:
+        # Normalizar nombres
+        org_name = scan['organization_name'].strip().upper()
+        loc_name = scan['location'].strip().upper()
+        
         cursor.execute("""
             INSERT OR REPLACE INTO scans 
             (id, organization_name, location, scan_type, target_range, interface,
@@ -452,7 +535,7 @@ def _import_scan_data(cursor, export_data: Dict, import_stats: Dict):
              ports_found, error_message, created_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            scan.get('id'), scan['organization_name'], scan['location'],
+            scan.get('id'), org_name, loc_name,
             scan['scan_type'], scan['target_range'], scan.get('interface'),
             scan.get('nmap_command'), scan.get('started_at'),
             scan.get('completed_at'), scan.get('status', 'completed'),
@@ -521,4 +604,41 @@ def _merge_directory(source: Path, dest: Path):
             dest_file.parent.mkdir(parents=True, exist_ok=True)
             if not dest_file.exists():
                 shutil.copy2(item, dest_file)
+
+
+def _import_org_metadata(cursor, export_data: Dict, import_stats: Dict):
+    """Importa redes y dispositivos críticos."""
+    # Importar redes
+    for net in export_data.get('networks', []):
+        # Normalizar nombre
+        org_name = net['organization_name'].strip().upper()
+        cursor.execute("""
+            INSERT OR REPLACE INTO networks 
+            (organization_name, system_name, network_name, network_range, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            org_name, net.get('system_name'),
+            net['network_name'], net['network_range'],
+            net.get('created_at', datetime.now().isoformat())
+        ))
+        if 'networks' not in import_stats:
+            import_stats['networks'] = 0
+        import_stats['networks'] += 1
+
+    # Importar dispositivos críticos
+    for dev in export_data.get('critical_devices', []):
+        # Normalizar nombre
+        org_name = dev['organization_name'].strip().upper()
+        cursor.execute("""
+            INSERT OR REPLACE INTO critical_devices
+            (organization_name, name, ips, reason, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            org_name, dev['name'],
+            dev['ips'], dev['reason'],
+            dev.get('created_at', datetime.now().isoformat())
+        ))
+        if 'critical_devices' not in import_stats:
+            import_stats['critical_devices'] = 0
+        import_stats['critical_devices'] += 1
 
