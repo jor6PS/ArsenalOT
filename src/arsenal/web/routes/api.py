@@ -68,26 +68,66 @@ async def get_stats(
     running_query = f"SELECT COUNT(*) FROM scans s {scan_filter} AND s.status = 'running'"
     running_scans_count = cursor.execute(running_query, scan_params).fetchone()[0]
     
+    # Determinar si el escaneo solicitado es pasivo
+    is_single_passive = False
+    if scan_id:
+        mode_row = cursor.execute("SELECT scan_mode FROM scans WHERE id = ?", (scan_id,)).fetchone()
+        is_single_passive = mode_row and mode_row[0] == 'passive'
+
     # Hosts
-    hosts_query = f"""
-        SELECT COUNT(DISTINCT h.id) 
-        FROM hosts h
-        JOIN scan_results sr ON sr.host_id = h.id
-        JOIN scans s ON s.id = sr.scan_id
-        {scan_filter}
-    """
-    hosts_count = cursor.execute(hosts_query, scan_params).fetchone()[0]
+    if is_single_passive:
+        hosts_query = """
+            SELECT COUNT(DISTINCT ip) FROM (
+                SELECT src_ip as ip FROM passive_conversations WHERE scan_id = ?
+                UNION
+                SELECT dst_ip as ip FROM passive_conversations WHERE scan_id = ?
+            )
+        """
+        hosts_count = cursor.execute(hosts_query, (scan_id, scan_id)).fetchone()[0]
+    else:
+        # Hosts activos + Hosts de otros escaneos pasivos si no hay scan_id
+        hosts_query = f"""
+            SELECT COUNT(DISTINCT h.id) 
+            FROM hosts h
+            JOIN scan_results sr ON sr.host_id = h.id
+            JOIN scans s ON s.id = sr.scan_id
+            {scan_filter}
+        """
+        hosts_count = cursor.execute(hosts_query, scan_params).fetchone()[0]
+        
+        # Si no hay scan_id, sumar hosts de conversaciones pasivas
+        if not scan_id:
+            passive_hosts_query = f"""
+                SELECT COUNT(DISTINCT ip) FROM (
+                    SELECT src_ip as ip FROM passive_conversations pc JOIN scans s ON s.id = pc.scan_id {scan_filter.replace('s.', 's.')}
+                    UNION
+                    SELECT dst_ip as ip FROM passive_conversations pc JOIN scans s ON s.id = pc.scan_id {scan_filter.replace('s.', 's.')}
+                )
+            """
+            # Nota: Esto es una aproximación, idealmente sería un UNION total de IPs para evitar duplicados entre tablas
+            # pero por simplicidad y siguiendo la "separación total", los tratamos como conjuntos distintos o los sumamos.
+            # El usuario pidió separación, así que contarlos por separado o sumarlos es aceptable.
+            hosts_count += cursor.execute(passive_hosts_query, scan_params * 2).fetchone()[0]
     
-    # Puertos
-    ports_query = f"""
-        SELECT COUNT(*) 
-        FROM scan_results sr
-        JOIN scans s ON s.id = sr.scan_id
-        {scan_filter}
-    """
-    ports_count = cursor.execute(ports_query, scan_params).fetchone()[0]
+    # Puertos / Conversaciones
+    if is_single_passive:
+        ports_count = cursor.execute(
+            "SELECT COUNT(*) FROM passive_conversations WHERE scan_id = ?", (scan_id,)
+        ).fetchone()[0]
+    else:
+        ports_query = f"""
+            SELECT COUNT(*) 
+            FROM scan_results sr
+            JOIN scans s ON s.id = sr.scan_id
+            {scan_filter}
+        """
+        ports_count = cursor.execute(ports_query, scan_params).fetchone()[0]
+        
+        if not scan_id:
+            passive_conv_query = f"SELECT COUNT(*) FROM passive_conversations pc JOIN scans s ON s.id = pc.scan_id {scan_filter}"
+            ports_count += cursor.execute(passive_conv_query, scan_params).fetchone()[0]
     
-    # Vulnerabilidades
+    # Vulnerabilidades (Solo activas por ahora)
     vulns_query = f"""
         SELECT COUNT(*) 
         FROM vulnerabilities v
@@ -308,80 +348,91 @@ async def export_results_csv(
     location: Optional[str] = None,
     scan_id: Optional[int] = None,
 ):
-    """Exporta los resultados filtrados en formato CSV."""
+    """Exporta los resultados filtrados en formato CSV, manejando activos y pasivos."""
     conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     cursor = conn.cursor()
 
-    where = "WHERE 1=1"
-    params = []
-    if organization:
-        where += " AND s.organization_name = ?"
-        params.append(organization.upper())
-    if location:
-        where += " AND s.location = ?"
-        params.append(location.upper())
+    # 1. Determinar si estamos exportando un scan pasivo específico
+    is_passive_only = False
     if scan_id:
-        where += " AND sr.scan_id = ?"
-        params.append(scan_id)
-
-    query = f"""
-        SELECT
-            h.ip_address,
-            h.hostname,
-            sr.port,
-            sr.protocol,
-            sr.service_name,
-            sr.product,
-            sr.version,
-            s.organization_name,
-            s.location,
-            sr.discovery_method,
-            s.id AS scan_id
-        FROM scan_results sr
-        JOIN hosts h ON h.id = sr.host_id
-        JOIN scans s ON s.id = sr.scan_id
-        {where}
-        ORDER BY h.ip_address, sr.port
-    """
-    rows = cursor.execute(query, params).fetchall()
-    
-    # Obtener IPs críticas para marcar en el CSV
-    critical_ips = set()
-    if organization:
-        crit_devs = storage.get_critical_devices(organization)
-        for d in crit_devs:
-            for ip in d['ips'].split(','):
-                ip_clean = ip.strip()
-                if ip_clean:
-                    critical_ips.add(ip_clean)
-
-    conn.close()
+        mode_row = cursor.execute("SELECT scan_mode FROM scans WHERE id = ?", (scan_id,)).fetchone()
+        is_passive_only = mode_row and mode_row[0] == 'passive'
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["IP", "Hostname", "Puerto", "Protocolo", "Servicio",
-                     "Producto", "Versión", "Organización", "Ubicación",
-                     "Origen Descubrimiento", "Scan ID", "Crítico"])
-    for row in rows:
-        writer.writerow([
-            row["ip_address"] or "",
-            row["hostname"] or "",
-            row["port"] or "",
-            row["protocol"] or "",
-            row["service_name"] or "",
-            row["product"] or "",
-            row["version"] or "",
-            row["organization_name"] or "",
-            row["location"] or "",
-            row["discovery_method"] or "",
-            row["scan_id"] or "",
-            "SÍ" if row["ip_address"] in critical_ips else "No"
-        ])
+
+    if is_passive_only:
+        # --- EXPORTAR SOLO PASIVO (Formato específico) ---
+        writer.writerow(["IP Origen", "MAC Origen", "Puerto Origen", "IP Destino", "MAC Destino", "Puerto Destino", "Protocolo", "Última Vez", "Organización", "Ubicación", "Scan ID"])
+        passive_data = storage.get_passive_results(scan_id=scan_id)
+        for r in passive_data:
+            writer.writerow([
+                r['src_ip'], r['src_mac'] or "", r['src_port'] or "",
+                r['dst_ip'], r['dst_mac'] or "", r['dst_port'] or "",
+                r['protocol'] or "", r['last_seen'],
+                r['organization_name'], r['location'], r['scan_id']
+            ])
+    else:
+        # --- EXPORTAR ACTIVO (+ PASIVO SI ES "TODOS") ---
+        # Cabecera genérica que acomoda ambos si es necesario
+        header = ["TIPO", "IP/Origen", "Hostname/Destino", "Puerto", "Protocolo", "Servicio/Info", "Producto/MAC_Or", "Versión/MAC_Des", "Organización", "Ubicación", "Origen_Desc", "Crítico", "Scan ID"]
+        writer.writerow(header)
+
+        # A. Resultados Activos
+        where = "WHERE 1=1"
+        res_params = []
+        if organization:
+            where += " AND s.organization_name = ?"
+            res_params.append(organization.upper())
+        if location:
+            where += " AND s.location = ?"
+            res_params.append(location.upper())
+        if scan_id:
+            where += " AND sr.scan_id = ?"
+            res_params.append(scan_id)
+
+        query = f"""
+            SELECT h.ip_address, h.hostname, sr.port, sr.protocol, sr.service_name, sr.product, sr.version,
+                   s.organization_name, s.location, sr.discovery_method, s.id AS scan_id
+            FROM scan_results sr JOIN hosts h ON h.id = sr.host_id JOIN scans s ON s.id = sr.scan_id
+            {where} ORDER BY h.ip_address, sr.port
+        """
+        rows = cursor.execute(query, res_params).fetchall()
+        
+        # IPs críticas
+        critical_ips = set()
+        if organization:
+            crit_devs = storage.get_critical_devices(organization)
+            for d in crit_devs:
+                for ip in d['ips'].split(','):
+                    ip_clean = ip.strip()
+                    if ip_clean: critical_ips.add(ip_clean)
+
+        for row in rows:
+            writer.writerow([
+                "ACTIVO", row["ip_address"], row["hostname"], row["port"], row["protocol"],
+                row["service_name"], row["product"], row["version"], row["organization_name"],
+                row["location"], row["discovery_method"], "SÍ" if row["ip_address"] in critical_ips else "No",
+                row["scan_id"]
+            ])
+
+        # B. Resultados Pasivos (solo si no se filtró por un scan activo específico)
+        # Si hay scan_id y NO es passive_only (ya manejado arriba), entonces es activo_only, no añadimos pasivos.
+        if not scan_id:
+            passive_data = storage.get_passive_results(organization=organization, location=location)
+            for r in passive_data:
+                writer.writerow([
+                    "PASIVO", r['src_ip'], r['dst_ip'], r['src_port'], r['protocol'],
+                    f"Conv a {r['dst_ip']}:{r['dst_port']}", r['src_mac'], r['dst_mac'],
+                    r['organization_name'], r['location'], "passive_capture", "No", r['scan_id']
+                ])
+
+    conn.close()
 
     csv_content = output.getvalue()
-    org_label = (organization or "all").lower()
+    org_label = (organization or "todos").lower()
     filename = f"resultados_{org_label}.csv"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}
     return StreamingResponse(

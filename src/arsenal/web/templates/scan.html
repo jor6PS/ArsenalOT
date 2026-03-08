@@ -9,119 +9,6 @@
 
 <div class="scan-page" style="margin-top: 1.5rem;">
 
-    <!-- Sección de importación XML (colapsable, menos prominente) -->
-    <details class="import-section glass-card" style="margin-bottom: 2rem; padding: 1.5rem;">
-        <summary style="cursor: pointer; color: var(--text-primary); font-weight: 500; user-select: none;">
-            <span>📥 Importar escaneo Nmap desde XML</span>
-        </summary>
-        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #1e293b;">
-            <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">Importa un escaneo Nmap existente desde
-                un archivo XML.</p>
-
-            <form id="importXmlForm" enctype="multipart/form-data"
-                style="display: flex; flex-direction: column; gap: 0.75rem;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label for="import_organization" style="font-size: 0.85rem;">Organización *</label>
-                        {% if org_name %}
-                        <input type="text" id="import_organization" name="organization" value="{{ org_name }}" required
-                            readonly
-                            style="font-size: 0.9rem; padding: 0.4rem; background: var(--bg-body); cursor: not-allowed; opacity: 0.8;">
-                        {% else %}
-                        <input type="text" id="import_organization" name="organization" required
-                            placeholder="Ej: EmpresaX" list="importOrgsList"
-                            style="font-size: 0.9rem; padding: 0.4rem;">
-                        <datalist id="importOrgsList"></datalist>
-                        {% endif %}
-                    </div>
-
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label for="import_location" style="font-size: 0.85rem;">Ubicación *</label>
-                        <input type="text" id="import_location" name="location" required
-                            placeholder="Ej: Oficina Central" style="font-size: 0.9rem; padding: 0.4rem;">
-                    </div>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label for="import_myip" style="font-size: 0.85rem;">Mi IP (Opcional)</label>
-                    <input type="text" id="import_myip" name="myip" placeholder="Ej: 192.168.1.10"
-                        style="font-size: 0.9rem; padding: 0.4rem;">
-                </div>
-
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label for="xml_file" style="font-size: 0.85rem;">Archivo XML de Nmap *</label>
-                    <input type="file" id="xml_file" name="xml_file" accept=".xml" required
-                        style="font-size: 0.85rem; padding: 0.4rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #e2e8f0;">
-                </div>
-
-                <div class="form-actions" style="margin-top: 0.5rem;">
-                    <button type="submit" class="btn btn-primary" id="importXmlBtn"
-                        style="font-size: 0.85rem; padding: 0.5rem 1rem;">
-                        <span id="importBtnText">📥 Importar</span>
-                        <span id="importBtnSpinner" class="spinner hidden"
-                            style="display: none; margin-left: 0.5rem;">⏳</span>
-                    </button>
-                </div>
-            </form>
-
-            <div id="importResult" style="margin-top: 0.75rem; display: none;"></div>
-        </div>
-    </details>
-
-    <!-- Sección de importación PCAP (colapsable, menos prominente) -->
-    <details class="import-section glass-card" style="margin-bottom: 2rem; padding: 1.5rem;">
-        <summary style="cursor: pointer; color: var(--text-primary); font-weight: 500; user-select: none;">
-            <span>🎧 Importar escaneo pasivo desde PCAP</span>
-        </summary>
-        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #1e293b;">
-            <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">Importa un escaneo pasivo desde un
-                archivo PCAP o PCAPNG. La extracción de resultados es la misma que cuando se inicia un escaneo pasivo.
-            </p>
-
-            <form id="importPcapForm" enctype="multipart/form-data"
-                style="display: flex; flex-direction: column; gap: 0.75rem;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label for="import_pcap_organization" style="font-size: 0.85rem;">Organización *</label>
-                        {% if org_name %}
-                        <input type="text" id="import_pcap_organization" name="organization" value="{{ org_name }}"
-                            required readonly
-                            style="font-size: 0.9rem; padding: 0.4rem; background: var(--bg-body); cursor: not-allowed; opacity: 0.8;">
-                        {% else %}
-                        <input type="text" id="import_pcap_organization" name="organization" required
-                            placeholder="Ej: EmpresaX" list="importPcapOrgsList"
-                            style="font-size: 0.9rem; padding: 0.4rem;">
-                        <datalist id="importPcapOrgsList"></datalist>
-                        {% endif %}
-                    </div>
-
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label for="import_pcap_location" style="font-size: 0.85rem;">Ubicación *</label>
-                        <input type="text" id="import_pcap_location" name="location" required
-                            placeholder="Ej: Oficina Central" style="font-size: 0.9rem; padding: 0.4rem;">
-                    </div>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label for="pcap_file" style="font-size: 0.85rem;">Archivo PCAP/PCAPNG *</label>
-                    <input type="file" id="pcap_file" name="pcap_file" accept=".pcap,.pcapng" required
-                        style="font-size: 0.85rem; padding: 0.4rem; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #e2e8f0;">
-                </div>
-
-                <div class="form-actions" style="margin-top: 0.5rem;">
-                    <button type="submit" class="btn btn-primary" id="importPcapBtn"
-                        style="font-size: 0.85rem; padding: 0.5rem 1rem;">
-                        <span id="importPcapBtnText">🎧 Importar</span>
-                        <span id="importPcapBtnSpinner" class="spinner hidden"
-                            style="display: none; margin-left: 0.5rem;">⏳</span>
-                    </button>
-                </div>
-            </form>
-
-            <div id="importPcapResult" style="margin-top: 0.75rem; display: none;"></div>
-        </div>
-    </details>
-
     <form id="scanForm" class="scan-form">
         <div class="form-section">
             <h2>📋 Información Básica</h2>
@@ -143,7 +30,7 @@
                 <input type="text" id="location" name="location" required placeholder="Ej: Oficina Central">
             </div>
 
-            <div class="form-group">
+            <div id="interfaceGroup" class="form-group">
                 <label for="interface">Interfaz de Red</label>
                 <input type="text" id="interface" name="interface" value="eth0" placeholder="eth0">
             </div>
@@ -155,8 +42,9 @@
             <div class="form-group">
                 <label for="scan_mode">Tipo de Escaneo *</label>
                 <select id="scan_mode" name="scan_mode" required onchange="toggleScanMode()">
-                    <option value="active" selected>🔍 Escaneo Activo</option>
-                    <option value="passive">🎧 Escaneo Pasivo</option>
+                    <option value="active" selected>🔍 Escaneo Activo (Descubrimiento y Puertos)</option>
+                    <option value="passive">🎧 Escaneo Pasivo (Captura de Tráfico)</option>
+                    <option value="specific">🎯 Escaneos Específicos (Capturas, Código, Interfaces)</option>
                 </select>
             </div>
         </div>
@@ -164,6 +52,24 @@
         <!-- Sección de Escaneos Activos -->
         <div class="form-section" id="activeScanSection">
             <h2>🔍 Capacidades de Escaneo Activo</h2>
+
+            <!-- Importación Nmap (Movido aquí) -->
+            <details class="import-section"
+                style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed rgba(59, 130, 246, 0.3); border-radius: 8px;">
+                <summary style="cursor: pointer; color: var(--accent-blue); font-weight: 500; font-size: 0.9rem;">
+                    <span>📥 Opcional: Importar desde XML de Nmap</span>
+                </summary>
+                <div style="margin-top: 1rem;">
+                    <div class="form-group" style="margin-bottom: 0.5rem;">
+                        <label for="xml_file" style="font-size: 0.8rem;">Archivo XML de Nmap</label>
+                        <input type="file" id="xml_file" name="xml_file" accept=".xml"
+                            style="font-size: 0.8rem; padding: 0.3rem;">
+                    </div>
+                    <button type="button" class="btn btn-sm" id="importXmlBtn" style="font-size: 0.75rem;">Importar
+                        XML</button>
+                    <div id="importResult" style="margin-top: 0.5rem; font-size: 0.8rem;"></div>
+                </div>
+            </details>
 
             <div class="form-group">
                 <label for="target_range">Rango de IPs *</label>
@@ -177,7 +83,7 @@
                         style="background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; white-space: nowrap;">➕
                         Añadir al Rango</button>
                 </div>
-                <input type="text" id="target_range" name="target_range" required
+                <input type="text" id="target_range_active" name="target_range_active"
                     placeholder="Ej: 192.168.1.0/24 o 192.168.1.100">
             </div>
 
@@ -259,12 +165,12 @@
                 </div>
             </div>
 
-            <!-- Comando Nmap Editable Preview (ahora movido encima de las opciones finales) -->
+            <!-- Comando Nmap Editable Preview -->
             <div id="nmapCommandPreview" class="nmap-command-preview"
                 style="display: none; margin-top: 1.5rem; margin-bottom: 1rem; padding: 1rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <label style="font-weight: 600; color: #e2e8f0; font-size: 0.95rem;">🔧 Comando Nmap Editable
-                        (Ajusta a tu gusto):</label>
+                    <label style="font-weight: 600; color: #e2e8f0; font-size: 0.95rem;">🔧 Comando Nmap
+                        Editable:</label>
                     <button type="button" onclick="copyNmapCommand()"
                         style="padding: 0.25rem 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">
                         📋 Copiar
@@ -273,48 +179,30 @@
                 <textarea id="nmapCommandText" name="custom_nmap_command"
                     style="width: 100%; min-height: 80px; padding: 0.75rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #60a5fa; font-family: 'Courier New', monospace; font-size: 0.9rem; resize: vertical;"
                     spellcheck="false">El comando aparecerá aquí cuando configures las opciones de Nmap</textarea>
-                <small style="color: #94a3b8; font-size: 0.8rem; margin-top: 0.5rem; display: block;">* Puedes modificar
-                    libremente este comando. El escaneo ejecutará exactamente lo que escribas aquí arriba.</small>
-            </div>
-
-            <div class="checkbox-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="screenshots" name="screenshots">
-                    <span>📸 Capturas de Pantalla</span>
-                    <small>Captura de servicios web (requiere Firefox)</small>
-                </label>
-            </div>
-
-            <div class="checkbox-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="ioxid" name="ioxid">
-                    <span>📌 Búsqueda de Interfaces Windows (IOXIDResolver)</span>
-                    <small>Descubre todas las IPs de la máquina mediante DCOM/RPC</small>
-                </label>
-            </div>
-
-            <div class="checkbox-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="source_code" name="source_code">
-                    <span>📄 Código Fuente</span>
-                    <small>Extracción de código HTML de servicios web</small>
-                </label>
-            </div>
-
-            <div id="internalModulesInfo"
-                style="margin-top: 1rem; margin-bottom: 1.5rem; padding: 1rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px;">
-                <p style="margin: 0; color: #94a3b8; font-size: 0.85rem;">
-                    <strong>ℹ️ Nota sobre Módulos Internos:</strong><br>
-                    Las <strong>Capturas de Pantalla</strong> y la extracción de <strong>Código Fuente</strong> no
-                    utilizan comandos de terminal editables. Se ejecutan internamente usando scripts de Python (Selenium
-                    y Requests).
-                </p>
             </div>
         </div>
 
         <!-- Sección de Escaneo Pasivo -->
         <div class="form-section" id="passiveScanSection" style="display: none;">
             <h2>🎧 Configuración de Escaneo Pasivo</h2>
+
+            <!-- Importación PCAP (Movido aquí) -->
+            <details class="import-section"
+                style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 8px;">
+                <summary style="cursor: pointer; color: #10b981; font-weight: 500; font-size: 0.9rem;">
+                    <span>📥 Opcional: Importar desde archivo PCAP</span>
+                </summary>
+                <div style="margin-top: 1rem;">
+                    <div class="form-group" style="margin-bottom: 0.5rem;">
+                        <label for="pcap_file" style="font-size: 0.8rem;">Archivo PCAP/PCAPNG</label>
+                        <input type="file" id="pcap_file" name="pcap_file" accept=".pcap,.pcapng"
+                            style="font-size: 0.8rem; padding: 0.3rem;">
+                    </div>
+                    <button type="button" class="btn btn-sm btn-success" id="importPcapBtn"
+                        style="font-size: 0.75rem; background: #10b981;">Importar PCAP</button>
+                    <div id="importPcapResult" style="margin-top: 0.5rem; font-size: 0.8rem;"></div>
+                </div>
+            </details>
 
             <div class="form-group">
                 <label for="pcap_filter">Filtro BPF (Opcional)</label>
@@ -327,13 +215,58 @@
                 <p style="margin: 0; color: #94a3b8; font-size: 0.9rem;">
                     <strong>ℹ️ Información sobre Escaneo Pasivo:</strong><br>
                     • Captura tráfico de red usando tshark/wireshark<br>
-                    • Extrae automáticamente direcciones IP y puertos descubiertos<br>
-                    • Los resultados se guardan en la base de datos en tiempo real<br>
-                    • Puedes detener el escaneo en cualquier momento<br>
-                    • El archivo pcap puede descargarse después
+                    • Extrae automáticamente direcciones IP, MACs y puertos<br>
+                    • Registra conversaciones entre hosts en la base de datos<br>
+                    • Puedes detener el escaneo en cualquier momento
                 </p>
             </div>
         </div>
+
+        <!-- Sección de Escaneos Específicos -->
+        <div class="form-section" id="specificScanSection" style="display: none;">
+            <h2>🎯 Capacidades de Escaneo Específico</h2>
+
+            <div class="form-group">
+                <label for="target_range_specific">Rango de IPs / Targets *</label>
+                <input type="text" id="target_range_specific" name="target_range_specific"
+                    placeholder="Ej: 192.168.1.50 o rango de red">
+                <small>Define el objetivo para los escaneos específicos seleccionados abajo.</small>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="screenshots" name="screenshots">
+                    <span>📸 Capturas de Pantalla</span>
+                    <small>Captura de servicios web (requiere Firefox)</small>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="source_code" name="source_code">
+                    <span>📄 Código Fuente</span>
+                    <small>Extracción de código HTML de servicios web</small>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="ioxid" name="ioxid">
+                    <span>📌 Múltiples Interfaces (IOXIDResolver)</span>
+                    <small>Descubre todas las IPs de la máquina mediante DCOM/RPC (Windows)</small>
+                </label>
+            </div>
+
+            <div id="internalModulesInfo"
+                style="margin-top: 1rem; margin-bottom: 1.5rem; padding: 1rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px;">
+                <p style="margin: 0; color: #94a3b8; font-size: 0.85rem;">
+                    <strong>ℹ️ Nota:</strong><br>
+                    Estos módulos se ejecutan internamente y no requieren configuración de comandos adicional.
+                </p>
+            </div>
+        </div>
+
+</div>
 
 </div>
 <div class="form-actions">
@@ -378,18 +311,6 @@
             datalist.innerHTML = orgs.map(org =>
                 `<option value="${org.name}">${org.name}</option>`
             ).join('');
-
-            // Para formulario de importación XML
-            const importDatalist = document.getElementById('importOrgsList');
-            importDatalist.innerHTML = orgs.map(org =>
-                `<option value="${org.name}">${org.name}</option>`
-            ).join('');
-
-            // Para formulario de importación PCAP
-            const importPcapDatalist = document.getElementById('importPcapOrgsList');
-            importPcapDatalist.innerHTML = orgs.map(org =>
-                `<option value="${org.name}">${org.name}</option>`
-            ).join('');
         } catch (error) {
             console.error('Error cargando organizaciones:', error);
         }
@@ -400,19 +321,28 @@
         const scanMode = document.getElementById('scan_mode').value;
         const activeSection = document.getElementById('activeScanSection');
         const passiveSection = document.getElementById('passiveScanSection');
-        const targetRangeField = document.getElementById('target_range');
+        const specificSection = document.getElementById('specificScanSection');
+        const interfaceGroup = document.getElementById('interfaceGroup');
+
+        // Reset visibilidad
+        activeSection.style.display = 'none';
+        passiveSection.style.display = 'none';
+        specificSection.style.display = 'none';
+        interfaceGroup.style.display = 'block'; // Mostrar por defecto
 
         if (scanMode === 'active') {
             activeSection.style.display = 'block';
-            passiveSection.style.display = 'none';
-            targetRangeField.required = true;
-        } else {
-            activeSection.style.display = 'none';
+            document.getElementById('target_range_active').required = true;
+        } else if (scanMode === 'passive') {
             passiveSection.style.display = 'block';
-            targetRangeField.required = false;
+            interfaceGroup.style.display = 'block'; // Necesario para tshark
+        } else if (scanMode === 'specific') {
+            specificSection.style.display = 'block';
+            document.getElementById('target_range_specific').required = true;
         }
 
         updateNmapCommand();
+        updateHostDiscoveryCommand();
     }
 
     // Mostrar/ocultar opciones de Nmap
@@ -491,7 +421,7 @@
 
     function addSelectedNetwork() {
         const selector = document.getElementById('networkSelector');
-        const targetInput = document.getElementById('target_range');
+        const targetInput = document.getElementById('target_range_active');
         if (selector.value) {
             const valsToAdd = selector.value.split(' ');
             let currentVals = targetInput.value.trim() === '' ? [] : targetInput.value.trim().split(/\s+/);
@@ -528,7 +458,7 @@
             return null;
         }
 
-        const targetRange = document.getElementById('target_range').value || 'TARGET_IP';
+        const targetRange = document.getElementById('target_range_active').value || 'TARGET_IP';
         const speed = document.getElementById('nmap_speed').value || 'normal';
         const enableVersions = document.getElementById('nmap_versions').checked;
         const enableVulns = document.getElementById('nmap_vulns').checked;
@@ -601,9 +531,6 @@
         // Target (al final)
         cmd.push(targetRange);
 
-        // Output XML (no incluirlo en el preview, se genera automáticamente)
-        // cmd.push('-oX', 'nmap_scan.xml');
-
         return cmd.join(' ');
     }
 
@@ -615,7 +542,7 @@
             return null;
         }
 
-        const targetRange = document.getElementById('target_range').value || 'TARGET_IP';
+        const targetRange = document.getElementById('target_range_active').value || 'TARGET_IP';
         return `arp-scan --localnet ${targetRange}`;
     }
 
@@ -647,7 +574,6 @@
         if (scanMode === 'active' && nmapEnabled) {
             const cmd = buildNmapCommand();
             if (cmd) {
-                // Al ser textarea usamos .value en vez de .textContent
                 commandText.value = cmd;
                 previewDiv.style.display = 'block';
             } else {
@@ -659,7 +585,6 @@
     }
 
     function copyNmapCommand() {
-        // Al ser textarea usamos .value
         const commandText = document.getElementById('nmapCommandText').value;
         navigator.clipboard.writeText(commandText).then(() => {
             const btn = event.target;
@@ -700,7 +625,7 @@
         updateHostDiscoveryCommand();
     });
 
-    document.getElementById('target_range').addEventListener('input', () => {
+    document.getElementById('target_range_active').addEventListener('input', () => {
         updateNmapCommand();
         updateHostDiscoveryCommand();
     });
@@ -719,7 +644,7 @@
     let resultsPollingInterval = null;
     let lastResultsHash = null;
 
-    // Manejar envío del formulario
+    // Manejar envío del formulario de inicio de escaneo
     document.getElementById('scanForm').addEventListener('submit', async function (e) {
         e.preventDefault();
 
@@ -737,10 +662,14 @@
         const formData = new FormData(this);
         const scanMode = formData.get('scan_mode') || 'active';
 
+        let targetRange = '0.0.0.0/0';
+        if (scanMode === 'active') targetRange = formData.get('target_range_active');
+        else if (scanMode === 'specific') targetRange = formData.get('target_range_specific');
+
         const config = {
             organization: formData.get('organization'),
             location: formData.get('location'),
-            target_range: scanMode === 'passive' ? '0.0.0.0/0' : (formData.get('target_range') || ''),
+            target_range: targetRange,
             interface: formData.get('interface') || 'eth0',
             scan_mode: scanMode,
             host_discovery: scanMode === 'active' ? formData.has('host_discovery') : false,
@@ -769,25 +698,19 @@
             const result = await response.json();
 
             if (!response.ok) {
-                // El servidor devolvió un error
                 const errorMsg = result.detail || result.message || 'Error desconocido al iniciar el escaneo';
-                console.error('Error del servidor:', errorMsg);
                 alert('❌ Error: ' + errorMsg);
                 startBtn.disabled = false;
                 btnText.textContent = '🚀 Iniciar Escaneo';
                 btnSpinner.style.display = 'none';
-                btnSpinner.classList.add('hidden');
                 return;
             }
 
             if (result.scan_id) {
                 currentScanId = result.scan_id;
-
-                // Restaurar botón y mostrar botón de cancelar
                 startBtn.disabled = false;
                 btnText.textContent = '🚀 Iniciar Escaneo';
                 btnSpinner.style.display = 'none';
-                btnSpinner.classList.add('hidden');
                 cancelBtn.style.display = 'inline-block';
                 cancelBtn.classList.remove('hidden');
 
@@ -795,18 +718,9 @@
                 stopBtn.style.display = 'inline-block';
                 stopBtn.classList.remove('hidden');
 
-                // Guardar scan_id en sessionStorage para persistencia
                 sessionStorage.setItem('currentScanId', result.scan_id.toString());
-
-                // Mostrar progreso
                 document.getElementById('scanProgress').classList.remove('hidden');
                 startProgressTracking(result.scan_id);
-            } else {
-                alert('Error al iniciar el escaneo: No se recibió scan_id');
-                startBtn.disabled = false;
-                btnText.textContent = '🚀 Iniciar Escaneo';
-                btnSpinner.style.display = 'none';
-                btnSpinner.classList.add('hidden');
             }
         } catch (error) {
             console.error('Error:', error);
@@ -814,9 +728,78 @@
             startBtn.disabled = false;
             btnText.textContent = '🚀 Iniciar Escaneo';
             btnSpinner.style.display = 'none';
-            btnSpinner.classList.add('hidden');
         }
     });
+
+    // Manejar detención/cancelación (no cambian significativamente)
+    // ... mantiene lógica de detención ...
+
+    // Manejar importación XML de Nmap
+    document.getElementById('importXmlBtn').addEventListener('click', async function () {
+        const fileInput = document.getElementById('xml_file');
+        const resultDiv = document.getElementById('importResult');
+        const org = document.getElementById('organization').value;
+        const loc = document.getElementById('location').value;
+
+        if (!fileInput.files[0]) {
+            alert('Selecciona un archivo XML'); return;
+        }
+        if (!org || !loc) {
+            alert('Especifica organización y origen primero'); return;
+        }
+
+        const formData = new FormData();
+        formData.append('xml_file', fileInput.files[0]);
+        formData.append('organization', org);
+        formData.append('location', loc);
+
+        resultDiv.innerHTML = '⌛ Importando...';
+        try {
+            const resp = await fetch('/api/scan/import-xml', { method: 'POST', body: formData });
+            const res = await resp.json();
+            if (resp.ok) {
+                resultDiv.innerHTML = `<div class="success">✅ Importado ID: ${res.scan_id} (${res.stats.hosts_processed} hosts)</div>`;
+            } else {
+                resultDiv.innerHTML = `<div class="error">❌ ${res.detail || 'Error'}</div>`;
+            }
+        } catch (e) {
+            resultDiv.innerHTML = `❌ Error de red: ${e.message}`;
+        }
+    });
+
+    // Manejar importación PCAP
+    document.getElementById('importPcapBtn').addEventListener('click', async function () {
+        const fileInput = document.getElementById('pcap_file');
+        const resultDiv = document.getElementById('importPcapResult');
+        const org = document.getElementById('organization').value;
+        const loc = document.getElementById('location').value;
+
+        if (!fileInput.files[0]) {
+            alert('Selecciona un archivo PCAP'); return;
+        }
+        if (!org || !loc) {
+            alert('Especifica organización y origen primero'); return;
+        }
+
+        const formData = new FormData();
+        formData.append('pcap_file', fileInput.files[0]);
+        formData.append('organization', org);
+        formData.append('location', loc);
+
+        resultDiv.innerHTML = '⌛ Importando...';
+        try {
+            const resp = await fetch('/api/scan/import-pcap', { method: 'POST', body: formData });
+            const res = await resp.json();
+            if (resp.ok) {
+                resultDiv.innerHTML = `<div class="success">✅ Importado ID: ${res.scan_id} (${res.stats.hosts_processed} hosts)</div>`;
+            } else {
+                resultDiv.innerHTML = `<div class="error">❌ ${res.detail || 'Error'}</div>`;
+            }
+        } catch (e) {
+            resultDiv.innerHTML = `❌ Error de red: ${e.message}`;
+        }
+    });
+
 
     // Manejar detención (solo parar proceso)
     document.getElementById('stopScanBtn').addEventListener('click', async function () {

@@ -355,6 +355,33 @@ class ScanStorage:
             ON scan_results(port, protocol)
         """)
         
+        # Tabla de conversaciones pasivas
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS passive_conversations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_id INTEGER NOT NULL,
+                src_ip TEXT NOT NULL,
+                src_mac TEXT,
+                src_port INTEGER,
+                dst_ip TEXT NOT NULL,
+                dst_mac TEXT,
+                dst_port INTEGER,
+                protocol TEXT,
+                last_seen TIMESTAMP NOT NULL,
+                FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_passive_conv_scan 
+            ON passive_conversations(scan_id)
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_passive_conv_ips 
+            ON passive_conversations(src_ip, dst_ip)
+        """)
+        
         conn.commit()
         conn.close()
     
@@ -1249,3 +1276,92 @@ class ScanStorage:
             conn.close()
 
 
+    def save_passive_conversation(self, scan_id: int, src_ip: str, dst_ip: str,
+                                 src_port: int = None, dst_port: int = None,
+                                 protocol: str = None, src_mac: str = None,
+                                 dst_mac: str = None):
+        """Guarda una conversación entre dos hosts detectada de forma pasiva."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        cursor = conn.cursor()
+        
+        try:
+            # Intentar actualizar si ya existe la conversación en este escaneo
+            # (IPs y puertos en cualquier dirección para simplificar, o dirección específica)
+            # Por ahora guardamos dirección específica src -> dst
+            cursor.execute("""
+                INSERT INTO passive_conversations 
+                (scan_id, src_ip, src_mac, src_port, dst_ip, dst_mac, dst_port, protocol, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (scan_id, src_ip, src_mac, src_port, dst_ip, dst_mac, dst_port, protocol, datetime.now()))
+            conn.commit()
+        except Exception as e:
+            print(f"⚠️  Error guardando conversación pasiva: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
+
+    def get_passive_results(self, scan_id: int = None, organization: str = None, 
+                           location: str = None) -> List[Dict]:
+        """Obtiene resultados de conversaciones pasivas filtrados."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT 
+                pc.id, pc.scan_id,
+                pc.src_ip, pc.src_mac, pc.src_port,
+                pc.dst_ip, pc.dst_mac, pc.dst_port,
+                pc.protocol, pc.last_seen,
+                s.organization_name, s.location
+            FROM passive_conversations pc
+            JOIN scans s ON pc.scan_id = s.id
+            WHERE 1=1
+        """
+        params = []
+        if scan_id:
+            query += " AND pc.scan_id = ?"
+            params.append(scan_id)
+        if organization:
+            query += " AND s.organization_name = ?"
+            params.append(organization.upper())
+        if location:
+            query += " AND s.location = ?"
+            params.append(location.upper())
+            
+        query += " ORDER BY pc.last_seen DESC"
+        
+        try:
+            rows = cursor.execute(query, params).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def get_passive_stats(self, scan_id: int) -> Dict[str, int]:
+        """Obtiene estadísticas de un escaneo pasivo."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        cursor = conn.cursor()
+        
+        try:
+            # Hosts únicos (origen o destino)
+            hosts_query = """
+                SELECT COUNT(DISTINCT ip) FROM (
+                    SELECT src_ip as ip FROM passive_conversations WHERE scan_id = ?
+                    UNION
+                    SELECT dst_ip as ip FROM passive_conversations WHERE scan_id = ?
+                )
+            """
+            hosts_count = cursor.execute(hosts_query, (scan_id, scan_id)).fetchone()[0]
+            
+            # Número de conversaciones
+            conv_count = cursor.execute(
+                "SELECT COUNT(*) FROM passive_conversations WHERE scan_id = ?", (scan_id,)
+            ).fetchone()[0]
+            
+            return {
+                "hosts_count": hosts_count,
+                "conversations_count": conv_count
+            }
+        finally:
+            conn.close()

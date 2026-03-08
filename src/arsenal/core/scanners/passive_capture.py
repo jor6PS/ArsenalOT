@@ -60,19 +60,19 @@ class PassiveCapture:
         except FileNotFoundError:
             raise FileNotFoundError("tshark no está instalado. Instala Wireshark para captura pasiva.")
     
-    def extract_connections(self, pcap_file: str) -> Set[Tuple[str, int, str]]:
+    def extract_connections(self, pcap_file: str) -> list[Dict]:
         """
-        Extrae conexiones (IP, puerto, protocolo) de un archivo pcap.
+        Extrae conexiones detalladas (IP, puerto, protocolo, MAC) de un archivo pcap.
         
         Args:
             pcap_file: Ruta al archivo pcap
             
         Returns:
-            Set de tuplas (ip, port, protocol)
+            Lista de diccionarios con la información de la conversación
         """
-        connections = set()
+        conversations = []
         
-        # Usar tshark para extraer conexiones
+        # Usar tshark para extraer conexiones con MACs
         cmd = [
             'tshark', '-r', pcap_file,
             '-T', 'fields',
@@ -82,6 +82,8 @@ class PassiveCapture:
             '-e', 'tcp.dstport',
             '-e', 'udp.srcport',
             '-e', 'udp.dstport',
+            '-e', 'eth.src',
+            '-e', 'eth.dst',
             '-E', 'header=n',
             '-E', 'separator=|'
         ]
@@ -90,42 +92,63 @@ class PassiveCapture:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
             
             if result.returncode != 0:
-                return connections
+                return conversations
+            
+            seen_convs = set()
             
             for line in result.stdout.strip().split('\n'):
                 if not line:
                     continue
                 
                 parts = line.split('|')
-                if len(parts) < 6:
+                if len(parts) < 8:
                     continue
                 
-                src_ip, dst_ip, tcp_sport, tcp_dport, udp_sport, udp_dport = parts[:6]
+                src_ip, dst_ip, tcp_sport, tcp_dport, udp_sport, udp_dport, src_mac, dst_mac = parts[:8]
                 
+                if not src_ip or not dst_ip:
+                    continue
+
+                protocol = None
+                src_port = None
+                dst_port = None
+
                 # Procesar TCP
                 if tcp_sport and tcp_sport.strip() and tcp_dport and tcp_dport.strip():
                     try:
                         src_port = int(tcp_sport.strip())
                         dst_port = int(tcp_dport.strip())
-                        connections.add((src_ip.strip(), src_port, 'tcp'))
-                        connections.add((dst_ip.strip(), dst_port, 'tcp'))
+                        protocol = 'tcp'
                     except (ValueError, AttributeError):
                         pass
                 
-                # Procesar UDP
-                if udp_sport and udp_sport.strip() and udp_dport and udp_dport.strip():
+                # Procesar UDP (si no es TCP)
+                if not protocol and udp_sport and udp_sport.strip() and udp_dport and udp_dport.strip():
                     try:
                         src_port = int(udp_sport.strip())
                         dst_port = int(udp_dport.strip())
-                        connections.add((src_ip.strip(), src_port, 'udp'))
-                        connections.add((dst_ip.strip(), dst_port, 'udp'))
+                        protocol = 'udp'
                     except (ValueError, AttributeError):
                         pass
+                
+                # Crear clave única para evitar duplicados masivos en el mismo pcap
+                conv_key = (src_ip, dst_ip, src_port, dst_port, protocol)
+                if conv_key not in seen_convs:
+                    conversations.append({
+                        'src_ip': src_ip.strip(),
+                        'dst_ip': dst_ip.strip(),
+                        'src_port': src_port,
+                        'dst_port': dst_port,
+                        'protocol': protocol,
+                        'src_mac': src_mac.strip() if src_mac else None,
+                        'dst_mac': dst_mac.strip() if dst_mac else None
+                    })
+                    seen_convs.add(conv_key)
             
         except Exception as e:
             print(f"⚠️  Error extrayendo conexiones: {e}")
         
-        return connections
+        return conversations
     
     def extract_protocols(self, pcap_file: str) -> Dict[str, Set[str]]:
         """

@@ -141,6 +141,7 @@ class PortScanner:
         """
         self.output_file = output_file
         self.max_threads = max_threads
+        self.current_process: Optional[subprocess.Popen] = None
     
     def format_ports_list(self, ports: List[int]) -> str:
         """Formatea una lista de puertos en formato Nmap."""
@@ -245,13 +246,13 @@ class PortScanner:
         cmd.append(target_range)
         
         return cmd
-    
-    def scan(self, target_range: str, speed: str = 'normal',
+    def scan(self, target_range: str, speed: str = 'normal', 
             ot_ports: bool = True, it_ports: bool = True,
             custom_ports: Optional[str] = None,
             enable_versions: bool = False,
             enable_vulns: bool = False,
-            output_file: Optional[str] = None) -> str:
+            output_file: Optional[str] = None,
+            process_callback: Optional[callable] = None) -> str:
         """
         Ejecuta un escaneo de puertos con Nmap mejorado.
         
@@ -296,14 +297,33 @@ class PortScanner:
             print(f"   Escaneo de vulnerabilidades: ✓ (incluyendo scripts OT)")
         
         try:
-            # Ejecutar Nmap
-            result = subprocess.run(
+            # Ejecutar Nmap usando Popen para permitir seguimiento/cancelación
+            self.current_process = subprocess.Popen(
                 cmd,
-                capture_output=True,
-                text=True,
-                check=False
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
             )
+        
+            # Llamar al callback si se proporcionó
+            if process_callback:
+                try:
+                    process_callback(self.current_process)
+                except:
+                    pass
             
+            stdout, stderr = self.current_process.communicate()
+            returncode = self.current_process.returncode
+            
+            # Crear un objeto similar al resultado de subprocess.run para compatibilidad mínima interna
+            class DummyResult:
+                def __init__(self, rc, out, err):
+                    self.returncode = rc
+                    self.stdout = out
+                    self.stderr = err
+            
+            result = DummyResult(returncode, stdout, stderr)
+                
             # Nmap puede devolver códigos de salida diferentes:
             # 0: éxito
             # 1: algún error pero puede haber resultados

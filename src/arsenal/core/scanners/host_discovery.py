@@ -34,6 +34,7 @@ class HostDiscovery:
         self.interface = interface
         self.timeout = timeout
         self.max_threads = max_threads
+        self.current_process: Optional[subprocess.Popen] = None
     
     def get_local_ip(self) -> str:
         """Obtiene la IP local de la máquina."""
@@ -44,7 +45,7 @@ class HostDiscovery:
         except Exception:
             return '127.0.0.1'
     
-    def arp_scan(self, target_range: str) -> Set[str]:
+    def arp_scan(self, target_range: str, process_callback: Optional[callable] = None) -> Set[str]:
         """
         Ejecuta un escaneo ARP en la interfaz especificada.
         
@@ -69,18 +70,26 @@ class HostDiscovery:
         cmd = ["arp-scan", "--interface", self.interface, "--local", target_range]
         
         try:
-            result = subprocess.run(
+            self.current_process = subprocess.Popen(
                 cmd,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                check=False
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
             )
             
-            if result.returncode == 0 or result.stdout:
+            # Notificar callback
+            if process_callback:
+                try:
+                    process_callback(self.current_process)
+                except:
+                    pass
+            
+            stdout, stderr = self.current_process.communicate()
+            
+            if self.current_process.returncode == 0 or stdout:
                 # Extraer IPs de la salida (formato: IP MAC Vendor)
                 ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
-                ips = re.findall(ip_pattern, result.stdout)
+                ips = re.findall(ip_pattern, stdout)
                 
                 # Filtrar IPs válidas y excluir IPs locales comunes
                 for ip_str in ips:
@@ -240,7 +249,9 @@ class HostDiscovery:
         
         return discovered
     
-    def discover_hosts(self, target_range: str, techniques: Optional[List[str]] = None) -> Set[str]:
+    def discover_hosts(self, target_range: str, techniques: Optional[List[str]] = None, 
+                      process_callback: Optional[callable] = None,
+                      is_cancelled_callback: Optional[callable] = None) -> Set[str]:
         """
         Descubre hosts usando múltiples técnicas de forma inteligente.
         
@@ -267,26 +278,32 @@ class HostDiscovery:
         
         # Técnica 1: ARP scan (más rápido en redes locales)
         if 'arp' in techniques:
+            if is_cancelled_callback and is_cancelled_callback(): return all_discovered
             print("   📡 Ejecutando ARP scan...")
-            arp_results = self.arp_scan(target_range)
+            arp_results = self.arp_scan(target_range, process_callback=process_callback)
             all_discovered.update(arp_results)
             print(f"      ✓ Descubiertos {len(arp_results)} hosts vía ARP")
+            if is_cancelled_callback and is_cancelled_callback(): return all_discovered
         
         # Técnica 2: ICMP ping (técnica estándar)
         if 'icmp' in techniques:
+            if is_cancelled_callback and is_cancelled_callback(): return all_discovered
             print("   📡 Ejecutando ICMP ping scan...")
             icmp_results = self.icmp_ping_scan(target_range)
             all_discovered.update(icmp_results)
             print(f"      ✓ Descubiertos {len(icmp_results)} hosts vía ICMP")
+            if is_cancelled_callback and is_cancelled_callback(): return all_discovered
         
         # Técnica 3: SYN quick scan (para hosts que filtran ICMP)
         # Solo si las técnicas anteriores no encontraron suficientes hosts
         # o si se solicita explícitamente
         if 'syn' in techniques and len(all_discovered) < 10:
+            if is_cancelled_callback and is_cancelled_callback(): return all_discovered
             print("   📡 Ejecutando SYN quick scan (puertos comunes)...")
             syn_results = self.syn_quick_scan(target_range)
             all_discovered.update(syn_results)
             print(f"      ✓ Descubiertos {len(syn_results)} hosts vía SYN scan")
+            if is_cancelled_callback and is_cancelled_callback(): return all_discovered
         
         print(f"✅ Total de hosts únicos descubiertos: {len(all_discovered)}")
         

@@ -222,25 +222,29 @@ async def get_scan_info(scan_id: int):
 
 @app.post("/api/scan/start")
 async def start_scan(config: ScanConfig):
-    """Inicia un nuevo escaneo (activo o pasivo)."""
+    """Inicia un nuevo escaneo (activo, pasivo o específico)."""
     # Validar scan_mode
-    if config.scan_mode not in ["active", "passive"]:
+    if config.scan_mode not in ["active", "passive", "specific"]:
         raise HTTPException(
             status_code=400, 
-            detail=f"Modo de escaneo inválido: '{config.scan_mode}'. Debe ser 'active' o 'passive'"
+            detail=f"Modo de escaneo inválido: '{config.scan_mode}'. Debe ser 'active', 'passive' o 'specific'"
         )
     
-    # Validar target_range para escaneos activos
-    if config.scan_mode == "active":
+    # Validar target_range para escaneos activos o específicos
+    if config.scan_mode in ["active", "specific"]:
         if not config.target_range or config.target_range.strip() == "":
-            raise HTTPException(status_code=400, detail="target_range es requerido para escaneos activos")
-        if not check_dependencies(check_optional=False, check_screenshots=config.screenshots):
-            raise HTTPException(status_code=400, detail="Dependencias críticas faltantes")
+            raise HTTPException(status_code=400, detail="target_range es requerido para escaneos activos o específicos")
+        
+        # Verificar dependencias si se requieren capturas
+        if config.screenshots or config.source_code:
+            if not check_dependencies(check_optional=False, check_screenshots=config.screenshots):
+                raise HTTPException(status_code=400, detail="Dependencias críticas faltantes para capturas")
+                
     elif config.scan_mode == "passive":
         # Para escaneos pasivos, target_range no es crítico (usar por defecto si no se proporciona)
         if not config.target_range or config.target_range.strip() == "":
             config.target_range = "0.0.0.0/0"
-        # Verificar que tshark esté disponible usando el sistema de verificación de dependencias
+        # Verificar que tshark esté disponible
         from arsenal.scripts.check_env import DependencyChecker
         checker = DependencyChecker()
         tshark_found = checker.check_command(
@@ -258,11 +262,19 @@ async def start_scan(config: ScanConfig):
             )
     
     # Determinar scan_type según el modo
-    scan_type = "passive" if config.scan_mode == "passive" else config.nmap_speed
+    if config.scan_mode == "active":
+        scan_type = config.nmap_speed
+    elif config.scan_mode == "specific":
+        scan_type = "specific"
+    else:
+        scan_type = "passive"
     
     # Crear escaneo en BD
     # Determinar myip usando la interfaz pasada
     myip = config.myip if config.myip else get_interface_ip(config.interface)
+    
+    # Forzar desactivación de ciertos flags si no es modo activo
+    is_active = config.scan_mode == "active"
     
     scan_id = storage.start_scan(
         organization=config.organization,
@@ -271,10 +283,10 @@ async def start_scan(config: ScanConfig):
         target_range=config.target_range,
         interface=config.interface,
         myip=myip,
-        enable_version_detection=config.nmap_versions if config.scan_mode == "active" else False,
-        enable_vulnerability_scan=config.nmap_vulns if config.scan_mode == "active" else False,
-        enable_screenshots=config.screenshots if config.scan_mode == "active" else False,
-        enable_source_code=config.source_code if config.scan_mode == "active" else False,
+        enable_version_detection=config.nmap_versions if is_active else False,
+        enable_vulnerability_scan=config.nmap_vulns if is_active else False,
+        enable_screenshots=config.screenshots, # Permitir en specific
+        enable_source_code=config.source_code, # Permitir en specific
         scan_mode=config.scan_mode
     )
     
@@ -282,6 +294,7 @@ async def start_scan(config: ScanConfig):
     if config.scan_mode == "passive":
         target_func = scans_module.run_passive_scan_background
     else:
+        # Modo 'active' y 'specific' usan run_scan_background
         target_func = scans_module.run_scan_background
 
     scan_thread = threading.Thread(
@@ -788,32 +801,57 @@ async def get_scan_results_live(scan_id: int):
     # Obtener el estado del escaneo para devolverlo también
     scan_status = scan['status']
     
-    # Obtener información de enrichments (screenshots y source code) para cada resultado
-    enriched_results = []
-    for row in results:
-        result_dict = dict(row)
-        
-        # Buscar screenshots y source code para este scan_result
-        enrichments = cursor.execute("""
-            SELECT enrichment_type, file_path
-            FROM enrichments
-            WHERE scan_result_id = ?
-        """, (result_dict['scan_result_id'],)).fetchall()
-        
-        result_dict['has_screenshot'] = any(e['enrichment_type'] == 'Screenshot' for e in enrichments)
-        result_dict['has_source_code'] = any(e['enrichment_type'] == 'Websource' for e in enrichments)
-        
-        enriched_results.append(result_dict)
+    # Determinar si es un escaneo pasivo
+    is_passive = cursor.execute("SELECT scan_mode FROM scans WHERE id = ?", (scan_id,)).fetchone()[0] == 'passive'
     
-    # Obtener estadísticas actualizadas
-    stats = cursor.execute("""
-        SELECT 
-            COUNT(DISTINCT h.id) as hosts_count,
-            COUNT(sr.id) as ports_count
-        FROM scan_results sr
-        JOIN hosts h ON h.id = sr.host_id
-        WHERE sr.scan_id = ?
-    """, (scan_id,)).fetchone()
+    if is_passive:
+        # Para escaneos pasivos, obtenemos conversaciones
+        passive_results = storage.get_passive_results(scan_id=scan_id)
+        enriched_results = []
+        for res in passive_results:
+            # Aplanar/Mapear src -> dst como resultados para la tabla
+            # Mostramos el par src:port -> dst:port como una entrada de servicio
+            enriched_results.append({
+                "ip_address": res['src_ip'],
+                "hostname": f"conv -> {res['dst_ip']}",
+                "port": res['src_port'],
+                "protocol": res['protocol'],
+                "service_name": f"To {res['dst_ip']}:{res['dst_port']}",
+                "product": res['src_mac'],
+                "version": res['dst_mac'],
+                "organization_name": res['organization_name'],
+                "location": res['location'],
+                "scan_id": res['scan_id'],
+                "scan_result_id": f"passive_{res.get('id', 0)}", # ID virtual
+                "state": "active",
+                "interfaces_json": None,
+                "discovery_method": "passive_capture",
+                "has_screenshot": False,
+                "has_source_code": False,
+                "is_critical": False
+            })
+        
+        # Estadísticas para escaneo pasivo
+        stats_data = storage.get_passive_stats(scan_id)
+        stats = type('obj', (object,), {
+            'hosts_count': stats_data['hosts_count'],
+            'ports_count': stats_data['conversations_count']
+        })
+    else:
+        # Lógica original para escaneos activos/específicos
+        results = cursor.execute(query, (scan_id,)).fetchall()
+        for row in results:
+            result_dict = dict(row)
+            enrichments = cursor.execute("SELECT enrichment_type FROM enrichments WHERE scan_result_id = ?", (result_dict['scan_result_id'],)).fetchall()
+            result_dict['has_screenshot'] = any(e['enrichment_type'] == 'Screenshot' for e in enrichments)
+            result_dict['has_source_code'] = any(e['enrichment_type'] == 'Websource' for e in enrichments)
+            enriched_results.append(result_dict)
+        
+        stats = cursor.execute("""
+            SELECT COUNT(DISTINCT h.id) as hosts_count, COUNT(sr.id) as ports_count
+            FROM scan_results sr JOIN hosts h ON h.id = sr.host_id
+            WHERE sr.scan_id = ?
+        """, (scan_id,)).fetchone()
 
     # Identificar IPs críticas de la organización para marcar los resultados
     critical_ips = set()
@@ -897,31 +935,23 @@ async def get_results(
     
     query += " ORDER BY s.started_at DESC, h.ip_address, COALESCE(sr.port, 0) LIMIT 1000"
     
+    # 1. Obtener resultados activos
     results = cursor.execute(query, params).fetchall()
-    
-    # Obtener información de enrichments (screenshots y source code) para cada resultado
     enriched_results = []
     for row in results:
         result_dict = dict(row)
-        
-        # Buscar screenshots y source code para este scan_result
         enrichments = cursor.execute("""
-            SELECT enrichment_type, file_path
-            FROM enrichments
-            WHERE scan_result_id = ?
+            SELECT enrichment_type, file_path FROM enrichments WHERE scan_result_id = ?
         """, (result_dict['scan_result_id'],)).fetchall()
         
         result_dict['has_screenshot'] = any(e['enrichment_type'] == 'Screenshot' for e in enrichments)
         result_dict['has_source_code'] = any(e['enrichment_type'] == 'Websource' for e in enrichments)
-        
-        # Obtener rutas de archivos
-        screenshot_path = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Screenshot'), None)
-        source_path = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Websource'), None)
-        
-        result_dict['screenshot_path'] = screenshot_path
-        result_dict['source_code_path'] = source_path
-        
+        result_dict['screenshot_path'] = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Screenshot'), None)
+        result_dict['source_code_path'] = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Websource'), None)
         enriched_results.append(result_dict)
+
+    # 2. Si pedimos un scan específico, no mezclamos pasivos aquí (se hará en otro endpoint)
+    # Anteriormente se mezclaban aquí, pero causaba confusión en la UI.
     
     # Enriquecer con flag is_critical si se filtró por organización
     if organization:
@@ -946,6 +976,20 @@ async def get_results(
     conn.close()
     
     return enriched_results
+
+@app.get("/api/results/passive")
+async def get_passive_results_api(
+    organization: Optional[str] = None,
+    location: Optional[str] = None,
+    scan_id: Optional[int] = None
+):
+    """Obtiene resultados de conversaciones pasivas directamente."""
+    try:
+        passive_data = storage.get_passive_results(scan_id=scan_id, organization=organization, location=location)
+        return passive_data
+    except Exception as e:
+        print(f"Error obteniendo resultados pasivos: {e}")
+        return []
 
 @app.delete("/api/scan/{scan_id}")
 async def delete_scan(scan_id: int):
