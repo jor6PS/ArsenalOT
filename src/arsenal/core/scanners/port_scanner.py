@@ -207,36 +207,41 @@ class PortScanner:
         """
         cmd = ['nmap']
         
-        # Configuración de velocidad (solo -T según selección del usuario)
+        # Configuración de velocidad
         speed_map = {
             'rapido': '-T4',
             'normal': '-T3',
-            'lento': '-T2'
+            'lento': '-T2',
+            'icmp': '-T4' # ICMP por defecto rápido
         }
         
         cmd.append(speed_map.get(speed, '-T3'))
         
-        # Técnica de escaneo: TCP connect scan (no requiere privilegios root)
-        cmd.append('-sT')
-        
-        # Puertos
-        if ports:
-            ports_str = self.format_ports_list(ports)
-            if ports_str:
-                cmd.extend(ports_str.split())
+        if speed == 'icmp':
+            # Modo descubrimiento ICMP (Ping Scan)
+            cmd.append('-sn')
         else:
-            # Por defecto, top 1000 puertos más comunes
-            cmd.append('--top-ports')
-            cmd.append('1000')
-        
-        # Detección de versiones (solo si está marcado en la interfaz)
-        if enable_versions:
-            cmd.append('-sV')
-        
-        # Scripts de vulnerabilidades (solo si está marcado en la interfaz)
-        if enable_vulns:
-            cmd.append('--script')
-            cmd.append('vuln')
+            # Técnica de escaneo: TCP connect scan (no requiere privilegios root)
+            cmd.append('-sT')
+            
+            # Puertos (solo si no es modo ICMP)
+            if ports:
+                ports_str = self.format_ports_list(ports)
+                if ports_str:
+                    cmd.extend(ports_str.split())
+            else:
+                # Por defecto, top 1000 puertos más comunes
+                cmd.append('--top-ports')
+                cmd.append('1000')
+            
+            # Detección de versiones (solo si está marcado en la interfaz y no es ICMP)
+            if enable_versions:
+                cmd.append('-sV')
+            
+            # Scripts de vulnerabilidades (solo si está marcado en la interfaz y no es ICMP)
+            if enable_vulns:
+                cmd.append('--script')
+                cmd.append('vuln')
         
         # Salida XML (necesario para el funcionamiento del sistema)
         if output_file:

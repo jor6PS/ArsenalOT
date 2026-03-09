@@ -430,9 +430,10 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     port_scanner = PortScanner(output_file=str(nmap_xml_path))
                     
                     # Ejecutar escaneo Nmap (pasando callback para registro)
+                    # Si nmap_icmp está activo, forzamos speed='icmp' para que el scanner use -sn
                     xml_file = port_scanner.scan(
                         target_range=target_str,
-                        speed=config.nmap_speed,
+                        speed='icmp' if config.nmap_icmp else config.nmap_speed,
                         ot_ports=config.nmap_ot_ports,
                         it_ports=config.nmap_it_ports,
                         custom_ports=config.custom_ports,
@@ -942,6 +943,10 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                 print(f"[Scan {scan_id}] ⏩ Captura ya realizada en otro escaneo para {host_ip}:{port_num}, saltando.")
                                 continue
 
+                            if is_scan_cancelled(): 
+                                print(f"[Scan {scan_id}] 🛑 Cancelando fase de enriquecimiento...")
+                                break
+                            
                             # Si source_code falló COMPLETAMENTE (ni siquiera status), saltamos
                             # Pero si get_source devolvió algo (aunque no sea 200), tiramos captura
                             if config.source_code and not source_obtained:
@@ -1137,9 +1142,20 @@ def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         while True:
             # Verificar si el escaneo ha sido cancelado por el usuario
             if is_scan_cancelled():
-                print(f"[Scan {scan_id}] 🛑 Escaneo cancelado por el usuario (pasivo)")
+                print(f"[Scan {scan_id}] 🛑 Escaneo detenido/cancelado por el usuario (pasivo)")
                 if process.poll() is None:
                     process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except:
+                        process.kill()
+                
+                # Procesar lo que quede en el pcap antes de salir
+                print(f"[Scan {scan_id}] 📦 Procesando datos finales antes de cerrar...")
+                try:
+                    scans_module.process_pcap_file(scan_id, str(pcap_file), organization, location)
+                except:
+                    pass
                 break
                 
             # Verificar si el proceso sigue corriendo
@@ -1279,17 +1295,10 @@ def process_pcap_file(scan_id: int, pcap_file: str, organization: str, location:
                     dst_mac=mac_dst
                 )
 
-                # Guardar en la nueva tabla de conversaciones
-                storage.save_passive_conversation(
-                    scan_id=scan_id,
-                    src_ip=ip_src,
-                    dst_ip=ip_dst,
-                    src_port=port_src,
-                    dst_port=port_dst,
-                    protocol=protocol,
-                    src_mac=mac_src,
-                    dst_mac=mac_dst
-                )
+                # También registrar los hosts como "descubiertos" para que aparezcan en la tabla de activos
+                # (Pero sin puertos específicos en la tabla de activos para no duplicar info de conversaciones)
+                storage.save_discovered_host(scan_id, ip_src, discovery_method='passive_capture')
+                storage.save_discovered_host(scan_id, ip_dst, discovery_method='passive_capture')
 
             except Exception as e:
                 print(f"[Scan {scan_id}] ⚠️  Error guardando conversación/host: {e}")

@@ -7,6 +7,67 @@
 {% set active_section = 'scan' %}
 {% include "org_tabs.html" %}
 
+<style>
+    .mode-selector {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        background: rgba(30, 41, 59, 0.5);
+        padding: 0.5rem;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .mode-btn {
+        flex: 1;
+        padding: 1rem;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: #94a3b8;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 500;
+    }
+
+    .mode-btn i {
+        font-size: 1.5rem;
+    }
+
+    .mode-btn:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: #f8fafc;
+    }
+
+    .mode-btn.active {
+        background: var(--accent-blue);
+        color: white;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    .mode-btn.active[data-mode="passive"] {
+        background: #10b981;
+    }
+
+    .mode-btn.active[data-mode="specific"] {
+        background: #f59e0b;
+    }
+
+    .mode-btn .mode-title {
+        font-size: 1rem;
+    }
+
+    .mode-btn .mode-desc {
+        font-size: 0.75rem;
+        opacity: 0.8;
+        text-align: center;
+    }
+</style>
+
 <div class="scan-page" style="margin-top: 1.5rem;">
 
     <form id="scanForm" class="scan-form">
@@ -31,21 +92,30 @@
             </div>
 
             <div id="interfaceGroup" class="form-group">
-                <label for="interface">Interfaz de Red</label>
-                <input type="text" id="interface" name="interface" value="eth0" placeholder="eth0">
+                <label for="interface">Interfaz de Red *</label>
+                <select id="interface" name="interface" required
+                    style="width: 100%; padding: 0.75rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #e2e8f0; font-size: 0.95rem;">
+                    <option value="">-- Seleccionar Interfaz --</option>
+                </select>
             </div>
         </div>
 
         <div class="form-section">
             <h2>🎯 Modo de Escaneo</h2>
-
-            <div class="form-group">
-                <label for="scan_mode">Tipo de Escaneo *</label>
-                <select id="scan_mode" name="scan_mode" required onchange="toggleScanMode()">
-                    <option value="active" selected>🔍 Escaneo Activo (Descubrimiento y Puertos)</option>
-                    <option value="passive">🎧 Escaneo Pasivo (Captura de Tráfico)</option>
-                    <option value="specific">🎯 Escaneos Específicos (Capturas, Código, Interfaces)</option>
-                </select>
+            <input type="hidden" id="scan_mode" name="scan_mode" value="active">
+            <div class="mode-selector">
+                <button type="button" class="mode-btn active" data-mode="active" onclick="setScanMode('active')">
+                    <span class="mode-title">🔍 Activo</span>
+                    <span class="mode-desc">Descubrimiento y Puertos</span>
+                </button>
+                <button type="button" class="mode-btn" data-mode="passive" onclick="setScanMode('passive')">
+                    <span class="mode-title">🎧 Pasivo</span>
+                    <span class="mode-desc">Captura de Tráfico</span>
+                </button>
+                <button type="button" class="mode-btn" data-mode="specific" onclick="setScanMode('specific')">
+                    <span class="mode-title">🎯 Especial</span>
+                    <span class="mode-desc">Web, Código, Interfaces</span>
+                </button>
             </div>
         </div>
 
@@ -89,9 +159,9 @@
 
             <div class="checkbox-group">
                 <label class="checkbox-label">
-                    <input type="checkbox" id="host_discovery" name="host_discovery" checked>
+                    <input type="checkbox" id="host_discovery" name="host_discovery">
                     <span>🔍 Descubrimiento de Hosts</span>
-                    <small>Detección de hosts activos mediante ARP y ping</small>
+                    <small>Detección de hosts activos mediante ARP</small>
                 </label>
             </div>
 
@@ -115,7 +185,7 @@
 
             <div class="checkbox-group">
                 <label class="checkbox-label">
-                    <input type="checkbox" id="nmap" name="nmap" checked>
+                    <input type="checkbox" id="nmap" name="nmap">
                     <span>🔌 Escaneo Nmap</span>
                     <small>Escaneo de puertos y servicios</small>
                 </label>
@@ -133,28 +203,39 @@
 
                 <div class="checkbox-group">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="nmap_versions" name="nmap_versions">
+                        <input type="checkbox" id="nmap_icmp" name="nmap_icmp" onchange="toggleIcmpMode(this)">
+                        <span>📍 Escaneo ICMP (Ping Scan)</span>
+                        <small>Solo descubrimiento de hosts mediante ping, sin escaneo de puertos.</small>
+                    </label>
+                </div>
+
+                <div class="checkbox-group nmap-port-option">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="nmap_versions" name="nmap_versions"
+                            onchange="handlePortOptionChange()">
                         <span>Detección de Versiones (-sV)</span>
                     </label>
                 </div>
 
-                <div class="checkbox-group">
+                <div class="checkbox-group nmap-port-option">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="nmap_vulns" name="nmap_vulns">
+                        <input type="checkbox" id="nmap_vulns" name="nmap_vulns" onchange="handlePortOptionChange()">
                         <span>Escaneo de Vulnerabilidades (--script vuln)</span>
                     </label>
                 </div>
 
-                <div class="checkbox-group">
+                <div class="checkbox-group nmap-port-option">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="nmap_ot_ports" name="nmap_ot_ports" checked>
+                        <input type="checkbox" id="nmap_ot_ports" name="nmap_ot_ports"
+                            onchange="handlePortOptionChange()">
                         <span>Puertos OT (Operational Technology)</span>
                     </label>
                 </div>
 
-                <div class="checkbox-group">
+                <div class="checkbox-group nmap-port-option">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="nmap_it_ports" name="nmap_it_ports" checked>
+                        <input type="checkbox" id="nmap_it_ports" name="nmap_it_ports"
+                            onchange="handlePortOptionChange()">
                         <span>Puertos Comunes IT</span>
                     </label>
                 </div>
@@ -233,6 +314,34 @@
                 <small>Define el objetivo para los escaneos específicos seleccionados abajo.</small>
             </div>
 
+            <div id="targetSuggestions" class="target-suggestions" style="display: none; margin-top: 1rem; padding: 1rem; background: #1e293b; border: 1px solid #334155; border-radius: 6px; margin-bottom: 1.5rem;">
+                <h3 style="font-size: 0.9rem; margin-bottom: 0.75rem; color: var(--accent-blue); display: flex; align-items: center; gap: 0.5rem;">
+                    <span>💡</span> Sugerencias de Objetivos (detectados previamente)
+                </h3>
+                
+                <div id="webSuggestions" style="margin-bottom: 1rem; display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.85rem; color: #94a3b8;">Servicios Web (para Screenshots/Source):</span>
+                        <button type="button" class="btn-small" onclick="selectAllTargets('web')" 
+                            style="padding: 2px 8px; font-size: 0.75rem; color: #fff; background: #3b82f6; border: none; border-radius: 4px; cursor: pointer;">Seleccionar Todos</button>
+                    </div>
+                    <div id="webTargetList" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+                </div>
+
+                <div id="winSuggestions" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.85rem; color: #94a3b8;">Equipos Windows (para IOXIDResolver):</span>
+                        <button type="button" class="btn-small" onclick="selectAllTargets('windows')" 
+                            style="padding: 2px 8px; font-size: 0.75rem; color: #fff; background: #3b82f6; border: none; border-radius: 4px; cursor: pointer;">Seleccionar Todos</button>
+                    </div>
+                    <div id="winTargetList" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+                </div>
+                
+                <div id="noSuggestions" style="display: none; font-size: 0.85rem; color: #64748b; font-style: italic; text-align: center; padding: 0.5rem;">
+                    No se encontraron sugerencias para esta ubicación. Use un escaneo activo primero.
+                </div>
+            </div>
+
             <div class="checkbox-group">
                 <label class="checkbox-label">
                     <input type="checkbox" id="screenshots" name="screenshots">
@@ -300,6 +409,43 @@
 </div>
 
 <script>
+    // Maneja el modo ICMP (excluyente con opciones de puertos)
+    function toggleIcmpMode(icmpCheckbox) {
+        if (icmpCheckbox.checked) {
+            // Desmarcar y deshabilitar opciones de puertos
+            document.querySelectorAll('.nmap-port-option input').forEach(el => {
+                el.checked = false;
+                el.disabled = true;
+                el.parentElement.style.opacity = '0.5';
+            });
+            // Limpiar puertos personalizados
+            document.getElementById('custom_ports').value = '';
+            document.getElementById('custom_ports').disabled = true;
+        } else {
+            // Rehabilitar opciones de puertos
+            document.querySelectorAll('.nmap-port-option input').forEach(el => {
+                el.disabled = false;
+                el.parentElement.style.opacity = '1';
+            });
+            document.getElementById('custom_ports').disabled = false;
+
+            // Marcar por defecto los puertos comunes si se desactiva ICMP
+            document.getElementById('nmap_ot_ports').checked = true;
+            document.getElementById('nmap_it_ports').checked = true;
+        }
+        updateNmapCommand();
+    }
+
+    // Maneja cambios en opciones de puertos (desmarca ICMP si se marca algo de puertos)
+    function handlePortOptionChange() {
+        const icmpCheckbox = document.getElementById('nmap_icmp');
+        if (icmpCheckbox && icmpCheckbox.checked) {
+            icmpCheckbox.checked = false;
+            toggleIcmpMode(icmpCheckbox);
+        }
+        updateNmapCommand();
+    }
+
     // Cargar organizaciones para ambos formularios
     async function loadOrganizations() {
         try {
@@ -308,21 +454,160 @@
 
             // Para formulario de escaneo
             const datalist = document.getElementById('orgsList');
-            datalist.innerHTML = orgs.map(org =>
-                `<option value="${org.name}">${org.name}</option>`
-            ).join('');
+            if (datalist) {
+                datalist.innerHTML = orgs.map(org =>
+                    `<option value="${org.name}">${org.name}</option>`
+                ).join('');
+            }
         } catch (error) {
             console.error('Error cargando organizaciones:', error);
         }
     }
 
-    // Función para cambiar entre modos de escaneo
+    // Cargar interfaces de red
+    async function loadInterfaces() {
+        const interfaceSelect = document.getElementById('interface');
+        if (!interfaceSelect) return;
+
+        try {
+            const response = await fetch('/api/interfaces');
+            if (!response.ok) throw new Error('Error en la respuesta del servidor');
+            
+            const interfaces = await response.json();
+            
+            // Mantener la opción por defecto
+            interfaceSelect.innerHTML = '<option value="">-- Seleccionar Interfaz --</option>';
+            
+            interfaces.forEach(iface => {
+                const option = document.createElement('option');
+                option.value = iface;
+                option.textContent = iface;
+                // Si es eth0, marcar como seleccionado por defecto (opcional)
+                if (iface === 'eth0' || iface === 'wlan0') {
+                    // option.selected = true;
+                }
+                interfaceSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error cargando interfaces:', error);
+            // Fallback en caso de error
+            interfaceSelect.innerHTML += '<option value="eth0">eth0 (fallback)</option><option value="wlan0">wlan0 (fallback)</option>';
+        }
+    }
+
+    let webSuggestionsData = [];
+    let winSuggestionsData = [];
+
+    async function loadTargetSuggestions() {
+        const organization = document.getElementById('organization')?.value;
+        const location = document.getElementById('location')?.value;
+        const suggestionsBox = document.getElementById('targetSuggestions');
+        
+        if (!organization || !suggestionsBox) return;
+
+        try {
+            const url = `/api/targets/suggestions?organization=${encodeURIComponent(organization)}${location ? '&location=' + encodeURIComponent(location) : ''}`;
+            const response = await fetch(url);
+            if (!response.ok) return;
+            const data = await response.json();
+            
+            webSuggestionsData = data.web || [];
+            winSuggestionsData = data.windows || [];
+            
+            const webList = document.getElementById('webTargetList');
+            const winList = document.getElementById('winTargetList');
+            const webBox = document.getElementById('webSuggestions');
+            const winBox = document.getElementById('winSuggestions');
+            const noSug = document.getElementById('noSuggestions');
+
+            suggestionsBox.style.display = 'block';
+            
+            if (webSuggestionsData.length > 0) {
+                webBox.style.display = 'block';
+                // Usamos un Set para IPs únicas
+                const uniqueWebIps = [...new Set(webSuggestionsData.map(t => t.ip_address))];
+                webList.innerHTML = uniqueWebIps.map(ip => {
+                    const info = webSuggestionsData.find(t => t.ip_address === ip);
+                    return `<span class="suggestion-badge" onclick="addTargetToSpecific('${ip}')" 
+                           style="background: #334155; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; border: 1px solid #475569; display: flex; flex-direction: column;">
+                        <span style="color: #e2e8f0;">${ip}</span>
+                        <small style="color: #94a3b8; font-size: 0.65rem;">Puerto ${info.port} (${info.service_name})</small>
+                    </span>`;
+                }).join('');
+            } else {
+                webBox.style.display = 'none';
+            }
+
+            if (winSuggestionsData.length > 0) {
+                winBox.style.display = 'block';
+                winList.innerHTML = winSuggestionsData.map(t => 
+                    `<span class="suggestion-badge" onclick="addTargetToSpecific('${t.ip_address}')" 
+                           style="background: #334155; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; border: 1px solid #475569; display: flex; flex-direction: column;">
+                        <span style="color: #e2e8f0;">${t.ip_address}</span>
+                        <small style="color: #94a3b8; font-size: 0.65rem;">${t.os_name || 'Host Windows'}</small>
+                    </span>`
+                ).join('');
+            } else {
+                winBox.style.display = 'none';
+            }
+            
+            noSug.style.display = (webSuggestionsData.length === 0 && winSuggestionsData.length === 0) ? 'block' : 'none';
+
+        } catch (error) {
+            console.error('Error loading suggestions:', error);
+        }
+    }
+
+    function addTargetToSpecific(ip) {
+        const input = document.getElementById('target_range_specific');
+        const currentTargets = input.value.trim() === '' ? [] : input.value.split(',').map(i => i.trim());
+        if (!currentTargets.includes(ip)) {
+            currentTargets.push(ip);
+            input.value = currentTargets.join(', ');
+        }
+    }
+
+    function selectAllTargets(type) {
+        const input = document.getElementById('target_range_specific');
+        const currentTargets = input.value.trim() === '' ? [] : input.value.split(',').map(i => i.trim());
+        const source = type === 'web' ? webSuggestionsData : winSuggestionsData;
+        
+        source.forEach(t => {
+            if (!currentTargets.includes(t.ip_address)) {
+                currentTargets.push(t.ip_address);
+            }
+        });
+        
+        input.value = currentTargets.join(', ');
+    }
+
+    // Función para establecer el modo de escaneo mediante botones
+    function setScanMode(mode) {
+        document.getElementById('scan_mode').value = mode;
+
+        // Actualizar clases de botones
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            if (btn.getAttribute('data-mode') === mode) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        toggleScanMode();
+    }
+
+    // Función para cambiar la visibilidad de las secciones
     function toggleScanMode() {
         const scanMode = document.getElementById('scan_mode').value;
         const activeSection = document.getElementById('activeScanSection');
         const passiveSection = document.getElementById('passiveScanSection');
         const specificSection = document.getElementById('specificScanSection');
         const interfaceGroup = document.getElementById('interfaceGroup');
+
+        if (scanMode === 'specific') {
+            loadTargetSuggestions();
+        }
 
         // Reset visibilidad
         activeSection.style.display = 'none';
@@ -460,11 +745,19 @@
 
         const targetRange = document.getElementById('target_range_active').value || 'TARGET_IP';
         const speed = document.getElementById('nmap_speed').value || 'normal';
+        const icmpMode = document.getElementById('nmap_icmp').checked;
         const enableVersions = document.getElementById('nmap_versions').checked;
         const enableVulns = document.getElementById('nmap_vulns').checked;
         const otPorts = document.getElementById('nmap_ot_ports').checked;
         const itPorts = document.getElementById('nmap_it_ports').checked;
         const customPorts = document.getElementById('custom_ports').value.trim();
+
+        // Si es modo ICMP, el comando es mucho más simple
+        if (icmpMode) {
+            let cmd = ['nmap', '-T4', '-sn'];
+            cmd.push(targetRange);
+            return cmd.join(' ');
+        }
 
         // Construir lista de puertos (deben coincidir exactamente con port_scanner.py)
         const itPortsList = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1433, 1521, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888, 9090, 27017, 5000, 27018, 27019, 50000];
@@ -637,12 +930,19 @@
     document.getElementById('nmap_vulns').addEventListener('change', updateNmapCommand);
     document.getElementById('nmap_ot_ports').addEventListener('change', updateNmapCommand);
     document.getElementById('nmap_it_ports').addEventListener('change', updateNmapCommand);
+    document.getElementById('nmap_icmp').addEventListener('change', updateNmapCommand);
     document.getElementById('custom_ports').addEventListener('input', updateNmapCommand);
 
     let currentScanId = null;
     let wsConnection = null;
     let resultsPollingInterval = null;
     let lastResultsHash = null;
+
+    function resetStartButton(btn, text, spinner) {
+        btn.disabled = false;
+        text.textContent = '🚀 Iniciar Escaneo';
+        spinner.style.display = 'none';
+    }
 
     // Manejar envío del formulario de inicio de escaneo
     document.getElementById('scanForm').addEventListener('submit', async function (e) {
@@ -679,6 +979,7 @@
             nmap_vulns: formData.has('nmap_vulns'),
             nmap_ot_ports: formData.has('nmap_ot_ports'),
             nmap_it_ports: formData.has('nmap_it_ports'),
+            nmap_icmp: formData.has('nmap_icmp'),
             custom_ports: formData.get('custom_ports') || null,
             custom_nmap_command: formData.get('custom_nmap_command') || null,
             custom_host_discovery_command: formData.get('custom_host_discovery_command') || null,
@@ -687,6 +988,27 @@
             source_code: formData.has('source_code'),
             pcap_filter: formData.get('pcap_filter') || null
         };
+
+        // Validación adicional en el cliente
+        if (!config.interface) {
+            alert('⚠️ Por favor, selecciona una interfaz de red.');
+            resetStartButton(startBtn, btnText, btnSpinner);
+            return;
+        }
+
+        if (scanMode === 'active') {
+            if (!config.host_discovery && !config.nmap) {
+                alert('⚠️ Debes seleccionar al menos una técnica (Descubrimiento o Nmap).');
+                resetStartButton(startBtn, btnText, btnSpinner);
+                return;
+            }
+
+            if (config.nmap && !config.nmap_icmp && !config.nmap_ot_ports && !config.nmap_it_ports && !config.custom_ports) {
+                alert('⚠️ Has seleccionado Nmap pero no has marcado ningún puerto ni modo ICMP.');
+                resetStartButton(startBtn, btnText, btnSpinner);
+                return;
+            }
+        }
 
         try {
             const response = await fetch('/api/scan/start', {
@@ -879,64 +1201,84 @@
 
             // Actualizar los mensajes de progreso con los resultados
             const messagesDiv = document.getElementById('progressMessages');
-            if (messagesDiv && data.results && data.results.length > 0) {
-                // Crear hash simple para detectar cambios
-                const currentHash = JSON.stringify(data.results.map(r => `${r.ip_address}:${r.port || ''}:${r.service_name || ''}`));
+            const activeEmpty = !data.active || data.active.length === 0;
+            const passiveEmpty = !data.passive || data.passive.length === 0;
+
+            if (messagesDiv && (!activeEmpty || !passiveEmpty)) {
+                // Crear hash simple para detectar cambios (incluyendo ambos tipos)
+                const activeHash = activeEmpty ? "" : JSON.stringify(data.active.map(r => `${r.ip_address}:${r.port || ''}`));
+                const passiveHash = passiveEmpty ? "" : JSON.stringify(data.passive.map(r => `${r.src_ip}:${r.dst_ip}`));
+                const currentHash = activeHash + "||" + passiveHash;
 
                 // Solo actualizar si hay cambios
                 if (currentHash !== lastResultsHash) {
                     lastResultsHash = currentHash;
+                    let resultsHtml = '';
 
-                    // Agrupar por IP para mostrar de forma más clara
-                    const hostsMap = new Map();
-                    data.results.forEach(r => {
-                        const ip = r.ip_address;
-                        if (!hostsMap.has(ip)) {
-                            hostsMap.set(ip, {
-                                ip: ip,
-                                hostname: r.hostname,
-                                ports: []
-                            });
-                        }
-                        if (r.port) {
-                            hostsMap.get(ip).ports.push({
-                                port: r.port,
-                                protocol: r.protocol,
-                                service: r.service_name,
-                                product: r.product,
-                                version: r.version
-                            });
-                        }
-                    });
+                    // 1. Mostrar Resultados Activos
+                    if (!activeEmpty) {
+                        const hostsMap = new Map();
+                        data.active.forEach(r => {
+                            const ip = r.ip_address;
+                            if (!hostsMap.has(ip)) {
+                                hostsMap.set(ip, {
+                                    ip: ip,
+                                    hostname: r.hostname,
+                                    ports: []
+                                });
+                            }
+                            if (r.port) {
+                                hostsMap.get(ip).ports.push({
+                                    port: r.port,
+                                    protocol: r.protocol,
+                                    service: r.service_name,
+                                    product: r.product,
+                                    version: r.version
+                                });
+                            }
+                        });
 
-                    // Construir HTML de resultados (sin el mensaje antiguo del WebSocket)
-                    let resultsHtml = '<div style="margin-top: 0.5rem;"><div style="font-weight: 600; margin-bottom: 0.5rem; color: #94a3b8;">Hosts descubiertos:</div>';
-                    resultsHtml += '<div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto;">';
+                        resultsHtml += '<div style="margin-top: 0.5rem;"><div style="font-weight: 600; margin-bottom: 0.5rem; color: #60a5fa;">🔌 Hosts y Puertos (Activo):</div>';
+                        resultsHtml += '<div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 250px; overflow-y: auto; margin-bottom: 1rem;">';
 
-                    Array.from(hostsMap.values()).forEach(host => {
-                        resultsHtml += `<div style="padding: 0.5rem; background: #1e293b; border-radius: 4px; border: 1px solid #334155;">`;
-                        resultsHtml += `<div style="font-weight: 600; color: #60a5fa;">${host.ip}</div>`;
-                        if (host.hostname) {
-                            resultsHtml += `<div style="font-size: 0.85em; color: #94a3b8; margin-top: 0.25rem;">${host.hostname}</div>`;
-                        }
-                        if (host.ports.length > 0) {
-                            resultsHtml += `<div style="margin-top: 0.5rem; font-size: 0.85em;">`;
-                            host.ports.forEach(p => {
-                                const serviceInfo = p.service ? ` (${p.service})` : '';
-                                const productInfo = p.product ? ` - ${p.product}` : '';
-                                const versionInfo = p.version ? ` ${p.version}` : '';
-                                resultsHtml += `<div style="color: #94a3b8; margin-left: 1rem;">🔌 ${p.port}/${p.protocol}${serviceInfo}${productInfo}${versionInfo}</div>`;
-                            });
+                        Array.from(hostsMap.values()).forEach(host => {
+                            resultsHtml += `<div style="padding: 0.5rem; background: #1e293b; border-radius: 4px; border: 1px solid #334155;">`;
+                            resultsHtml += `<div style="font-weight: 600; color: #e2e8f0;">${host.ip}</div>`;
+                            if (host.hostname) {
+                                resultsHtml += `<div style="font-size: 0.85em; color: #94a3b8; margin-top: 0.25rem;">${host.hostname}</div>`;
+                            }
+                            if (host.ports.length > 0) {
+                                resultsHtml += `<div style="margin-top: 0.5rem; font-size: 0.85em;">`;
+                                host.ports.forEach(p => {
+                                    const serviceInfo = p.service ? ` (${p.service})` : '';
+                                    resultsHtml += `<div style="color: #94a3b8; margin-left: 1rem;">${p.port}/${p.protocol}${serviceInfo}</div>`;
+                                });
+                                resultsHtml += `</div>`;
+                            }
                             resultsHtml += `</div>`;
-                        } else {
-                            resultsHtml += `<div style="margin-top: 0.25rem; font-size: 0.85em; color: #94a3b8; font-style: italic;">Host activo (sin puertos abiertos)</div>`;
+                        });
+                        resultsHtml += '</div></div>';
+                    }
+
+                    // 2. Mostrar Resultados Pasivos
+                    if (!passiveEmpty) {
+                        resultsHtml += '<div style="margin-top: 0.5rem;"><div style="font-weight: 600; margin-bottom: 0.5rem; color: #10b981;">🎧 Tráfico Detectado (Pasivo):</div>';
+                        resultsHtml += '<div style="display: flex; flex-direction: column; gap: 0.3rem; max-height: 250px; overflow-y: auto;">';
+                        
+                        // Agrupar por conversación para no saturar
+                        const convs = data.passive.slice(0, 50); // Limitar a las últimas 50
+                        convs.forEach(c => {
+                            resultsHtml += `<div style="padding: 0.4rem; background: #064e3b; border-radius: 4px; border: 1px solid #059669; font-size: 0.85em; color: #d1fae5;">`;
+                            resultsHtml += `<strong>${c.src_ip}</strong>:${c.src_port || '*'} ➡️ <strong>${c.dst_ip}</strong>:${c.dst_port || '*'} (${c.protocol || '?'})`;
+                            resultsHtml += `</div>`;
+                        });
+                        
+                        if (data.passive.length > 50) {
+                            resultsHtml += `<div style="text-align: center; font-size: 0.8em; color: #94a3b8;">... y ${data.passive.length - 50} más ...</div>`;
                         }
-                        resultsHtml += `</div>`;
-                    });
+                        resultsHtml += '</div></div>';
+                    }
 
-                    resultsHtml += '</div></div>';
-
-                    // Mostrar solo los resultados (sin el mensaje antiguo)
                     messagesDiv.innerHTML = resultsHtml;
                 }
             }
@@ -1152,6 +1494,7 @@
 
     // Restaurar seguimiento cuando se carga la página
     loadOrganizations();
+    loadInterfaces();
     restoreScanTracking();
 
     // Manejar importación XML
@@ -1298,6 +1641,14 @@
 
     // Inicializar preview del comando Nmap al cargar la página
     setTimeout(updateNmapCommand, 100);
+
+    // Recargar sugerencias si cambia organización o ubicación y estamos en modo específico
+    document.getElementById('organization').addEventListener('change', () => {
+        if (document.getElementById('scan_mode').value === 'specific') loadTargetSuggestions();
+    });
+    document.getElementById('location').addEventListener('change', () => {
+        if (document.getElementById('scan_mode').value === 'specific') loadTargetSuggestions();
+    });
 </script>
 
 <style>
@@ -1329,6 +1680,11 @@
     #startScanBtn:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+    }
+
+    .suggestion-badge:hover {
+        background: #4b5563 !important;
+        border-color: #3b82f6 !important;
     }
 </style>
 {% endblock %}

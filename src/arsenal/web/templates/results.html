@@ -560,61 +560,53 @@
             });
         });
 
-        // Cargar datos iniciales
-        loadOrganizations();
-        loadLocations();
-        loadScans();
+        // --- INICIALIZACIÓN ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            const orgNameContext = "{{ org_name | default('') }}";
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlScanId = urlParams.get('scan_id');
+            const urlOrg = urlParams.get('organization') || orgNameContext;
+            const urlLocation = urlParams.get('location');
 
-        // Verificar si hay parámetros en la URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlScanId = urlParams.get('scan_id');
-        const urlOrg = urlParams.get('organization');
-        const urlLocation = urlParams.get('location');
+            // 1. Cargar Organizaciones (siempre necesario para el dropdown si no está bloqueado)
+            await loadOrganizations();
 
-        if (urlScanId) {
-            // Si hay scan_id en la URL, cargar ese escaneo específico
-            document.getElementById('filterScan').value = urlScanId;
-            // Cargar información del escaneo para pre-seleccionar org y location
-            fetch(`/api/scans/list`)
-                .then(response => response.json())
-                .then(scans => {
-                    const scan = scans.find(s => s.id == urlScanId);
-                    if (scan) {
-                        document.getElementById('filterOrg').value = scan.organization;
-                        loadLocations(scan.organization);
-                        loadScans(scan.organization, null);
-                        // Esperar un momento para que se carguen los dropdowns
-                        setTimeout(() => {
-                            document.getElementById('filterLocation').value = scan.location;
-                            document.getElementById('filterScan').value = urlScanId;
-                            loadResults();
-                            updateDeleteButtons();
-                        }, 500);
-                    } else {
-                        loadResults();
-                    }
-                })
-                .catch(() => loadResults());
-        } else if (urlOrg) {
-            // Si hay organización en la URL
-            document.getElementById('filterOrg').value = urlOrg;
-            loadLocations(urlOrg);
-            if (urlLocation) {
-                setTimeout(() => {
+            if (urlScanId) {
+                // Escaneo específico por URL
+                const response = await fetch(`/api/scans/list`);
+                const scans = await response.json();
+                const scan = scans.find(s => s.id == urlScanId);
+                
+                if (scan) {
+                    document.getElementById('filterOrg').value = scan.organization;
+                    await loadLocations(scan.organization);
+                    document.getElementById('filterLocation').value = scan.location;
+                    await loadScans(scan.organization, scan.location);
+                    document.getElementById('filterScan').value = urlScanId;
+                }
+                loadResults();
+            } else if (urlOrg) {
+                // Organización específica (por contexto o URL)
+                document.getElementById('filterOrg').value = urlOrg;
+                await loadLocations(urlOrg);
+                
+                if (urlLocation) {
                     document.getElementById('filterLocation').value = urlLocation;
-                    loadScans(urlOrg, urlLocation);
-                    setTimeout(() => loadResults(), 500);
-                }, 500);
+                    await loadScans(urlOrg, urlLocation);
+                } else {
+                    await loadScans(urlOrg, null);
+                }
+                loadResults();
             } else {
-                loadScans(urlOrg, null);
-                setTimeout(() => loadResults(), 500);
+                // Carga global por defecto
+                await loadLocations();
+                await loadScans();
+                loadResults();
             }
-        } else {
-            loadResults();
-        }
 
-        // Llamar a updateDeleteButtons después de cargar los datos iniciales
-        setTimeout(() => updateDeleteButtons(), 1000);
+            // Actualizar botones después de la carga inicial
+            updateDeleteButtons();
+        });
 
         // Actualizar ubicaciones cuando cambia la organización
         document.getElementById('filterOrg').addEventListener('change', function () {
@@ -917,26 +909,7 @@
 
                 if (response.ok) {
                     alert(`✅ ${result.message}\nEscaneos eliminados: ${result.scans_deleted}\nUbicaciones eliminadas: ${result.locations_deleted}`);
-                    // Recargar datos
-                    document.getElementById('filterOrg').value = '';
-                    document.getElementById('filterLocation').value = '';
-                    // Carga inicial
-                    document.addEventListener('DOMContentLoaded', () => {
-                        loadOrganizations().then(() => {
-                            const orgNameContext = "{{ org_name | default('') }}";
-                            if (orgNameContext) {
-                                loadLocations(orgNameContext);
-                                loadScans(orgNameContext, '');
-                                loadStats(orgNameContext, '', '');
-                                loadResults();
-                            } else {
-                                loadLocations();
-                                loadScans();
-                                loadStats();
-                                loadResults();
-                            }
-                        });
-                    }); updateDeleteButtons();
+                    updateDeleteButtons();
                 } else {
                     alert(`❌ Error: ${result.detail || result.message}`);
                 }

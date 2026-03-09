@@ -5,12 +5,13 @@ class ScanConfig(BaseModel):
     organization: str
     location: str
     target_range: Optional[str] = "0.0.0.0/0"  # Opcional, por defecto para pasivo
-    interface: str = "eth0"
+    interface: str = ""
     myip: Optional[str] = None
     scan_mode: str = "active"  # active o passive
     # Opciones para escaneos activos
     host_discovery: bool = True
     nmap: bool = True
+    nmap_icmp: bool = False
     nmap_speed: str = "normal"  # rapido, normal, lento
     nmap_versions: bool = False
     nmap_vulns: bool = False

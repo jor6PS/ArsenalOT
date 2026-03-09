@@ -304,7 +304,7 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
 
 
 def _add_directory_to_zip(zipf: zipfile.ZipFile, directory: Path, zip_path: str):
-    """Añade un directorio completo al ZIP."""
+    """Añade un directorio completo al ZIP, manejando posibles errores de acceso."""
     import os
     for root, dirs, files in os.walk(directory):
         # Excluir archivos ZIP y la base de datos
@@ -315,7 +315,10 @@ def _add_directory_to_zip(zipf: zipfile.ZipFile, directory: Path, zip_path: str)
                 continue
             file_path = Path(root) / file
             arcname = str(Path(zip_path) / file_path.relative_to(directory))
-            zipf.write(file_path, arcname)
+            try:
+                zipf.write(file_path, arcname)
+            except (PermissionError, OSError) as e:
+                print(f"⚠️ Saltando archivo {file_path} por error de acceso: {e}")
 
 
 def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
@@ -596,14 +599,17 @@ def _import_scan_data(cursor, export_data: Dict, import_stats: Dict):
 
 
 def _merge_directory(source: Path, dest: Path):
-    """Fusiona directorio fuente en destino, evitando sobrescribir."""
+    """Fusiona directorio fuente en destino, evitando sobrescribir y manejando errores."""
     for item in source.rglob('*'):
         if item.is_file():
             rel_path = item.relative_to(source)
             dest_file = dest / rel_path
             dest_file.parent.mkdir(parents=True, exist_ok=True)
             if not dest_file.exists():
-                shutil.copy2(item, dest_file)
+                try:
+                    shutil.copy2(item, dest_file)
+                except (PermissionError, OSError) as e:
+                    print(f"⚠️ No se pudo copiar {item} a {dest_file}: {e}")
 
 
 def _import_org_metadata(cursor, export_data: Dict, import_stats: Dict):

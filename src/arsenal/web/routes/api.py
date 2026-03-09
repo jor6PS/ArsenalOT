@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import sqlite3
 from typing import Optional
 from fastapi import APIRouter, HTTPException
@@ -173,6 +174,24 @@ async def get_stats(
         "sources": sources_count
     }
 
+@router.get("/api/interfaces")
+async def get_interfaces():
+    """Obtiene la lista de interfaces de red disponibles en el sistema."""
+    try:
+        import psutil
+        interfaces = sorted(list(psutil.net_if_addrs().keys()))
+        # Filtrar interfaces 'lo' y otras virtuales no deseadas
+        interfaces = [i for i in interfaces if i != 'lo' and not i.startswith('veth') and i != 'docker0']
+        return interfaces
+    except Exception as e:
+        print(f"⚠️ Error obteniendo interfaces: {e}")
+        # Intentar fallback con socket si falla psutil
+        try:
+            import socket
+            return [i[1] for i in socket.if_nameindex() if i[1] != 'lo']
+        except:
+            return ["eth0", "wlan0"]
+
 @router.get("/api/organizations")
 async def get_organizations():
     """Obtiene lista de organizaciones."""
@@ -211,6 +230,70 @@ async def get_locations(organization: Optional[str] = None):
     conn.close()
     
     return [{"location": loc["location"]} for loc in locations]
+
+@router.get("/api/targets/suggestions")
+async def get_target_suggestions(organization: str, location: Optional[str] = None):
+    """Sugiere objetivos para escaneos específicos basándose en resultados previos."""
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    params = [organization.upper()]
+    loc_filter = ""
+    if location:
+        loc_filter = " AND s.location = ?"
+        params.append(location.upper())
+        
+    # 1. Sugerencias Web (para Screenshots/Source Code)
+    web_query = f"""
+        SELECT DISTINCT h.ip_address, sr.port, sr.service_name
+        FROM scan_results sr
+        JOIN hosts h ON h.id = sr.host_id
+        JOIN scans s ON s.id = sr.scan_id
+        WHERE s.organization_name = ? {loc_filter}
+        AND (
+            sr.port IN (80, 443, 8080, 8443, 8888, 9090) 
+            OR sr.service_name LIKE '%http%' 
+            OR sr.service_name LIKE '%ssl/http%'
+            OR sr.service_name LIKE '%https%'
+        )
+        ORDER BY h.ip_address, sr.port
+    """
+    web_rows = cursor.execute(web_query, params).fetchall()
+    web_targets = [dict(r) for r in web_rows]
+    
+    # 2. Sugerencias Windows (para IOXIDResolver)
+    win_query = f"""
+        SELECT DISTINCT h.ip_address, h.os_info_json
+        FROM hosts h
+        JOIN scan_results sr ON h.id = sr.host_id
+        JOIN scans s ON s.id = sr.scan_id
+        WHERE s.organization_name = ? {loc_filter}
+        AND (
+            h.os_info_json LIKE '%Windows%' 
+            OR h.os_info_json LIKE '%Microsoft%'
+            OR sr.port IN (135, 139, 445)
+        )
+        ORDER BY h.ip_address
+    """
+    win_rows = cursor.execute(win_query, params).fetchall()
+    win_targets = []
+    for r in win_rows:
+        target = dict(r)
+        # Intentar extraer nombre de OS legible si existe
+        if target['os_info_json']:
+            try:
+                os_data = json.loads(target['os_info_json'])
+                if os_data.get('matches'):
+                    target['os_name'] = os_data['matches'][0]['name']
+            except: pass
+        win_targets.append(target)
+        
+    conn.close()
+    return {
+        "web": web_targets,
+        "windows": win_targets
+    }
 
 @router.get("/api/networks")
 async def get_networks(organization: str):
@@ -420,14 +503,15 @@ async def export_results_csv(
 
         # B. Resultados Pasivos (solo si no se filtró por un scan activo específico)
         # Si hay scan_id y NO es passive_only (ya manejado arriba), entonces es activo_only, no añadimos pasivos.
-        if not scan_id:
-            passive_data = storage.get_passive_results(organization=organization, location=location)
-            for r in passive_data:
-                writer.writerow([
-                    "PASIVO", r['src_ip'], r['dst_ip'], r['src_port'], r['protocol'],
-                    f"Conv a {r['dst_ip']}:{r['dst_port']}", r['src_mac'], r['dst_mac'],
-                    r['organization_name'], r['location'], "passive_capture", "No", r['scan_id']
-                ])
+        # B. Resultados Pasivos
+        # Siempre intentamos obtener resultados pasivos si no hay un filtro que lo impida
+        passive_data = storage.get_passive_results(scan_id=scan_id, organization=organization, location=location)
+        for r in passive_data:
+            writer.writerow([
+                "PASIVO", r['src_ip'], r['dst_ip'], r['src_port'], r['protocol'],
+                f"Conv a {r['dst_ip']}:{r['dst_port']}", r['src_mac'], r['dst_mac'],
+                r['organization_name'], r['location'], "passive_capture", "No", r['scan_id']
+            ])
 
     conn.close()
 

@@ -1103,10 +1103,39 @@ class ScanStorage:
         conn.commit()
         conn.close()
         
+        # 3. Limpieza en Neo4j (Best-effort)
+        try:
+            self._cleanup_neo4j_organization(organization)
+        except Exception as e:
+            print(f"⚠️ Error limpiando Neo4j para organización {organization}: {e}")
+        
         return {
             "scans_deleted": scans_count,
-            "locations_deleted": locations_count
+            "locations_deleted": locations_count,
+            "neo4j_cleanup": "success"
         }
+
+    def _cleanup_neo4j_organization(self, organization: str):
+        """Helper para borrar datos de una organización en Neo4j."""
+        import os
+        from py2neo import Graph
+        
+        neo4j_user = os.getenv("NEO4J_USERNAME", "neo4j")
+        neo4j_pass = os.getenv("NEO4J_PASSWORD", "neo4j1")
+        neo4j_host = os.getenv("NEO4J_HOST", "localhost")
+        
+        try:
+            graph = Graph(f"bolt://{neo4j_host}:7687", auth=(neo4j_user, neo4j_pass))
+            cypher = """
+            MATCH (o:ORGANIZACION {name: $org})
+            OPTIONAL MATCH (o)-[:SCAN_TYPE]->(s)
+            OPTIONAL MATCH (s)-[:EXECUTED_FROM|DETECTED_HOST]->(h:HOST)
+            OPTIONAL MATCH (h)-[:HAS_SERVICE]->(svc:SERVICE)
+            DETACH DELETE o, s, h, svc
+            """
+            graph.run(cypher, org=organization.upper())
+        except Exception as e:
+            print(f"⚠️ No se pudo conectar a Neo4j para limpieza: {e}")
     
     def delete_all_data(self) -> dict:
         """Elimina TODOS los datos de la base de datos y archivos. OPERACIÓN CRÍTICA."""
@@ -1147,6 +1176,18 @@ class ScanStorage:
         
         conn.commit()
         conn.close()
+        
+        # ELIMINAR TODO EN NEO4J (Best-effort)
+        try:
+            import os
+            from py2neo import Graph
+            neo4j_user = os.getenv("NEO4J_USERNAME", "neo4j")
+            neo4j_pass = os.getenv("NEO4J_PASSWORD", "neo4j1")
+            neo4j_host = os.getenv("NEO4J_HOST", "localhost")
+            graph = Graph(f"bolt://{neo4j_host}:7687", auth=(neo4j_user, neo4j_pass))
+            graph.run("MATCH (n) DETACH DELETE n")
+        except Exception as e:
+            print(f"⚠️ Error limpiando Neo4j en delete_all: {e}")
         
         return {
             "organizations_deleted": orgs_count,

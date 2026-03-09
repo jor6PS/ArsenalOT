@@ -619,10 +619,10 @@
             progressBar.style.background = 'linear-gradient(90deg, #6366f1, #4f46e5)';
         }
 
-        // Actualizar tabla de resultados
-        if (liveData && liveData.results && liveData.results.length > 0 && resultsBody && resultsContainer) {
+        // Actualizar tabla de resultados activos
+        if (liveData && liveData.active && liveData.active.length > 0 && resultsBody && resultsContainer) {
             resultsContainer.style.display = 'block';
-            resultsBody.innerHTML = liveData.results.map(r => {
+            resultsBody.innerHTML = liveData.active.map(r => {
                 const portDisplay = r.port || '-';
                 const protocolDisplay = r.protocol || '-';
                 const serviceDisplay = r.service_name || (r.port ? '-' : 'Host activo');
@@ -635,6 +635,25 @@
                         <td style="padding: 0.75rem; color: #e2e8f0;">${serviceDisplay}</td>
                         <td style="padding: 0.75rem; color: #e2e8f0;">${r.product || '-'}</td>
                         <td style="padding: 0.75rem; color: #e2e8f0;">${r.version || '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Actualizar tabla de resultados pasivos
+        const passiveBody = container.querySelector(`#passiveResultsBody_${scanId}`);
+        const passiveContainer = container.querySelector(`#passiveContainer_${scanId}`);
+        if (liveData && liveData.passive && liveData.passive.length > 0 && passiveBody && passiveContainer) {
+            passiveContainer.style.display = 'block';
+            passiveBody.innerHTML = liveData.passive.map(r => {
+                return `
+                    <tr style="border-bottom: 1px solid #334155;">
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.src_ip}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.dst_ip}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.src_port || '-'}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.dst_port || '-'}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.protocol || '-'}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.last_seen || '-'}</td>
                     </tr>
                 `;
             }).join('');
@@ -672,8 +691,8 @@
             </div>
             <div id="progressMessages_${scanId}" style="margin-bottom: 1rem; padding: 1rem; background: #0f172a; border-radius: 6px; border: 1px solid #334155;"></div>
             <div id="liveResultsContainer_${scanId}" style="margin-top: 1.5rem; display: none;">
-                <h4 style="margin-bottom: 1rem; color: #e2e8f0;">📊 Resultados en Tiempo Real</h4>
-                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #334155; border-radius: 6px;">
+                <h4 style="margin-bottom: 1rem; color: #60a5fa;">🔌 Dispositivos y Puertos (Activo)</h4>
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #334155; border-radius: 6px; margin-bottom: 1.5rem;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
                         <thead style="position: sticky; top: 0; background: #1e293b; z-index: 10;">
                             <tr>
@@ -686,9 +705,26 @@
                                 <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">Versión</th>
                             </tr>
                         </thead>
-                        <tbody id="liveResultsBody_${scanId}" style="background: #0f172a;">
-                            <!-- Los resultados se cargarán aquí dinámicamente -->
-                        </tbody>
+                        <tbody id="liveResultsBody_${scanId}" style="background: #0f172a;"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="passiveContainer_${scanId}" style="margin-top: 1.5rem; display: none;">
+                <h4 style="margin-bottom: 1rem; color: #10b981;">🎧 Tráfico y Conversaciones (Pasivo)</h4>
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #065f46; border-radius: 6px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead style="position: sticky; top: 0; background: #064e3b; z-index: 10;">
+                            <tr>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Origen</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Destino</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">P. Origen</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">P. Destino</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Protocolo</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Última vez</th>
+                            </tr>
+                        </thead>
+                        <tbody id="passiveResultsBody_${scanId}" style="background: #064e3b;"></tbody>
                     </table>
                 </div>
             </div>
@@ -1230,73 +1266,6 @@
         }
     }
 
-    // --- NEO4J & NEODASH DOCKER CONTROLS ---
-
-    async function toggleDockerService(service) {
-        const btn = document.getElementById(`btn${service.charAt(0).toUpperCase() + service.slice(1)}`);
-        const isRunning = btn.getAttribute('data-running') === 'true';
-        const action = isRunning ? 'stop' : 'start';
-
-        btn.disabled = true;
-        const targetText = btn.querySelector(`span[id="text${service.charAt(0).toUpperCase() + service.slice(1)}"]`);
-        const originalText = targetText.innerText;
-        targetText.innerText = isRunning ? 'Deteniendo...' : 'Levantando...';
-
-        try {
-            const response = await fetch(`/api/docker/${service}/${action}`, { method: 'POST' });
-            const data = await response.json();
-
-            if (!response.ok || data.status === 'error') {
-                throw new Error(data.message || `Error al ${action} ${service}`);
-            }
-            // Realizamos check inmediato para actualizar botón
-            await checkDockerService(service);
-        } catch (error) {
-            console.error(error);
-            alert(`Error afectando contenedor ${service}: ` + error.message);
-            targetText.innerText = originalText;
-            btn.disabled = false;
-        }
-    }
-
-    async function checkDockerService(service) {
-        try {
-            const response = await fetch(`/api/docker/${service}/status`);
-            const data = await response.json();
-
-            const btn = document.getElementById(`btn${service.charAt(0).toUpperCase() + service.slice(1)}`);
-            const icon = document.getElementById(`icon${service.charAt(0).toUpperCase() + service.slice(1)}`);
-            const text = document.getElementById(`text${service.charAt(0).toUpperCase() + service.slice(1)}`);
-            const link = document.getElementById(`link${service.charAt(0).toUpperCase() + service.slice(1)}`);
-
-            if (data.running) {
-                btn.setAttribute('data-running', 'true');
-                btn.style.background = '#ef4444'; // Red for Stop
-                icon.innerText = '⏹️';
-                text.innerText = `Detener ${service === 'neo4j' ? 'Neo4j' : 'NeoDash'}`;
-                link.style.display = 'inline-flex';
-            } else {
-                btn.setAttribute('data-running', 'false');
-                btn.style.background = service === 'neo4j' ? '#018bff' : '#60a5fa'; // Original blue colors
-                icon.innerText = '▶️';
-                text.innerText = `Levantar ${service === 'neo4j' ? 'Neo4j' : 'NeoDash'}`;
-                link.style.display = 'none';
-            }
-            btn.disabled = false;
-        } catch (error) {
-            console.error(`Error checking ${service} status:`, error);
-        }
-    }
-
-    // Inicializar polling de estado de contenedores locales
-    setInterval(() => {
-        checkDockerService('neo4j');
-        checkDockerService('neodash');
-    }, 5000); // Revisar cada 5 segundos
-
-    // Check initial state
-    checkDockerService('neo4j');
-    checkDockerService('neodash');
 
     // ------------------------------------------------------------------ //
     //  DISPOSITIVOS CRÍTICOS                                               //

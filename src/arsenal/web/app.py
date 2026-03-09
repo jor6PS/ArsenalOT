@@ -767,7 +767,7 @@ async def get_scan_results_live(scan_id: int):
     cursor = conn.cursor()
     
     # Verificar que el escaneo existe y obtener metadata necesaria
-    scan = cursor.execute("SELECT id, status, error_message, organization_name FROM scans WHERE id = ?", (scan_id,)).fetchone()
+    scan = cursor.execute("SELECT id, status, error_message, organization_name, location, scan_mode FROM scans WHERE id = ?", (scan_id,)).fetchone()
     if not scan:
         conn.close()
         raise HTTPException(status_code=404, detail="Escaneo no encontrado")
@@ -801,57 +801,45 @@ async def get_scan_results_live(scan_id: int):
     # Obtener el estado del escaneo para devolverlo también
     scan_status = scan['status']
     
-    # Determinar si es un escaneo pasivo
-    is_passive = cursor.execute("SELECT scan_mode FROM scans WHERE id = ?", (scan_id,)).fetchone()[0] == 'passive'
+    # Inicializar variables para evitar UnboundLocalError
+    active_results = []
+    passive_results = []
+    stats = None
     
-    if is_passive:
-        # Para escaneos pasivos, obtenemos conversaciones
-        passive_results = storage.get_passive_results(scan_id=scan_id)
-        enriched_results = []
-        for res in passive_results:
-            # Aplanar/Mapear src -> dst como resultados para la tabla
-            # Mostramos el par src:port -> dst:port como una entrada de servicio
-            enriched_results.append({
-                "ip_address": res['src_ip'],
-                "hostname": f"conv -> {res['dst_ip']}",
-                "port": res['src_port'],
-                "protocol": res['protocol'],
-                "service_name": f"To {res['dst_ip']}:{res['dst_port']}",
-                "product": res['src_mac'],
-                "version": res['dst_mac'],
-                "organization_name": res['organization_name'],
-                "location": res['location'],
-                "scan_id": res['scan_id'],
-                "scan_result_id": f"passive_{res.get('id', 0)}", # ID virtual
-                "state": "active",
-                "interfaces_json": None,
-                "discovery_method": "passive_capture",
-                "has_screenshot": False,
-                "has_source_code": False,
-                "is_critical": False
-            })
-        
-        # Estadísticas para escaneo pasivo
+    # Determinar si el escaneo tiene modo pasivo habilitado
+    # Un escaneo puede tener ambos si se implementa en el futuro, pero por ahora suele ser uno u otro
+    is_passive_mode = scan['scan_mode'] == 'passive'
+    
+    # 1. Obtener resultados activos (de la tabla scan_results)
+    results = cursor.execute(query, (scan_id,)).fetchall()
+    for row in results:
+        result_dict = dict(row)
+        enrichments = cursor.execute("SELECT enrichment_type FROM enrichments WHERE scan_result_id = ?", (result_dict['scan_result_id'],)).fetchall()
+        result_dict['has_screenshot'] = any(e['enrichment_type'] == 'Screenshot' for e in enrichments)
+        result_dict['has_source_code'] = any(e['enrichment_type'] == 'Websource' for e in enrichments)
+        active_results.append(result_dict)
+    
+    # 2. Obtener resultados pasivos (si aplica o si hay datos)
+    raw_passive = storage.get_passive_results(scan_id=scan_id)
+    if raw_passive:
+        passive_results = raw_passive
+    
+    # 3. Estadísticas
+    hosts_count = 0
+    ports_count = 0
+    if is_passive_mode:
         stats_data = storage.get_passive_stats(scan_id)
-        stats = type('obj', (object,), {
-            'hosts_count': stats_data['hosts_count'],
-            'ports_count': stats_data['conversations_count']
-        })
+        hosts_count = stats_data.get('hosts_count', 0)
+        ports_count = stats_data.get('conversations_count', 0)
     else:
-        # Lógica original para escaneos activos/específicos
-        results = cursor.execute(query, (scan_id,)).fetchall()
-        for row in results:
-            result_dict = dict(row)
-            enrichments = cursor.execute("SELECT enrichment_type FROM enrichments WHERE scan_result_id = ?", (result_dict['scan_result_id'],)).fetchall()
-            result_dict['has_screenshot'] = any(e['enrichment_type'] == 'Screenshot' for e in enrichments)
-            result_dict['has_source_code'] = any(e['enrichment_type'] == 'Websource' for e in enrichments)
-            enriched_results.append(result_dict)
-        
-        stats = cursor.execute("""
+        stats_row = cursor.execute("""
             SELECT COUNT(DISTINCT h.id) as hosts_count, COUNT(sr.id) as ports_count
             FROM scan_results sr JOIN hosts h ON h.id = sr.host_id
             WHERE sr.scan_id = ?
         """, (scan_id,)).fetchone()
+        if stats_row:
+            hosts_count = stats_row['hosts_count']
+            ports_count = stats_row['ports_count']
 
     # Identificar IPs críticas de la organización para marcar los resultados
     critical_ips = set()
@@ -868,8 +856,12 @@ async def get_scan_results_live(scan_id: int):
         print(f"⚠️  Error cargando IPs críticas en live results: {e}")
     
     # Enriquecer con flag is_critical
-    for res in enriched_results:
-        res['is_critical'] = res['ip_address'] in critical_ips
+    for res in active_results:
+        res['is_critical'] = res.get('ip_address') in critical_ips
+        
+    for res in passive_results:
+        res['src_is_critical'] = res.get('src_ip') in critical_ips
+        res['dst_is_critical'] = res.get('dst_ip') in critical_ips
     
     conn.close()
     
@@ -880,10 +872,11 @@ async def get_scan_results_live(scan_id: int):
         "scan_id": scan_id,
         "status": scan["status"],
         "error_message": error_message,
-        "results": enriched_results,
+        "active": active_results,
+        "passive": passive_results,
         "stats": {
-            "hosts": stats["hosts_count"] if stats else 0,
-            "ports": stats["ports_count"] if stats else 0
+            "hosts": hosts_count,
+            "ports": ports_count
         }
     }
 
@@ -1020,7 +1013,9 @@ async def delete_location(organization: str, location: str):
 async def delete_organization(organization: str):
     """Elimina una organización completa y todos sus datos."""
     try:
+        # Llamar a storage (que ya se encarga de archivos locales y Neo4j)
         result = storage.delete_organization(organization)
+        
         return {
             "status": "success",
             "message": f"Organización '{organization}' eliminada correctamente",
@@ -1502,66 +1497,8 @@ async def clear_neo4j_database(config: Neo4jConfig):
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 # ============================================================================
-# NEO4J & NEODASH LOCAL DOCKER MANAGEMENT
+# NEO4J UTILS
 # ============================================================================
-
-def _get_compose_base() -> list:
-    """Returns the base docker compose command, preferring the plugin syntax."""
-    compose_file = Path.cwd() / "docker-compose.neo4j.yml"
-    return ["docker", "compose", "-f", str(compose_file)]
-
-def get_docker_compose_cmd(service: str, action: str) -> list:
-    compose_base = _get_compose_base()
-    if action == "up":
-        return compose_base + ["up", "-d", service]
-    elif action == "stop":
-        return compose_base + ["stop", service]
-    elif action == "status":
-        return ["docker", "ps", "--format", "{{.Names}}", "--filter", f"name={service}"]
-    return []
-
-@app.post("/api/docker/{service}/start")
-async def start_local_service(service: str):
-    """Inicia un servicio local usando docker-compose."""
-    if service not in ["neo4j", "neodash"]:
-        raise HTTPException(status_code=400, detail="Servicio no válido")
-    try:
-        cmd = get_docker_compose_cmd(service, "up")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if result.returncode == 0:
-            return {"status": "success", "message": f"Servicio {service} iniciado"}
-        else:
-            return {"status": "error", "message": result.stderr or result.stdout}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error iniciando {service}: {str(e)}")
-
-@app.post("/api/docker/{service}/stop")
-async def stop_local_service(service: str):
-    """Detiene un servicio local usando docker-compose."""
-    if service not in ["neo4j", "neodash"]:
-        raise HTTPException(status_code=400, detail="Servicio no válido")
-    try:
-        cmd = get_docker_compose_cmd(service, "stop")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        if result.returncode == 0:
-            return {"status": "success", "message": f"Servicio {service} detenido"}
-        else:
-            return {"status": "error", "message": result.stderr or result.stdout}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deteniendo {service}: {str(e)}")
-
-@app.get("/api/docker/{service}/status")
-async def status_local_service(service: str):
-    """Comprueba el estado de un servicio local."""
-    if service not in ["neo4j", "neodash"]:
-        raise HTTPException(status_code=400, detail="Servicio no válido")
-    try:
-        cmd = get_docker_compose_cmd(service, "status")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        is_running = f"arsenalot_{service}" in result.stdout
-        return {"status": "success", "running": is_running}
-    except Exception as e:
-        return {"status": "error", "running": False, "message": str(e)}
 
 class Neo4jQueryRequest(BaseModel):
     ip: str
