@@ -617,8 +617,12 @@ class ScanStorage:
                              first_seen, last_seen)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(ip_address) DO UPDATE SET
-                last_seen = excluded.last_seen,
-                subnet = COALESCE(excluded.subnet, subnet)
+                last_seen = MAX(last_seen, excluded.last_seen),
+                subnet = CASE 
+                    WHEN subnet IS NULL OR subnet IN ('10.0.0.0/8', '192.168.0.0/16', '172.16.0.0/12', 'Unknown') 
+                    THEN excluded.subnet 
+                    ELSE subnet 
+                END
         """, (host_ip, None, subnet, is_private, discovered_at, discovered_at))
         
         # Obtener el host_id
@@ -690,7 +694,7 @@ class ScanStorage:
                         port = int(port.split('/')[0])
                     else:
                         port = int(port)
-                elif not isinstance(port, int):
+                else:
                     port = int(port)
         except (ValueError, TypeError):
             port = None
@@ -745,7 +749,11 @@ class ScanStorage:
                 hostnames_json = COALESCE(excluded.hostnames_json, hostnames_json),
                 mac_address = COALESCE(excluded.mac_address, mac_address),
                 vendor = COALESCE(excluded.vendor, vendor),
-                subnet = COALESCE(excluded.subnet, subnet),
+                subnet = CASE 
+                    WHEN subnet IS NULL OR subnet IN ('10.0.0.0/8', '192.168.0.0/16', '172.16.0.0/12', 'Unknown') 
+                    THEN excluded.subnet 
+                    ELSE subnet 
+                END,
                 os_info_json = COALESCE(excluded.os_info_json, os_info_json),
                 host_scripts_json = COALESCE(excluded.host_scripts_json, host_scripts_json)
         """, (host_ip, hostname, hostnames_json, mac_address, vendor, subnet, is_private,
@@ -893,7 +901,11 @@ class ScanStorage:
                         hostnames_json = COALESCE(excluded.hostnames_json, hostnames_json),
                         mac_address = COALESCE(excluded.mac_address, mac_address),
                         vendor = COALESCE(excluded.vendor, vendor),
-                        subnet = COALESCE(excluded.subnet, subnet),
+                        subnet = CASE 
+                            WHEN subnet IS NULL OR subnet IN ('10.0.0.0/8', '192.168.0.0/16', '172.16.0.0/12', 'Unknown') 
+                            THEN excluded.subnet 
+                            ELSE subnet 
+                        END,
                         os_info_json = COALESCE(excluded.os_info_json, os_info_json),
                         host_scripts_json = COALESCE(excluded.host_scripts_json, host_scripts_json)
                 """, (host_ip, hostname, hostnames_json, mac_address, vendor, subnet, True,
@@ -1631,7 +1643,11 @@ class ScanStorage:
                     VALUES (?, ?, ?, 1, ?)
                     ON CONFLICT(ip_address) DO UPDATE SET 
                         last_seen = MAX(last_seen, excluded.last_seen),
-                        subnet = COALESCE(subnet, excluded.subnet)
+                        subnet = CASE 
+                            WHEN subnet IS NULL OR subnet IN ('10.0.0.0/8', '192.168.0.0/16', '172.16.0.0/12', 'Unknown') 
+                            THEN excluded.subnet 
+                            ELSE subnet 
+                        END
                 """, (ip, now, now, subnet))
                 h_id = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (ip,)).fetchone()[0]
                 # Poblar metadata scan
@@ -1715,7 +1731,11 @@ class ScanStorage:
                     VALUES (?, ?, ?, 1, ?)
                     ON CONFLICT(ip_address) DO UPDATE SET 
                         last_seen = MAX(last_seen, excluded.last_seen),
-                        subnet = COALESCE(subnet, excluded.subnet)
+                        subnet = CASE 
+                            WHEN subnet IS NULL OR subnet IN ('10.0.0.0/8', '192.168.0.0/16', '172.16.0.0/12', 'Unknown') 
+                            THEN excluded.subnet 
+                            ELSE subnet 
+                        END
                 """, (ip, info['last_seen'], info['last_seen'], subnet))
                 
                 h_id = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (ip,)).fetchone()[0]

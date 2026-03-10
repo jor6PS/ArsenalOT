@@ -138,6 +138,11 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                             subnet = net_range
                             break
                 
+                # 1.5. Intentar match con el target_range del propio escaneo
+                if not subnet and scan['target_range'] and scan['target_range'] != "0.0.0.0/0":
+                    if is_ip_in_network(ip, scan['target_range']):
+                        subnet = scan['target_range']
+                
                 # 2. Si no hay match en redes conocidas, usar el registrado o Unknown
                 if not subnet:
                     subnet = row['subnet'] or "Unknown"
