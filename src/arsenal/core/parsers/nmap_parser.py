@@ -176,6 +176,25 @@ class NmapXMLParser:
                     port_key = f"{port_data['port']}/{port_data['protocol']}"
                     ports[port_key] = port_data
         
+        # Tiempos
+        starttime_epoch = host_elem.get('starttime')
+        endtime_epoch = host_elem.get('endtime')
+        
+        starttime = None
+        endtime = None
+        
+        if starttime_epoch:
+            try:
+                starttime = datetime.fromtimestamp(float(starttime_epoch))
+            except (ValueError, TypeError):
+                pass
+        
+        if endtime_epoch:
+            try:
+                endtime = datetime.fromtimestamp(float(endtime_epoch))
+            except (ValueError, TypeError):
+                pass
+
         return {
             'ip': ip,
             'hostnames': hostnames,
@@ -186,7 +205,9 @@ class NmapXMLParser:
             'reason': status_elem.get('reason', ''),
             'os': os_info,
             'host_scripts': host_scripts,
-            'ports': ports
+            'ports': ports,
+            'starttime': starttime,
+            'endtime': endtime
         }
     
     def _parse_port(self, port_elem) -> Optional[Dict]:

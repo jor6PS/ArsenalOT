@@ -66,6 +66,58 @@
         opacity: 0.8;
         text-align: center;
     }
+
+    /* Phase Styles */
+    .scan-phase-card {
+        background: rgba(30, 41, 59, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .scan-phase-card:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        background: rgba(30, 41, 59, 0.6);
+    }
+    .phase-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .phase-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .phase-1-badge { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .phase-2-badge { background: rgba(139, 92, 246, 0.2); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+    .phase-3-badge { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    
+    .phase-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .phase-1-border { border-left: 4px solid #3b82f6; }
+    .phase-2-border { border-left: 4px solid #8b5cf6; }
+    .phase-3-border { border-left: 4px solid #10b981; }
+    
+    #nmapOptions {
+        border-left: none;
+        margin-left: 0;
+        padding-left: 0;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+    .nmap-full-width { grid-column: 1 / -1; }
 </style>
 
 <div class="scan-page" style="margin-top: 1.5rem;">
@@ -123,24 +175,41 @@
         <div class="form-section" id="activeScanSection">
             <h2>🔍 Capacidades de Escaneo Activo</h2>
 
-            <!-- Importación Nmap (Movido aquí) -->
+            <!-- Importación Nmap -->
             <details class="import-section"
                 style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed rgba(59, 130, 246, 0.3); border-radius: 8px;">
                 <summary style="cursor: pointer; color: var(--accent-blue); font-weight: 500; font-size: 0.9rem;">
                     <span>📥 Opcional: Importar desde XML de Nmap</span>
                 </summary>
-                <div style="margin-top: 1rem;">
+                <div style="margin-top: 1rem;" id="xmlImportSection">
                     <div class="form-group" style="margin-bottom: 0.5rem;">
-                        <label for="xml_file" style="font-size: 0.8rem;">Archivo XML de Nmap</label>
-                        <input type="file" id="xml_file" name="xml_file" accept=".xml"
+                        <label for="xml_files" style="font-size: 0.8rem;">Archivo(s) XML de Nmap</label>
+                        <input type="file" id="xml_files" name="xml_files" accept=".xml" multiple
                             style="font-size: 0.8rem; padding: 0.3rem;">
+                        <small style="display: block; color: #94a3b8; font-size: 0.7rem; margin-top: 2px;">Puedes seleccionar varios archivos</small>
                     </div>
-                    <button type="button" class="btn btn-sm" id="importXmlBtn" style="font-size: 0.75rem;">Importar
-                        XML</button>
+                    <div class="form-group" style="margin-bottom: 0.5rem;">
+                        <label for="xml_myip" style="font-size: 0.8rem;">IP de Origen (opcional)</label>
+                        <input type="text" id="xml_myip" name="myip" placeholder="Ej: 192.168.1.10"
+                            style="font-size: 0.8rem; padding: 0.3rem; width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0.5rem;">
+                        <label for="xml_interface" style="font-size: 0.8rem;">Interfaz (opcional)</label>
+                        <select id="xml_interface" name="interface"
+                            style="font-size: 0.8rem; padding: 0.3rem; width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            <option value="">-- Seleccionar Interfaz --</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-sm" id="importXmlBtn" style="font-size: 0.75rem;">
+                        <span id="importBtnSpinner" class="spinner hidden" style="margin-right: 5px;">⏳</span>
+                        <span id="importBtnText">📥 Importar XMLs</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger hidden" id="cancelXmlBtn" style="font-size: 0.75rem; background: #dc2626; margin-left: 0.5rem;">🛑 Cancelar</button>
                     <div id="importResult" style="margin-top: 0.5rem; font-size: 0.8rem;"></div>
                 </div>
             </details>
 
+            <!-- Rango de IPs (Común para las 3 fases) -->
             <div class="form-group">
                 <label for="target_range">Rango de IPs *</label>
                 <div id="networkSelectorContainer"
@@ -157,109 +226,135 @@
                     placeholder="Ej: 192.168.1.0/24 o 192.168.1.100">
             </div>
 
-            <div class="checkbox-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="host_discovery" name="host_discovery">
-                    <span>🔍 Descubrimiento de Hosts</span>
-                    <small>Detección de hosts activos mediante ARP</small>
-                </label>
-            </div>
-
-            <!-- Comando Descubrimiento Editable Preview -->
-            <div id="hostDiscoveryCommandPreview" class="nmap-command-preview"
-                style="display: block; margin-top: 1rem; margin-bottom: 1.5rem; padding: 1rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <label style="font-weight: 600; color: #e2e8f0; font-size: 0.95rem;">🔧 Comando Descubrimiento
-                        Editable:</label>
-                    <button type="button" onclick="copyHostDiscoveryCommand()"
-                        style="padding: 0.25rem 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">
-                        📋 Copiar
-                    </button>
+            <!-- FASE 1: CAPA 2 (ARP) -->
+            <div class="scan-phase-card phase-1-border">
+                <div class="phase-header">
+                    <span class="phase-badge phase-1-badge">Fase 1</span>
+                    <h3 class="phase-title">Capa 2: Descubrimiento ARP</h3>
                 </div>
-                <textarea id="hostDiscoveryCommandText" name="custom_host_discovery_command"
-                    style="width: 100%; min-height: 80px; padding: 0.75rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #60a5fa; font-family: 'Courier New', monospace; font-size: 0.9rem; resize: vertical;"
-                    spellcheck="false">El comando aparecerá aquí cuando configures el rango</textarea>
-                <small style="color: #94a3b8; font-size: 0.8rem; margin-top: 0.5rem; display: block;">* arp-scan se
-                    usará por defecto en modo root. Puedes modificar libremente este comando.</small>
-            </div>
-
-            <div class="checkbox-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="nmap" name="nmap">
-                    <span>🔌 Escaneo Nmap</span>
-                    <small>Escaneo de puertos y servicios</small>
-                </label>
-            </div>
-
-            <div id="nmapOptions" class="nmap-options">
-                <div class="form-group">
-                    <label for="nmap_speed">Velocidad del Escaneo</label>
-                    <select id="nmap_speed" name="nmap_speed">
-                        <option value="rapido">Rápido (T4)</option>
-                        <option value="normal" selected>Normal (T3)</option>
-                        <option value="lento">Lento (T2)</option>
-                    </select>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="host_discovery" name="host_discovery">
+                        <span>🔍 Activar arp-scan</span>
+                        <small>Detección ultrarrápida de hosts en la red local (Capa 2)</small>
+                    </label>
                 </div>
 
+                <!-- Comando Descubrimiento Editable Preview -->
+                <div id="hostDiscoveryCommandPreview" class="nmap-command-preview"
+                    style="display: none; margin-top: 1rem; padding: 1rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label style="font-weight: 600; color: #e2e8f0; font-size: 0.85rem;">🔧 Comando ARP:</label>
+                        <button type="button" onclick="copyHostDiscoveryCommand()"
+                            style="padding: 0.2rem 0.4rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #94a3b8; cursor: pointer; font-size: 0.75rem;">
+                            📋 Copiar
+                        </button>
+                    </div>
+                    <textarea id="hostDiscoveryCommandText" name="custom_host_discovery_command"
+                        style="width: 100%; min-height: 60px; padding: 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #60a5fa; font-family: 'Courier New', monospace; font-size: 0.85rem; resize: vertical;"
+                        spellcheck="false">El comando aparecerá aquí cuando configures el rango</textarea>
+                </div>
+            </div>
+
+            <!-- FASE 2: CAPA 3 (PING) -->
+            <div class="scan-phase-card phase-2-border">
+                <div class="phase-header">
+                    <span class="phase-badge phase-2-badge">Fase 2</span>
+                    <h3 class="phase-title">Capa 3: Ping Scan (Nmap)</h3>
+                </div>
                 <div class="checkbox-group">
                     <label class="checkbox-label">
                         <input type="checkbox" id="nmap_icmp" name="nmap_icmp" onchange="toggleIcmpMode(this)">
-                        <span>📍 Escaneo ICMP (Ping Scan)</span>
-                        <small>Solo descubrimiento de hosts mediante ping, sin escaneo de puertos.</small>
+                        <span>📍 Activar Ping Discovery (-sn)</span>
+                        <small>Identifica hosts activos mediante ICMP y otros protocolos de Capa 3</small>
                     </label>
                 </div>
 
-                <div class="checkbox-group nmap-port-option">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="nmap_versions" name="nmap_versions"
-                            onchange="handlePortOptionChange()">
-                        <span>Detección de Versiones (-sV)</span>
-                    </label>
-                </div>
-
-                <div class="checkbox-group nmap-port-option">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="nmap_vulns" name="nmap_vulns" onchange="handlePortOptionChange()">
-                        <span>Escaneo de Vulnerabilidades (--script vuln)</span>
-                    </label>
-                </div>
-
-                <div class="checkbox-group nmap-port-option">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="nmap_ot_ports" name="nmap_ot_ports"
-                            onchange="handlePortOptionChange()">
-                        <span>Puertos OT (Operational Technology)</span>
-                    </label>
-                </div>
-
-                <div class="checkbox-group nmap-port-option">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="nmap_it_ports" name="nmap_it_ports"
-                            onchange="handlePortOptionChange()">
-                        <span>Puertos Comunes IT</span>
-                    </label>
-                </div>
-
-                <div class="form-group">
-                    <label for="custom_ports">Puertos Personalizados (opcional)</label>
-                    <input type="text" id="custom_ports" name="custom_ports" placeholder="Ej: 80,443,8080">
+                <!-- Comando Ping Editable Preview -->
+                <div id="pingCommandPreview" class="nmap-command-preview"
+                    style="display: none; margin-top: 1rem; padding: 1rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label style="font-weight: 600; color: #e2e8f0; font-size: 0.85rem;">🔧 Comando Ping:</label>
+                        <button type="button" onclick="copyPingCommand()"
+                            style="padding: 0.2rem 0.4rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #94a3b8; cursor: pointer; font-size: 0.75rem;">
+                            📋 Copiar
+                        </button>
+                    </div>
+                    <textarea id="pingCommandText" name="custom_ping_command"
+                        style="width: 100%; min-height: 60px; padding: 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #60a5fa; font-family: 'Courier New', monospace; font-size: 0.85rem; resize: vertical;"
+                        spellcheck="false">El comando aparecerá aquí cuando configures el rango</textarea>
                 </div>
             </div>
 
-            <!-- Comando Nmap Editable Preview -->
-            <div id="nmapCommandPreview" class="nmap-command-preview"
-                style="display: none; margin-top: 1.5rem; margin-bottom: 1rem; padding: 1rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <label style="font-weight: 600; color: #e2e8f0; font-size: 0.95rem;">🔧 Comando Nmap
-                        Editable:</label>
-                    <button type="button" onclick="copyNmapCommand()"
-                        style="padding: 0.25rem 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #94a3b8; cursor: pointer; font-size: 0.85rem;">
-                        📋 Copiar
-                    </button>
+            <!-- FASE 3: PUERTOS (IT/OT) -->
+            <div class="scan-phase-card phase-3-border">
+                <div class="phase-header">
+                    <span class="phase-badge phase-3-badge">Fase 3</span>
+                    <h3 class="phase-title">Capa 4+: Descubrimiento de Servicios IT/OT</h3>
                 </div>
-                <textarea id="nmapCommandText" name="custom_nmap_command"
-                    style="width: 100%; min-height: 80px; padding: 0.75rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #60a5fa; font-family: 'Courier New', monospace; font-size: 0.9rem; resize: vertical;"
-                    spellcheck="false">El comando aparecerá aquí cuando configures las opciones de Nmap</textarea>
+                
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="nmap" name="nmap">
+                        <span>🔌 Activar Escaneo de Puertos</span>
+                        <small>Identificación de servicios y aplicaciones abiertas</small>
+                    </label>
+                </div>
+
+                <div id="nmapOptions" class="nmap-options" style="display: none;">
+                    <div class="form-group">
+                        <label for="nmap_speed">Velocidad</label>
+                        <select id="nmap_speed" name="nmap_speed">
+                            <option value="rapido">Rápido (T4)</option>
+                            <option value="normal" selected>Normal (T3)</option>
+                            <option value="lento">Lento (T2)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Versiones</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label" style="padding: 0;">
+                                <input type="checkbox" id="nmap_versions" name="nmap_versions" onchange="handlePortOptionChange()">
+                                <span>Detectar Versiones (-sV)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Puertos a Escanear</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label" style="padding: 0; margin-bottom: 0.5rem;">
+                                <input type="checkbox" id="nmap_ot_ports" name="nmap_ot_ports" onchange="handlePortOptionChange()">
+                                <span>Puertos OT Industriales</span>
+                            </label>
+                            <label class="checkbox-label" style="padding: 0;">
+                                <input type="checkbox" id="nmap_it_ports" name="nmap_it_ports" onchange="handlePortOptionChange()">
+                                <span>Puertos Comunes IT</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="custom_ports">Personalizados (opcional)</label>
+                        <input type="text" id="custom_ports" name="custom_ports" placeholder="Ej: 80,443,8080">
+                    </div>
+                </div>
+
+                <!-- Comando Nmap Preview -->
+                <div id="nmapCommandPreview" class="nmap-command-preview"
+                    style="display: none; margin-top: 1rem; padding: 1rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label style="font-weight: 600; color: #e2e8f0; font-size: 0.85rem;">🔧 Comando Puertos:</label>
+                        <button type="button" onclick="copyNmapCommand()"
+                            style="padding: 0.2rem 0.4rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #94a3b8; cursor: pointer; font-size: 0.75rem;">
+                            📋 Copiar
+                        </button>
+                    </div>
+                    <textarea id="nmapCommandText" name="custom_nmap_command"
+                        style="width: 100%; min-height: 60px; padding: 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #60a5fa; font-family: 'Courier New', monospace; font-size: 0.85rem; resize: vertical;"
+                        spellcheck="false">El comando aparecerá aquí cuando configures las opciones</textarea>
+                </div>
             </div>
         </div>
 
@@ -273,14 +368,30 @@
                 <summary style="cursor: pointer; color: #10b981; font-weight: 500; font-size: 0.9rem;">
                     <span>📥 Opcional: Importar desde archivo PCAP</span>
                 </summary>
-                <div style="margin-top: 1rem;">
+                <div style="margin-top: 1rem;" id="pcapImportSection">
                     <div class="form-group" style="margin-bottom: 0.5rem;">
-                        <label for="pcap_file" style="font-size: 0.8rem;">Archivo PCAP/PCAPNG</label>
-                        <input type="file" id="pcap_file" name="pcap_file" accept=".pcap,.pcapng"
+                        <label for="pcap_files" style="font-size: 0.8rem;">Archivo(s) PCAP/PCAPNG</label>
+                        <input type="file" id="pcap_files" name="pcap_files" accept=".pcap,.pcapng" multiple
                             style="font-size: 0.8rem; padding: 0.3rem;">
+                        <small style="display: block; color: #94a3b8; font-size: 0.7rem; margin-top: 2px;">Puedes seleccionar varios archivos</small>
                     </div>
-                    <button type="button" class="btn btn-sm btn-success" id="importPcapBtn"
-                        style="font-size: 0.75rem; background: #10b981;">Importar PCAP</button>
+                    <div class="form-group" style="margin-bottom: 0.5rem;">
+                        <label for="pcap_myip" style="font-size: 0.8rem;">IP de Origen (opcional)</label>
+                        <input type="text" id="pcap_myip" name="myip" placeholder="Ej: 192.168.1.10"
+                            style="font-size: 0.8rem; padding: 0.3rem; width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0.5rem;">
+                        <label for="pcap_interface" style="font-size: 0.8rem;">Interfaz (opcional)</label>
+                        <select id="pcap_interface" name="interface"
+                            style="font-size: 0.8rem; padding: 0.3rem; width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            <option value="">-- Seleccionar Interfaz --</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-success" id="importPcapBtn" style="font-size: 0.75rem; background: #10b981;">
+                        <span id="importPcapBtnSpinner" class="spinner hidden" style="margin-right: 5px;">⏳</span>
+                        <span id="importPcapBtnText">🎧 Importar PCAPs</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger hidden" id="cancelPcapBtn" style="font-size: 0.75rem; background: #dc2626; margin-left: 0.5rem;">🛑 Cancelar</button>
                     <div id="importPcapResult" style="margin-top: 0.5rem; font-size: 0.8rem;"></div>
                 </div>
             </details>
@@ -409,40 +520,16 @@
 </div>
 
 <script>
-    // Maneja el modo ICMP (excluyente con opciones de puertos)
+    // Maneja el modo ICMP
     function toggleIcmpMode(icmpCheckbox) {
-        if (icmpCheckbox.checked) {
-            // Desmarcar y deshabilitar opciones de puertos
-            document.querySelectorAll('.nmap-port-option input').forEach(el => {
-                el.checked = false;
-                el.disabled = true;
-                el.parentElement.style.opacity = '0.5';
-            });
-            // Limpiar puertos personalizados
-            document.getElementById('custom_ports').value = '';
-            document.getElementById('custom_ports').disabled = true;
-        } else {
-            // Rehabilitar opciones de puertos
-            document.querySelectorAll('.nmap-port-option input').forEach(el => {
-                el.disabled = false;
-                el.parentElement.style.opacity = '1';
-            });
-            document.getElementById('custom_ports').disabled = false;
-
-            // Marcar por defecto los puertos comunes si se desactiva ICMP
-            document.getElementById('nmap_ot_ports').checked = true;
-            document.getElementById('nmap_it_ports').checked = true;
-        }
+        // Ya no es excluyente para permitir ejecución secuencial de fases
+        updatePingCommand();
         updateNmapCommand();
     }
 
-    // Maneja cambios en opciones de puertos (desmarca ICMP si se marca algo de puertos)
+    // Maneja cambios en opciones de puertos
     function handlePortOptionChange() {
-        const icmpCheckbox = document.getElementById('nmap_icmp');
-        if (icmpCheckbox && icmpCheckbox.checked) {
-            icmpCheckbox.checked = false;
-            toggleIcmpMode(icmpCheckbox);
-        }
+        // Ya no desmarcamos ICMP automáticamente, permitimos redundancia o convivencia
         updateNmapCommand();
     }
 
@@ -466,8 +553,13 @@
 
     // Cargar interfaces de red
     async function loadInterfaces() {
-        const interfaceSelect = document.getElementById('interface');
-        if (!interfaceSelect) return;
+        const interfaceSelects = [
+            document.getElementById('interface'),
+            document.getElementById('xml_interface'),
+            document.getElementById('pcap_interface')
+        ].filter(el => el !== null);
+
+        if (interfaceSelects.length === 0) return;
 
         try {
             const response = await fetch('/api/interfaces');
@@ -475,23 +567,23 @@
             
             const interfaces = await response.json();
             
-            // Mantener la opción por defecto
-            interfaceSelect.innerHTML = '<option value="">-- Seleccionar Interfaz --</option>';
-            
-            interfaces.forEach(iface => {
-                const option = document.createElement('option');
-                option.value = iface;
-                option.textContent = iface;
-                // Si es eth0, marcar como seleccionado por defecto (opcional)
-                if (iface === 'eth0' || iface === 'wlan0') {
-                    // option.selected = true;
-                }
-                interfaceSelect.appendChild(option);
+            interfaceSelects.forEach(select => {
+                // Mantener la opción por defecto
+                select.innerHTML = '<option value="">-- Seleccionar Interfaz --</option>';
+                
+                interfaces.forEach(iface => {
+                    const option = document.createElement('option');
+                    option.value = iface;
+                    option.textContent = iface;
+                    select.appendChild(option);
+                });
             });
         } catch (error) {
             console.error('Error cargando interfaces:', error);
             // Fallback en caso de error
-            interfaceSelect.innerHTML += '<option value="eth0">eth0 (fallback)</option><option value="wlan0">wlan0 (fallback)</option>';
+            interfaceSelects.forEach(select => {
+                select.innerHTML += '<option value="eth0">eth0 (fallback)</option><option value="wlan0">wlan0 (fallback)</option>';
+            });
         }
     }
 
@@ -627,6 +719,7 @@
         }
 
         updateNmapCommand();
+        updatePingCommand();
         updateHostDiscoveryCommand();
     }
 
@@ -747,13 +840,14 @@
         const speed = document.getElementById('nmap_speed').value || 'normal';
         const icmpMode = document.getElementById('nmap_icmp').checked;
         const enableVersions = document.getElementById('nmap_versions').checked;
-        const enableVulns = document.getElementById('nmap_vulns').checked;
         const otPorts = document.getElementById('nmap_ot_ports').checked;
         const itPorts = document.getElementById('nmap_it_ports').checked;
         const customPorts = document.getElementById('custom_ports').value.trim();
 
-        // Si es modo ICMP, el comando es mucho más simple
-        if (icmpMode) {
+        // NOTA: Con la nueva estructura secuencial, si ambos están activos, 
+        // el backend los ejecutará uno tras otro. El comando mostrado aquí
+        // es para la fase de Puertos (o Ping si solo se activa Ping).
+        if (icmpMode && !nmapEnabled) {
             let cmd = ['nmap', '-T4', '-sn'];
             cmd.push(targetRange);
             return cmd.join(' ');
@@ -816,11 +910,6 @@
             cmd.push('-sV');
         }
 
-        // Scripts de vulnerabilidades (solo si está marcado en la interfaz)
-        if (enableVulns) {
-            cmd.push('--script', 'vuln');
-        }
-
         // Target (al final)
         cmd.push(targetRange);
 
@@ -839,6 +928,18 @@
         return `arp-scan --localnet ${targetRange}`;
     }
 
+    function buildPingCommand() {
+        const scanMode = document.getElementById('scan_mode').value;
+        const icmpEnabled = document.getElementById('nmap_icmp').checked;
+
+        if (scanMode !== 'active' || !icmpEnabled) {
+            return null;
+        }
+
+        const targetRange = document.getElementById('target_range_active').value || 'TARGET_IP';
+        return `nmap -sn -T4 ${targetRange}`;
+    }
+
     function updateHostDiscoveryCommand() {
         const scanMode = document.getElementById('scan_mode').value;
         const hdEnabled = document.getElementById('host_discovery').checked;
@@ -847,6 +948,25 @@
 
         if (scanMode === 'active' && hdEnabled) {
             const cmd = buildHostDiscoveryCommand();
+            if (cmd) {
+                commandText.value = cmd;
+                previewDiv.style.display = 'block';
+            } else {
+                previewDiv.style.display = 'none';
+            }
+        } else {
+            previewDiv.style.display = 'none';
+        }
+    }
+
+    function updatePingCommand() {
+        const scanMode = document.getElementById('scan_mode').value;
+        const icmpEnabled = document.getElementById('nmap_icmp').checked;
+        const previewDiv = document.getElementById('pingCommandPreview');
+        const commandText = document.getElementById('pingCommandText');
+
+        if (scanMode === 'active' && icmpEnabled) {
+            const cmd = buildPingCommand();
             if (cmd) {
                 commandText.value = cmd;
                 previewDiv.style.display = 'block';
@@ -920,6 +1040,7 @@
 
     document.getElementById('target_range_active').addEventListener('input', () => {
         updateNmapCommand();
+        updatePingCommand();
         updateHostDiscoveryCommand();
     });
 
@@ -927,10 +1048,9 @@
 
     document.getElementById('nmap_speed').addEventListener('change', updateNmapCommand);
     document.getElementById('nmap_versions').addEventListener('change', updateNmapCommand);
-    document.getElementById('nmap_vulns').addEventListener('change', updateNmapCommand);
     document.getElementById('nmap_ot_ports').addEventListener('change', updateNmapCommand);
     document.getElementById('nmap_it_ports').addEventListener('change', updateNmapCommand);
-    document.getElementById('nmap_icmp').addEventListener('change', updateNmapCommand);
+    document.getElementById('nmap_icmp').addEventListener('change', updatePingCommand);
     document.getElementById('custom_ports').addEventListener('input', updateNmapCommand);
 
     let currentScanId = null;
@@ -981,13 +1101,35 @@
             nmap_it_ports: formData.has('nmap_it_ports'),
             nmap_icmp: formData.has('nmap_icmp'),
             custom_ports: formData.get('custom_ports') || null,
-            custom_nmap_command: formData.get('custom_nmap_command') || null,
-            custom_host_discovery_command: formData.get('custom_host_discovery_command') || null,
             ioxid: formData.has('ioxid'),
             screenshots: formData.has('screenshots'),
             source_code: formData.has('source_code'),
             pcap_filter: formData.get('pcap_filter') || null
         };
+
+        // Solo incluir comandos personalizados si sus fases están activas y no son el placeholder
+        const placeholder = "El comando aparecerá aquí";
+        
+        const customArp = formData.get('custom_host_discovery_command');
+        if (config.host_discovery && customArp && !customArp.includes(placeholder)) {
+            config.custom_host_discovery_command = customArp;
+        } else {
+            config.custom_host_discovery_command = null;
+        }
+
+        const customPing = formData.get('custom_ping_command');
+        if (config.nmap_icmp && customPing && !customPing.includes(placeholder)) {
+            config.custom_ping_command = customPing;
+        } else {
+            config.custom_ping_command = null;
+        }
+
+        const customNmap = formData.get('custom_nmap_command');
+        if (config.nmap && customNmap && !customNmap.includes(placeholder)) {
+            config.custom_nmap_command = customNmap;
+        } else {
+            config.custom_nmap_command = null;
+        }
 
         // Validación adicional en el cliente
         if (!config.interface) {
@@ -997,14 +1139,14 @@
         }
 
         if (scanMode === 'active') {
-            if (!config.host_discovery && !config.nmap) {
-                alert('⚠️ Debes seleccionar al menos una técnica (Descubrimiento o Nmap).');
+            if (!config.host_discovery && !config.nmap && !config.nmap_icmp) {
+                alert('⚠️ Debes seleccionar al menos una técnica (Fase 1, 2 o 3).');
                 resetStartButton(startBtn, btnText, btnSpinner);
                 return;
             }
 
-            if (config.nmap && !config.nmap_icmp && !config.nmap_ot_ports && !config.nmap_it_ports && !config.custom_ports) {
-                alert('⚠️ Has seleccionado Nmap pero no has marcado ningún puerto ni modo ICMP.');
+            if (config.nmap && !config.nmap_ot_ports && !config.nmap_it_ports && !config.custom_ports) {
+                alert('⚠️ Fase 3: Has seleccionado Escaneo de Puertos pero no has marcado ningún puerto ni comando personalizado.');
                 resetStartButton(startBtn, btnText, btnSpinner);
                 return;
             }
@@ -1055,72 +1197,6 @@
 
     // Manejar detención/cancelación (no cambian significativamente)
     // ... mantiene lógica de detención ...
-
-    // Manejar importación XML de Nmap
-    document.getElementById('importXmlBtn').addEventListener('click', async function () {
-        const fileInput = document.getElementById('xml_file');
-        const resultDiv = document.getElementById('importResult');
-        const org = document.getElementById('organization').value;
-        const loc = document.getElementById('location').value;
-
-        if (!fileInput.files[0]) {
-            alert('Selecciona un archivo XML'); return;
-        }
-        if (!org || !loc) {
-            alert('Especifica organización y origen primero'); return;
-        }
-
-        const formData = new FormData();
-        formData.append('xml_file', fileInput.files[0]);
-        formData.append('organization', org);
-        formData.append('location', loc);
-
-        resultDiv.innerHTML = '⌛ Importando...';
-        try {
-            const resp = await fetch('/api/scan/import-xml', { method: 'POST', body: formData });
-            const res = await resp.json();
-            if (resp.ok) {
-                resultDiv.innerHTML = `<div class="success">✅ Importado ID: ${res.scan_id} (${res.stats.hosts_processed} hosts)</div>`;
-            } else {
-                resultDiv.innerHTML = `<div class="error">❌ ${res.detail || 'Error'}</div>`;
-            }
-        } catch (e) {
-            resultDiv.innerHTML = `❌ Error de red: ${e.message}`;
-        }
-    });
-
-    // Manejar importación PCAP
-    document.getElementById('importPcapBtn').addEventListener('click', async function () {
-        const fileInput = document.getElementById('pcap_file');
-        const resultDiv = document.getElementById('importPcapResult');
-        const org = document.getElementById('organization').value;
-        const loc = document.getElementById('location').value;
-
-        if (!fileInput.files[0]) {
-            alert('Selecciona un archivo PCAP'); return;
-        }
-        if (!org || !loc) {
-            alert('Especifica organización y origen primero'); return;
-        }
-
-        const formData = new FormData();
-        formData.append('pcap_file', fileInput.files[0]);
-        formData.append('organization', org);
-        formData.append('location', loc);
-
-        resultDiv.innerHTML = '⌛ Importando...';
-        try {
-            const resp = await fetch('/api/scan/import-pcap', { method: 'POST', body: formData });
-            const res = await resp.json();
-            if (resp.ok) {
-                resultDiv.innerHTML = `<div class="success">✅ Importado ID: ${res.scan_id} (${res.stats.hosts_processed} hosts)</div>`;
-            } else {
-                resultDiv.innerHTML = `<div class="error">❌ ${res.detail || 'Error'}</div>`;
-            }
-        } catch (e) {
-            resultDiv.innerHTML = `❌ Error de red: ${e.message}`;
-        }
-    });
 
 
     // Manejar detención (solo parar proceso)
@@ -1498,146 +1574,278 @@
     restoreScanTracking();
 
     // Manejar importación XML
-    document.getElementById('importXmlForm').addEventListener('submit', async function (e) {
-        e.preventDefault();
+    let xmlAbortController = null;
+    const importXmlBtn = document.getElementById('importXmlBtn');
+    const cancelXmlBtn = document.getElementById('cancelXmlBtn');
 
-        const importBtn = document.getElementById('importXmlBtn');
-        const importBtnText = document.getElementById('importBtnText');
-        const importBtnSpinner = document.getElementById('importBtnSpinner');
-        const importResult = document.getElementById('importResult');
-
-        // Deshabilitar botón y mostrar spinner
-        importBtn.disabled = true;
-        importBtnText.textContent = 'Importando...';
-        importBtnSpinner.style.display = 'inline-block';
-        importBtnSpinner.classList.remove('hidden');
-        importResult.style.display = 'none';
-
-        const formData = new FormData(this);
-
-        try {
-            const response = await fetch('/api/scan/import-xml', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                importResult.style.display = 'block';
-                importResult.innerHTML = `
-                    <div style="padding: 1rem; background: #064e3b; border: 1px solid #059669; border-radius: 4px; color: #d1fae5;">
-                        <strong>✅ ${result.message}</strong>
-                        <div style="margin-top: 0.5rem; font-size: 0.9em;">
-                            <div>Escaneo ID: ${result.scan_id}</div>
-                            <div>Hosts procesados: ${result.stats.hosts_processed}</div>
-                            <div>Puertos procesados: ${result.stats.ports_processed}</div>
-                        </div>
-                        <div style="margin-top: 0.5rem;">
-                            <a href="/pentest/${encodeURIComponent(formData.get('organization'))}/recon/results?scan_id=${result.scan_id}" class="btn btn-primary" style="display: inline-block; padding: 0.5rem 1rem; text-decoration: none;">
-                                Ver Resultados
-                            </a>
-                        </div>
-                    </div>
-                `;
-
-                // Limpiar formulario
-                this.reset();
-            } else {
-                importResult.style.display = 'block';
-                importResult.innerHTML = `
-                    <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
-                        <strong>❌ Error:</strong> ${result.detail || 'Error desconocido'}
-                    </div>
-                `;
+    if (cancelXmlBtn) {
+        cancelXmlBtn.addEventListener('click', () => {
+            if (xmlAbortController) {
+                xmlAbortController.abort();
+                console.log('XML Import aborted by user');
             }
-        } catch (error) {
-            console.error('Error:', error);
-            importResult.style.display = 'block';
-            importResult.innerHTML = `
-                <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
-                    <strong>❌ Error:</strong> ${error.message}
-                </div>
-            `;
-        } finally {
-            // Restaurar botón
-            importBtn.disabled = false;
-            importBtnText.textContent = '📥 Importar';
-            importBtnSpinner.style.display = 'none';
-            importBtnSpinner.classList.add('hidden');
-        }
-    });
+        });
+    }
+
+    if (importXmlBtn) {
+        importXmlBtn.addEventListener('click', async function (e) {
+            e.preventDefault();
+
+            const importBtn = document.getElementById('importXmlBtn');
+            const importBtnText = document.getElementById('importBtnText') || { textContent: '' };
+            const importBtnSpinner = document.getElementById('importBtnSpinner');
+            const importResult = document.getElementById('importResult');
+
+            const fileInput = document.getElementById('xml_files');
+            if (!fileInput.files.length) {
+                alert('Selecciona al menos un archivo XML');
+                return;
+            }
+            
+            const org = document.getElementById('organization').value;
+            const loc = document.getElementById('location').value;
+            if (!org || !loc) {
+                alert('Especifica organización y origen primero');
+                return;
+            }
+
+            // Configurar AbortController
+            xmlAbortController = new AbortController();
+
+            // Deshabilitar botón y mostrar spinner/cancelar
+            if (importBtn) importBtn.disabled = true;
+            if (importBtnText) importBtnText.textContent = 'Importando...';
+            if (importBtnSpinner) {
+                importBtnSpinner.style.display = 'inline-block';
+                importBtnSpinner.classList.remove('hidden');
+            }
+            if (cancelXmlBtn) cancelXmlBtn.classList.remove('hidden');
+            if (importResult) importResult.style.display = 'none';
+
+            const formData = new FormData();
+            for (const file of fileInput.files) {
+                formData.append('xml_file', file);
+            }
+            formData.append('organization', org);
+            formData.append('location', loc);
+            
+            const myip = document.getElementById('xml_myip').value;
+            if (myip) formData.append('myip', myip);
+            
+            const iface = document.getElementById('xml_interface').value;
+            if (iface) formData.append('interface', iface);
+
+            try {
+                const response = await fetch('/api/scan/import-xml', {
+                    method: 'POST',
+                    body: formData,
+                    signal: xmlAbortController.signal
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    importResult.style.display = 'block';
+                    let html = `<div style="padding: 1rem; background: #064e3b; border: 1px solid #059669; border-radius: 4px; color: #d1fae5;">
+                        <strong>✅ ${result.message}</strong><div style="margin-top:0.5rem">`;
+                    
+                    result.results.forEach(res => {
+                        if (res.status === 'success') {
+                            html += `<div style="margin-bottom:0.5rem; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem">
+                                <span style="color:#10b981">✔ ${res.filename}</span> (ID: ${res.scan_id})<br>
+                                <small>Hosts: ${res.stats.hosts_processed} | Puertos: ${res.stats.ports_processed}</small>
+                            </div>`;
+                        } else {
+                            html += `<div style="margin-bottom:0.5rem; color:#ef4444">
+                                ✘ ${res.filename}: ${res.message}
+                            </div>`;
+                        }
+                    });
+                    
+                    html += `</div><div style="margin-top: 0.5rem;">
+                                <button type="button" onclick="location.reload()" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: #374151; color: white; border: none; border-radius: 4px; cursor: pointer;">Cerrar</button>
+                            </div></div>`;
+                    importResult.innerHTML = html;
+
+                    // Limpiar campos
+                    fileInput.value = '';
+                    const myipInput = document.getElementById('xml_myip');
+                    if (myipInput) myipInput.value = '';
+                } else {
+                    importResult.style.display = 'block';
+                    importResult.innerHTML = `
+                        <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
+                            <strong>❌ Error:</strong> ${result.detail || 'Error desconocido'}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    importResult.style.display = 'block';
+                    importResult.innerHTML = `
+                        <div style="padding: 1rem; background: #7c2d12; border: 1px solid #ea580c; border-radius: 4px; color: #ffedd5;">
+                            <strong>⚠️ Importación cancelada</strong>
+                        </div>
+                    `;
+                } else {
+                    console.error('Error:', error);
+                    importResult.style.display = 'block';
+                    importResult.innerHTML = `
+                        <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
+                            <strong>❌ Error:</strong> ${error.message}
+                        </div>
+                    `;
+                }
+            } finally {
+                xmlAbortController = null;
+                // Restaurar botón
+                if (importBtn) importBtn.disabled = false;
+                if (importBtnText) importBtnText.textContent = '📥 Importar XMLs';
+                if (importBtnSpinner) {
+                    importBtnSpinner.style.display = 'none';
+                    importBtnSpinner.classList.add('hidden');
+                }
+                if (cancelXmlBtn) cancelXmlBtn.classList.add('hidden');
+            }
+        });
+    }
 
     // Manejar importación PCAP
-    document.getElementById('importPcapForm').addEventListener('submit', async function (e) {
-        e.preventDefault();
+    let pcapAbortController = null;
+    const importPcapBtn = document.getElementById('importPcapBtn');
+    const cancelPcapBtn = document.getElementById('cancelPcapBtn');
 
-        const importPcapBtn = document.getElementById('importPcapBtn');
-        const importPcapBtnText = document.getElementById('importPcapBtnText');
-        const importPcapBtnSpinner = document.getElementById('importPcapBtnSpinner');
-        const importPcapResult = document.getElementById('importPcapResult');
-
-        // Deshabilitar botón y mostrar spinner
-        importPcapBtn.disabled = true;
-        importPcapBtnText.textContent = 'Importando...';
-        importPcapBtnSpinner.style.display = 'inline-block';
-        importPcapBtnSpinner.classList.remove('hidden');
-        importPcapResult.style.display = 'none';
-
-        const formData = new FormData(this);
-
-        try {
-            const response = await fetch('/api/scan/import-pcap', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                importPcapResult.style.display = 'block';
-                importPcapResult.innerHTML = `
-                    <div style="padding: 1rem; background: #064e3b; border: 1px solid #059669; border-radius: 4px; color: #d1fae5;">
-                        <strong>✅ ${result.message}</strong>
-                        <div style="margin-top: 0.5rem; font-size: 0.9em;">
-                            <div>Escaneo ID: ${result.scan_id}</div>
-                            <div>Hosts procesados: ${result.stats.hosts_processed}</div>
-                            <div>Puertos procesados: ${result.stats.ports_processed}</div>
-                        </div>
-                        <div style="margin-top: 0.5rem;">
-                            <a href="/pentest/${encodeURIComponent(formData.get('organization'))}/recon/results?scan_id=${result.scan_id}" class="btn btn-primary" style="display: inline-block; padding: 0.5rem 1rem; text-decoration: none;">
-                                Ver Resultados
-                            </a>
-                        </div>
-                    </div>
-                `;
-
-                // Limpiar formulario
-                this.reset();
-            } else {
-                importPcapResult.style.display = 'block';
-                importPcapResult.innerHTML = `
-                    <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
-                        <strong>❌ Error:</strong> ${result.detail || 'Error desconocido'}
-                    </div>
-                `;
+    if (cancelPcapBtn) {
+        cancelPcapBtn.addEventListener('click', () => {
+            if (pcapAbortController) {
+                pcapAbortController.abort();
+                console.log('PCAP Import aborted by user');
             }
-        } catch (error) {
-            console.error('Error:', error);
-            importPcapResult.style.display = 'block';
-            importPcapResult.innerHTML = `
-                <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
-                    <strong>❌ Error:</strong> ${error.message}
-                </div>
-            `;
-        } finally {
-            // Restaurar botón
-            importPcapBtn.disabled = false;
-            importPcapBtnText.textContent = '🎧 Importar';
-            importPcapBtnSpinner.style.display = 'none';
-            importPcapBtnSpinner.classList.add('hidden');
-        }
-    });
+        });
+    }
+
+    if (importPcapBtn) {
+        importPcapBtn.addEventListener('click', async function (e) {
+            e.preventDefault();
+
+            const importPcapBtn = document.getElementById('importPcapBtn');
+            const importPcapBtnText = document.getElementById('importPcapBtnText') || { textContent: '' };
+            const importPcapBtnSpinner = document.getElementById('importPcapBtnSpinner');
+            const importPcapResult = document.getElementById('importPcapResult');
+
+            const fileInputPcap = document.getElementById('pcap_files');
+            if (!fileInputPcap.files.length) {
+                alert('Selecciona al menos un archivo PCAP');
+                return;
+            }
+            
+            const orgPcap = document.getElementById('organization').value;
+            const locPcap = document.getElementById('location').value;
+            if (!orgPcap || !locPcap) {
+                alert('Especifica organización y origen primero');
+                return;
+            }
+
+            // Configurar AbortController
+            pcapAbortController = new AbortController();
+
+            // Deshabilitar botón y mostrar spinner/cancelar
+            if (importPcapBtn) importPcapBtn.disabled = true;
+            if (importPcapBtnText) importPcapBtnText.textContent = 'Importando...';
+            if (importPcapBtnSpinner) {
+                importPcapBtnSpinner.style.display = 'inline-block';
+                importPcapBtnSpinner.classList.remove('hidden');
+            }
+            if (cancelPcapBtn) cancelPcapBtn.classList.remove('hidden');
+            if (importPcapResult) importPcapResult.style.display = 'none';
+
+            const formDataPcap = new FormData();
+            for (const file of fileInputPcap.files) {
+                formDataPcap.append('pcap_file', file);
+            }
+            formDataPcap.append('organization', orgPcap);
+            formDataPcap.append('location', locPcap);
+            
+            const myipPcap = document.getElementById('pcap_myip').value;
+            if (myipPcap) formDataPcap.append('myip', myipPcap);
+            
+            const ifacePcap = document.getElementById('pcap_interface').value;
+            if (ifacePcap) formDataPcap.append('interface', ifacePcap);
+
+            try {
+                const response = await fetch('/api/scan/import-pcap', {
+                    method: 'POST',
+                    body: formDataPcap,
+                    signal: pcapAbortController.signal
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    importPcapResult.style.display = 'block';
+                    let html = `<div style="padding: 1rem; background: #064e3b; border: 1px solid #059669; border-radius: 4px; color: #d1fae5;">
+                        <strong>✅ ${result.message}</strong><div style="margin-top:0.5rem">`;
+                    
+                    result.results.forEach(res => {
+                        if (res.status === 'success') {
+                            html += `<div style="margin-bottom:0.5rem; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem">
+                                <span style="color:#10b981">✔ ${res.filename}</span> (ID: ${res.scan_id})<br>
+                                <small>Hosts: ${res.stats.hosts_processed} | Puertos: ${res.stats.ports_processed}</small>
+                            </div>`;
+                        } else {
+                            html += `<div style="margin-bottom:0.5rem; color:#ef4444">
+                                ✘ ${res.filename}: ${res.message}
+                            </div>`;
+                        }
+                    });
+                    
+                    html += `</div><div style="margin-top: 0.5rem;">
+                                <button type="button" onclick="location.reload()" class="btn btn-secondary" style="padding: 0.5rem 1rem; background: #374151; color: white; border: none; border-radius: 4px; cursor: pointer;">Cerrar</button>
+                            </div></div>`;
+                    importPcapResult.innerHTML = html;
+
+                    // Limpiar campos
+                    fileInputPcap.value = '';
+                    const myipInputPcap = document.getElementById('pcap_myip');
+                    if (myipInputPcap) myipInputPcap.value = '';
+                } else {
+                    importPcapResult.style.display = 'block';
+                    importPcapResult.innerHTML = `
+                        <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
+                            <strong>❌ Error:</strong> ${result.detail || 'Error desconocido'}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    importPcapResult.style.display = 'block';
+                    importPcapResult.innerHTML = `
+                        <div style="padding: 1rem; background: #7c2d12; border: 1px solid #ea580c; border-radius: 4px; color: #ffedd5;">
+                            <strong>⚠️ Importación cancelada</strong>
+                        </div>
+                    `;
+                } else {
+                    console.error('Error:', error);
+                    importPcapResult.style.display = 'block';
+                    importPcapResult.innerHTML = `
+                        <div style="padding: 1rem; background: #7f1d1d; border: 1px solid #dc2626; border-radius: 4px; color: #fee2e2;">
+                            <strong>❌ Error:</strong> ${error.message}
+                        </div>
+                    `;
+                }
+            } finally {
+                pcapAbortController = null;
+                // Restaurar botón
+                if (importPcapBtn) importPcapBtn.disabled = false;
+                if (importPcapBtnText) importPcapBtnText.textContent = '🎧 Importar PCAPs';
+                if (importPcapBtnSpinner) {
+                    importPcapBtnSpinner.style.display = 'none';
+                    importPcapBtnSpinner.classList.add('hidden');
+                }
+                if (cancelPcapBtn) cancelPcapBtn.classList.add('hidden');
+            }
+        });
+    }
 
     // Inicializar preview del comando Nmap al cargar la página
     setTimeout(updateNmapCommand, 100);

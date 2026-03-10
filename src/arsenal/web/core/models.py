@@ -9,15 +9,16 @@ class ScanConfig(BaseModel):
     myip: Optional[str] = None
     scan_mode: str = "active"  # active o passive
     # Opciones para escaneos activos
-    host_discovery: bool = True
-    nmap: bool = True
+    host_discovery: bool = False
+    nmap: bool = False
     nmap_icmp: bool = False
     nmap_speed: str = "normal"  # rapido, normal, lento
     nmap_versions: bool = False
     nmap_vulns: bool = False
-    nmap_ot_ports: bool = True
-    nmap_it_ports: bool = True
+    nmap_ot_ports: bool = False
+    nmap_it_ports: bool = False
     custom_ports: Optional[str] = None
+    custom_ping_command: Optional[str] = None
     custom_nmap_command: Optional[str] = None
     custom_host_discovery_command: Optional[str] = None
     ioxid: bool = False

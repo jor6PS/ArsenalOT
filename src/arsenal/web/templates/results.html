@@ -474,7 +474,12 @@
             const passiveTbody = document.getElementById('passiveResultsBody');
             document.getElementById('passiveCount').textContent = `(${filteredPassive.length})`;
             if (filteredPassive.length === 0) {
-                passiveTbody.innerHTML = '<tr><td colspan="8" class="empty">No hay conversaciones pasivas</td></tr>';
+                // Si es un escaneo pasivo seleccionado, dar feedback específico
+                if (scanId) {
+                    passiveTbody.innerHTML = '<tr><td colspan="8" class="empty">No hay conversaciones detectadas en este escaneo pasivo</td></tr>';
+                } else {
+                    passiveTbody.innerHTML = '<tr><td colspan="8" class="empty">No hay conversaciones pasivas</td></tr>';
+                }
             } else {
                 passiveTbody.innerHTML = filteredPassive.map(r => {
                     return `<tr>
@@ -495,12 +500,23 @@
                 document.getElementById('activeResultsContainer').style.display = 'block';
                 document.getElementById('passiveResultsContainer').style.display = allPassiveResults.length > 0 ? 'block' : 'none';
             } else {
-                const hasActive = allResults.length > 0;
-                const hasPassive = allPassiveResults.length > 0;
-                document.getElementById('activeResultsContainer').style.display = hasActive ? 'block' : 'none';
-                document.getElementById('passiveResultsContainer').style.display = hasPassive ? 'block' : 'none';
-                if (!hasActive && !hasPassive) {
-                    document.getElementById('activeResultsContainer').style.display = 'block';
+                // Determinar si el escaneo seleccionado es pasivo basándonos en el dropdown (o en los datos)
+                const scanSelect = document.getElementById('filterScan');
+                const selectedText = scanSelect.options[scanSelect.selectedIndex].text;
+                const isPassiveScan = selectedText.includes('🎧');
+
+                if (isPassiveScan) {
+                    document.getElementById('activeResultsContainer').style.display = 'none';
+                    document.getElementById('passiveResultsContainer').style.display = 'block';
+                } else {
+                    const hasActive = allResults.length > 0;
+                    const hasPassive = allPassiveResults.length > 0;
+                    document.getElementById('activeResultsContainer').style.display = hasActive ? 'block' : 'none';
+                    document.getElementById('passiveResultsContainer').style.display = hasPassive ? 'block' : 'none';
+                    
+                    if (!hasActive && !hasPassive) {
+                        document.getElementById('activeResultsContainer').style.display = 'block';
+                    }
                 }
             }
         }

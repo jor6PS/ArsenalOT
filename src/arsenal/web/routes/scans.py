@@ -4,6 +4,7 @@ import subprocess
 import os
 import shutil
 import ipaddress
+import shlex
 import json
 import time
 import asyncio
@@ -284,23 +285,6 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         img_dir.mkdir(parents=True, exist_ok=True)
         source_dir.mkdir(parents=True, exist_ok=True)
         
-        # Subredes internas para determinar subnet
-        private_subnets = [
-            ipaddress.ip_network(s) for s in [
-                '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16',
-                '169.254.0.0/16', '127.0.0.0/8', '::1/128', 'fc00::/7', 'fe80::/10'
-            ]
-        ]
-
-        def get_subnet(ip_str):
-            try:
-                ip_o = ipaddress.ip_address(ip_str)
-                for net in private_subnets:
-                    if ip_o in net:
-                        return str(net)
-                return "Public IP"
-            except ValueError:
-                return "Unknown"
 
         def is_scan_cancelled():
             """Comprueba si el escaneo ha sido cancelado en la base de datos."""
@@ -327,11 +311,14 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         if config.host_discovery:
             print(f"[Scan {scan_id}] 🔍 Iniciando descubrimiento de hosts...")
             try:
-                if config.custom_host_discovery_command:
-                    print(f"[Scan {scan_id}] 📡 Ejecutando comando personalizado de descubrimiento: {config.custom_host_discovery_command}")
-                    import shlex
+                # Validar comando personalizado
+                custom_cmd = config.custom_host_discovery_command
+                placeholder = "El comando aparecerá aquí"
+                
+                if custom_cmd and custom_cmd.strip() and placeholder not in custom_cmd:
+                    print(f"[Scan {scan_id}] 📡 Fase 1: Ejecutando comando personalizado: {custom_cmd}")
                     # Execute custom command
-                    cmd_args = shlex.split(config.custom_host_discovery_command)
+                    cmd_args = shlex.split(custom_cmd)
                     
                     # Usar Popen para registrar el proceso antes de que bloquee
                     process = subprocess.Popen(
@@ -368,14 +355,10 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 for host_ip in discovered_ips:
                     if is_scan_cancelled(): return
                     try:
-                        # Determinar subred
-                        subnet = get_subnet(host_ip)
-                        
                         storage.save_discovered_host(
                             scan_id=scan_id,
                             host_ip=host_ip,
-                            discovery_method='host_discovery',
-                            subnet=subnet
+                            discovery_method='host_discovery'
                         )
                     except Exception as e:
                         print(f"[Scan {scan_id}] ⚠️  Error guardando host {host_ip}: {e}")
@@ -385,39 +368,107 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 traceback.print_exc()
         
         # ============================================================================
-        # PASO 2: NMAP SCAN (si está habilitado)
+        # PASO 2: NMAP PING DISCOVERY (FASE 2)
         # ============================================================================
-        if config.nmap:
-            print(f"[Scan {scan_id}] 🔍 Iniciando escaneo Nmap...")
+        if config.nmap_icmp:
+            print(f"[Scan {scan_id}] 📍 Iniciando Fase 2: Ping Scan...")
             
-            # Determinar targets: usar IPs descubiertas si hay, sino usar el rango
-            if discovered_ips:
-                targets = sorted(list(discovered_ips))
-                target_str = ' '.join(targets)
-                print(f"[Scan {scan_id}] 📋 Escaneando {len(targets)} hosts descubiertos...")
-            else:
-                target_str = config.target_range
-                print(f"[Scan {scan_id}] 📋 Escaneando rango: {target_str}")
+            # Determinar targets: usar IPs de la Fase 1 si hay, sino el rango
+            current_targets = sorted(list(discovered_ips)) if discovered_ips else [config.target_range]
+            target_str = ' '.join(current_targets)
             
             try:
-                if config.custom_nmap_command:
-                    print(f"[Scan {scan_id}] 📡 Ejecutando comando Nmap personalizado: {config.custom_nmap_command}")
-                    import shlex
+                # Archivo temporal para resultados de Ping
+                ping_xml_path = evidence_dir / "ping_scan.xml"
+                
+                # Validar comando personalizado
+                custom_cmd = config.custom_ping_command
+                placeholder = "El comando aparecerá aquí"
+                
+                if custom_cmd and custom_cmd.strip() and placeholder not in custom_cmd:
+                    print(f"[Scan {scan_id}] 📡 Fase 2: Ejecutando comando personalizado: {custom_cmd}")
+                    cmd_str = custom_cmd
+                    if '-oX' not in cmd_str:
+                        cmd_str += f" -oX {ping_xml_path}"
                     
-                    # Ensure -oX flag is added to save results
-                    cmd_str = config.custom_nmap_command
+                    cmd_args = shlex.split(cmd_str)
+                    process = subprocess.Popen(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    register_process(process)
+                    stdout, stderr = process.communicate()
+                    
+                    if process.returncode == 0 or (os.path.exists(ping_xml_path) and os.path.getsize(ping_xml_path) > 0):
+                        xml_file = str(ping_xml_path)
+                    else:
+                        raise Exception(f"Comando Ping manual falló con código {process.returncode}: {stderr[:500] if stderr else 'Sin error'}")
+                else:
+                    port_scanner = PortScanner(output_file=str(ping_xml_path))
+                    # Ejecutar ping scan (-sn)
+                    xml_file = port_scanner.scan(
+                        target_range=target_str,
+                        speed='icmp',
+                        ot_ports=False, # No puertos en ping scan
+                        it_ports=False,
+                        output_file=str(ping_xml_path),
+                        process_callback=register_process
+                    )
+                
+                if xml_file and Path(xml_file).exists():
+                    parser = NmapXMLParser(ping_xml_path)
+                    parsed_data = parser.parse()
+                    
+                    # Actualizar discovered_ips con nuevos hallazgos
+                    new_hosts_count = 0
+                    for host_ip, host_data in parsed_data['hosts'].items():
+                        if host_ip not in discovered_ips:
+                            discovered_ips.add(host_ip)
+                            new_hosts_count += 1
+                        
+                        # Guardar host en BD (aunque no tenga puertos)
+                        try:
+                            storage.save_host_result(
+                                scan_id=scan_id,
+                                host_ip=host_ip,
+                                port=None,
+                                protocol=None,
+                                state=host_data.get('status', 'up'),
+                                service_data={},
+                                hostname=hostname,
+                                host_data={'vendor': host_data.get('vendor')},
+                                discovery_method='nmap_ping',
+                                timestamp=host_data.get('endtime') or host_data.get('starttime')
+                            )
+                        except Exception as e:
+                            print(f"[Scan {scan_id}] ⚠️ Error guardando host ping {host_ip}: {e}")
+                    
+                    print(f"[Scan {scan_id}] ✅ Fase 2 completada. Hallados {new_hosts_count} nuevos hosts. Total: {len(discovered_ips)}")
+            except Exception as e:
+                print(f"[Scan {scan_id}] ⚠️ Error en Fase 2 (Ping): {e}")
+
+        if is_scan_cancelled(): return
+
+        # ============================================================================
+        # PASO 3: NMAP PORT SCAN (FASE 3)
+        # ============================================================================
+        if config.nmap:
+            print(f"[Scan {scan_id}] 🔌 Iniciando Fase 3: Escaneo de Puertos...")
+            
+            # Determinar targets: usar IPs acumuladas (F1+F2) si hay, sino el rango
+            current_targets = sorted(list(discovered_ips)) if discovered_ips else [config.target_range]
+            target_str = ' '.join(current_targets)
+            
+            try:
+                # Validar comando personalizado
+                custom_cmd = config.custom_nmap_command
+                placeholder = "El comando aparecerá aquí"
+                
+                if custom_cmd and custom_cmd.strip() and placeholder not in custom_cmd:
+                    print(f"[Scan {scan_id}] 📡 Fase 3: Ejecutando comando personalizado: {custom_cmd}")
+                    cmd_str = custom_cmd
                     if '-oX' not in cmd_str:
                         cmd_str += f" -oX {nmap_xml_path}"
                     
                     cmd_args = shlex.split(cmd_str)
-                    
-                    # Usar Popen para registrar el proceso
-                    process = subprocess.Popen(
-                        cmd_args,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True
-                    )
+                    process = subprocess.Popen(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                     register_process(process)
                     stdout, stderr = process.communicate()
                     
@@ -426,14 +477,13 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     else:
                         raise Exception(f"Comando Nmap manual falló con código {process.returncode}: {stderr[:500] if stderr else 'Sin error'}")
                 else:
-                    # Crear scanner de puertos
+                    # Usar el archivo principal para el escaneo de puertos
                     port_scanner = PortScanner(output_file=str(nmap_xml_path))
                     
-                    # Ejecutar escaneo Nmap (pasando callback para registro)
-                    # Si nmap_icmp está activo, forzamos speed='icmp' para que el scanner use -sn
+                    # Ejecutar escaneo de puertos
                     xml_file = port_scanner.scan(
                         target_range=target_str,
-                        speed='icmp' if config.nmap_icmp else config.nmap_speed,
+                        speed=config.nmap_speed,
                         ot_ports=config.nmap_ot_ports,
                         it_ports=config.nmap_it_ports,
                         custom_ports=config.custom_ports,
@@ -443,16 +493,14 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         process_callback=register_process
                     )
                 
-                if is_scan_cancelled():
-                    print(f"[Scan {scan_id}] 🛑 Escaneo cancelado tras Nmap")
-                    return
+                if is_scan_cancelled(): return
                 
                 if not xml_file or not Path(xml_file).exists():
-                    raise Exception("Nmap no generó el archivo XML de salida")
+                    raise Exception("Nmap no generó el archivo XML de salida (Fase 3)")
                 
-                print(f"[Scan {scan_id}] ✅ Nmap completado. Procesando resultados...")
+                print(f"[Scan {scan_id}] ✅ Fase 3 completada. Procesando resultados...")
                 
-                # Procesar resultados XML
+                # Procesar resultados XML de la Fase 3
                 parser = NmapXMLParser(nmap_xml_path)
                 parsed_data = parser.parse()
                 
@@ -466,8 +514,6 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 for host_ip, host_data in parsed_data['hosts'].items():
                     if is_scan_cancelled(): return
                     try:
-                        # Determinar subred
-                        subnet = get_subnet(host_ip)
                         
                         # Obtener hostname
                         hostname = host_data.get('hostname') or None
@@ -490,10 +536,10 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                 protocol=None,
                                 state=host_data.get('status', 'up'),
                                 service_data={},
-                                subnet=subnet,
                                 hostname=hostname,
                                 host_data=host_additional_data,
-                                discovery_method='nmap'
+                                discovery_method='nmap_ports',
+                                timestamp=host_data.get('endtime') or host_data.get('starttime')
                             )
                             hosts_processed += 1
                             continue
@@ -530,10 +576,10 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                 protocol=proto,
                                 state=port_data['state'],
                                 service_data=service_data,
-                                subnet=subnet,
                                 hostname=hostname,
                                 host_data=host_additional_data,
-                                discovery_method='nmap'
+                                discovery_method='nmap_ports',
+                                timestamp=host_data.get('endtime') or host_data.get('starttime')
                             )
                             ports_processed += 1
                             
@@ -652,10 +698,9 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     try:
                         # En modo específico sin Nmap, probamos puertos web comunes
                         web_ports = [80, 443, 8080, 8443, 8000]
-                        subnet = get_subnet(host_ip)
                         
                         # Registrar el host si no existe
-                        storage.save_discovered_host(scan_id, host_ip, 'specific_capture', subnet)
+                        storage.save_discovered_host(scan_id, host_ip, 'specific_capture')
                         
                         for port_num in web_ports:
                             protocol = 'tcp'
@@ -671,7 +716,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                         res_id = storage.save_host_result(
                                             scan_id=scan_id, host_ip=host_ip, port=port_num, 
                                             protocol=protocol, state='open', service_data={'name': 'http-alt' if port_num != 80 and port_num != 443 else 'http'},
-                                            subnet=subnet, discovery_method='specific_capture'
+                                            discovery_method='specific_capture'
                                         )
                                         storage.save_enrichment(
                                             scan_id=scan_id, host_ip=host_ip, port=port_num,
@@ -691,7 +736,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                         storage.save_host_result(
                                             scan_id=scan_id, host_ip=host_ip, port=port_num, 
                                             protocol=protocol, state='open', service_data={'name': 'http-alt'},
-                                            subnet=subnet, discovery_method='specific_capture'
+                                            discovery_method='specific_capture'
                                         )
                                         storage.save_enrichment(
                                             scan_id=scan_id, host_ip=host_ip, port=port_num,
@@ -1252,17 +1297,29 @@ def process_pcap_file(scan_id: int, pcap_file: str, organization: str, location:
         private_subnets = [
             ipaddress.ip_network(subnet) for subnet in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16']
         ]
-        
+        # Obtener myip del escaneo para filtrar tráfico saliente del propio equipo
+        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        scan_info = cursor.execute("SELECT myip FROM scans WHERE id = ?", (scan_id,)).fetchone()
+        conn.close()
+        my_ip = scan_info['myip'] if scan_info and scan_info['myip'] else None
+        if my_ip:
+            print(f"[Scan {scan_id}] 🛡️ Filtrando tráfico saliente desde mi IP: {my_ip}")
+
         # Guardar conexiones en la BD (solo IPs privadas)
+        conversations_to_save = []
+        ip_timestamps = {} # IP -> latest timestamp
+        
         for conv in connections:
             try:
                 ip_src = conv['src_ip']
                 ip_dst = conv['dst_ip']
-                port_src = conv['src_port']
-                port_dst = conv['dst_port']
-                protocol = conv['protocol']
-                mac_src = conv['src_mac']
-                mac_dst = conv['dst_mac']
+                ts = conv.get('timestamp') or datetime.now()
+
+                # DESCARTE: Si el origen es mi equipo, no guardar ni registrar como host
+                if my_ip and ip_src == my_ip:
+                    continue
 
                 # Validar IPs y verificar que sean privadas
                 try:
@@ -1283,27 +1340,60 @@ def process_pcap_file(scan_id: int, pcap_file: str, organization: str, location:
                 if not is_src_private and not is_dst_private:
                     continue
 
-                # Guardar en la nueva tabla de conversaciones
-                storage.save_passive_conversation(
-                    scan_id=scan_id,
-                    src_ip=ip_src,
-                    dst_ip=ip_dst,
-                    src_port=port_src,
-                    dst_port=port_dst,
-                    protocol=protocol,
-                    src_mac=mac_src,
-                    dst_mac=mac_dst
-                )
-
-                # También registrar los hosts como "descubiertos" para que aparezcan en la tabla de activos
-                # (Pero sin puertos específicos en la tabla de activos para no duplicar info de conversaciones)
-                storage.save_discovered_host(scan_id, ip_src, discovery_method='passive_capture')
-                storage.save_discovered_host(scan_id, ip_dst, discovery_method='passive_capture')
+                # Añadir a la lista para guardado masivo
+                conversations_to_save.append(conv)
+                
+                # Coleccionar IPs únicas con su último timestamp visto
+                if is_src_private:
+                    if ip_src not in ip_timestamps or ts > ip_timestamps[ip_src]:
+                        ip_timestamps[ip_src] = ts
+                if is_dst_private:
+                    if ip_dst not in ip_timestamps or ts > ip_timestamps[ip_dst]:
+                        ip_timestamps[ip_dst] = ts
 
             except Exception as e:
-                print(f"[Scan {scan_id}] ⚠️  Error guardando conversación/host: {e}")
+                print(f"[Scan {scan_id}] ⚠️  Error procesando conversación: {e}")
                 continue
         
+        # Guardar conversaciones masivamente
+        if conversations_to_save:
+            storage.save_passive_conversations_bulk(scan_id, conversations_to_save)
+            
+        # Registrar hosts descubiertos masivamente (con su timestamp real)
+        if ip_timestamps:
+            hosts_to_save = []
+            for ip, ts in ip_timestamps.items():
+                hosts_to_save.append({
+                    'host_ip': ip,
+                    'port': None,
+                    'protocol': None,
+                    'state': 'up',
+                    'service_data': {},
+                    'discovery_method': 'passive_capture',
+                    'timestamp': ts # Propagar timestamp para first_seen/last_seen
+                })
+            storage.save_host_results_bulk(scan_id, hosts_to_save)
+        
+        # Actualizar los tiempos del escaneo (started_at / completed_at) con los reales del pcap
+        if ip_timestamps:
+            min_ts = min(ip_timestamps.values())
+            max_ts = max(ip_timestamps.values())
+            
+            try:
+                conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+                conn.execute("PRAGMA journal_mode=WAL")
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE scans 
+                    SET started_at = ?, completed_at = ? 
+                    WHERE id = ?
+                """, (min_ts, max_ts, scan_id))
+                conn.commit()
+                conn.close()
+                print(f"[Scan {scan_id}] 📅 Tiempos del escaneo actualizados: {min_ts} - {max_ts}")
+            except Exception as e:
+                print(f"[Scan {scan_id}] ⚠️  Error actualizando tiempos del escaneo: {e}")
+
         print(f"[Scan {scan_id}] ✅ Procesamiento de pcap completado")
         
     except Exception as e:

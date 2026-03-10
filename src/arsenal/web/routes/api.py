@@ -177,20 +177,26 @@ async def get_stats(
 @router.get("/api/interfaces")
 async def get_interfaces():
     """Obtiene la lista de interfaces de red disponibles en el sistema."""
+    # 1. Intentar con psutil (más completo)
     try:
         import psutil
         interfaces = sorted(list(psutil.net_if_addrs().keys()))
         # Filtrar interfaces 'lo' y otras virtuales no deseadas
-        interfaces = [i for i in interfaces if i != 'lo' and not i.startswith('veth') and i != 'docker0']
-        return interfaces
-    except Exception as e:
-        print(f"⚠️ Error obteniendo interfaces: {e}")
-        # Intentar fallback con socket si falla psutil
-        try:
-            import socket
+        return [i for i in interfaces if i != 'lo' and not i.startswith('veth') and i != 'docker0']
+    except (ImportError, Exception):
+        # psutil no está o falló, intentar fallback
+        pass
+
+    # 2. Intentar fallback con socket (estándar en Python)
+    try:
+        import socket
+        if hasattr(socket, 'if_nameindex'):
             return [i[1] for i in socket.if_nameindex() if i[1] != 'lo']
-        except:
-            return ["eth0", "wlan0"]
+    except Exception:
+        pass
+
+    # 3. Fallback final
+    return ["eth0", "wlan0"]
 
 @router.get("/api/organizations")
 async def get_organizations():
@@ -356,6 +362,8 @@ async def create_network(request: NetworkCreateRequest):
                 system_name=request.system_name
             )
         return {"status": "success", "message": "Red añadida correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error añadiendo red: {str(e)}")
 

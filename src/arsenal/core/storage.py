@@ -355,6 +355,44 @@ class ScanStorage:
             ON scan_results(port, protocol)
         """)
         
+        # Tabla de metadatos de host por escaneo (AISLAMIENTO)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS host_scan_metadata (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_id INTEGER NOT NULL,
+                host_id INTEGER NOT NULL,
+                hostname TEXT,
+                mac_address TEXT,
+                vendor TEXT,
+                os_info_json TEXT,
+                host_scripts_json TEXT,
+                interfaces_json TEXT,
+                hostnames_json TEXT,
+                last_seen TIMESTAMP,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE,
+                FOREIGN KEY (host_id) REFERENCES hosts(id) ON DELETE CASCADE,
+                UNIQUE(scan_id, host_id)
+            )
+        """)
+
+        # Migración para columnas nuevas en host_scan_metadata si ya existe la tabla
+        for col in ['last_seen', 'hostnames_json']:
+            try:
+                cursor.execute(f"ALTER TABLE host_scan_metadata ADD COLUMN {col} TIMESTAMP" if col == 'last_seen' else f"ALTER TABLE host_scan_metadata ADD COLUMN {col} TEXT")
+            except sqlite3.OperationalError:
+                pass
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_host_scan_meta_scan 
+            ON host_scan_metadata(scan_id)
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_host_scan_meta_host 
+            ON host_scan_metadata(host_id)
+        """)
+        
         # Tabla de conversaciones pasivas
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS passive_conversations (
@@ -405,7 +443,8 @@ class ScanStorage:
                    enable_screenshots: bool = False,
                    enable_source_code: bool = False,
                    scan_mode: str = 'active',
-                   pcap_file: str = None) -> int:
+                   pcap_file: str = None,
+                   started_at: Optional[datetime] = None) -> int:
         """Inicia un nuevo escaneo y retorna su ID."""
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -423,7 +462,7 @@ class ScanStorage:
              enable_screenshots, enable_source_code, scan_mode, pcap_file)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
         """, (organization.upper(), location.upper(), scan_type, target_range,
-              interface, myip, nmap_command, datetime.now(), created_by,
+              interface, myip, nmap_command, started_at or datetime.now(), created_by,
               enable_version_detection, enable_vulnerability_scan,
               enable_screenshots, enable_source_code, scan_mode, pcap_file))
         
@@ -470,26 +509,78 @@ class ScanStorage:
         scan_dir.mkdir(parents=True, exist_ok=True)
         return scan_dir
 
-    def _get_matching_network(self, organization: str, ip_str: str) -> str:
+    def _get_matching_network(self, organization: str, ip_str: str) -> Optional[Dict]:
         """Busca si una IP pertenece a una red de la organización definida por el usuario.
-        Devuelve el rango de red si hay match, de lo contrario None."""
+        Devuelve un diccionario con info de la red si hay match, de lo contrario None."""
         try:
             ip_obj = ipaddress.ip_address(ip_str)
             networks = self.get_networks(organization)
             for net in networks:
                 try:
-                    net_obj = ipaddress.ip_network(net['network_range'])
+                    net_obj = ipaddress.ip_network(net['network_range'], strict=False)
                     if ip_obj in net_obj:
-                        return net['network_range']
+                        return {
+                            'range': net['network_range'],
+                            'name': net['network_name'],
+                            'system': net.get('system_name')
+                        }
                 except ValueError:
                     continue
         except ValueError:
             pass
         return None
+
+    def _get_effective_subnet(self, organization: str, ip_str: str, scan_target_range: str = None) -> str:
+        """Determina la subred más específica para una IP.
+        Prioriza match exacto > target_range del escaneo > cálculo /24 estándar."""
+        # 1. Intentar match con redes conocidas definidas por el usuario
+        matched = self._get_matching_network(organization, ip_str)
+        if matched:
+            return matched['range']
+            
+        # 2. Si no hay match, intentar usar el target_range del escaneo (si no es 0.0.0.0/0)
+        if scan_target_range:
+            try:
+                # Si hay múltiples rangos separados por espacio/coma, probar cada uno
+                ranges = scan_target_range.replace(',', ' ').split()
+                for r in ranges:
+                    if r == "0.0.0.0/0": continue # Ignorar rango universal para esta lógica
+                    try:
+                        target_net = ipaddress.ip_network(r, strict=False)
+                        if ipaddress.ip_address(ip_str) in target_net:
+                            return str(target_net)
+                    except ValueError:
+                        continue
+            except Exception:
+                pass
+        
+        # 3. Fallback: Rangos privados estándar (RFC1918)
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+            if ip_obj.is_private:
+                for rfc1918 in [
+                    ipaddress.ip_network('192.168.0.0/16'),
+                    ipaddress.ip_network('172.16.0.0/12'),
+                    ipaddress.ip_network('10.0.0.0/8'),
+                    ipaddress.ip_network('169.254.0.0/16'),
+                    ipaddress.ip_network('fc00::/7'),
+                    ipaddress.ip_network('fe80::/10'),
+                ]:
+                    if ip_obj in rfc1918:
+                        return str(rfc1918)
+                
+                # 4. Cálculo "natural" /24 como último recurso para IPs privadas no RFC1918 (o para mayor detalle)
+                # Devolver el /24 del segmento como "rango por defecto calculado"
+                return str(ipaddress.ip_network(f"{ip_str}/24", strict=False))
+        except ValueError:
+            pass
+            
+        return "Unknown"
     
     def save_discovered_host(self, scan_id: int, host_ip: str, 
                              discovery_method: str = 'host_discovery',
-                             subnet: str = None):
+                             subnet: str = None,
+                             timestamp: Optional[datetime] = None):
         """
         Guarda un host descubierto por host discovery (sin puertos aún).
         IMPORTANTE: También crea un registro en scan_results con port=NULL para que
@@ -508,37 +599,19 @@ class ScanStorage:
         cursor = conn.cursor()
         
         # Validar que el escaneo existe
-        scan = cursor.execute("SELECT id, organization_name FROM scans WHERE id = ?", (scan_id,)).fetchone()
+        scan = cursor.execute("SELECT id, organization_name, target_range FROM scans WHERE id = ?", (scan_id,)).fetchone()
         if not scan:
             print(f"⚠️  El escaneo {scan_id} no existe")
             conn.close()
             return False
             
-        # Determinar subnet dinámica basada en las redes definidas (Preferencia sobre default)
+        # Determinar subnet dinámica (Match exacto > Target Range > /24 Fallback)
         organization_name = scan[1]
-        matched_network = self._get_matching_network(organization_name, host_ip)
-        
-        if matched_network:
-            subnet = matched_network
-        elif not subnet:
-            # Fallback original
-            for private_net in [
-                ipaddress.ip_network('10.0.0.0/8'),
-                ipaddress.ip_network('172.16.0.0/12'),
-                ipaddress.ip_network('192.168.0.0/16'),
-                ipaddress.ip_network('169.254.0.0/16'),
-                ipaddress.ip_network('127.0.0.0/8'),
-                ipaddress.ip_network('::1/128'),
-                ipaddress.ip_network('fc00::/7'),
-                ipaddress.ip_network('fe80::/10'),
-            ]:
-                if ip_obj in private_net:
-                    subnet = str(private_net)
-                    break
-            if not subnet:
-                subnet = "Private IP (unknown subnet)"
+        target_range = scan[2]
+        subnet = self._get_effective_subnet(organization_name, host_ip, target_range)
         
         # Insertar o actualizar host
+        discovered_at = timestamp or datetime.now()
         cursor.execute("""
             INSERT INTO hosts (ip_address, hostname, subnet, is_private,
                              first_seen, last_seen)
@@ -546,12 +619,13 @@ class ScanStorage:
             ON CONFLICT(ip_address) DO UPDATE SET
                 last_seen = excluded.last_seen,
                 subnet = COALESCE(excluded.subnet, subnet)
-        """, (host_ip, None, subnet, is_private, datetime.now(), datetime.now()))
+        """, (host_ip, None, subnet, is_private, discovered_at, discovered_at))
         
         # Obtener el host_id
         host_id = cursor.execute(
             "SELECT id FROM hosts WHERE ip_address = ?", (host_ip,)
         ).fetchone()[0]
+        
         
         # Crear un registro en scan_results con port=NULL para que el host aparezca en resultados
         # Esto es importante para que hosts descubiertos sin puertos también se muestren
@@ -568,7 +642,16 @@ class ScanStorage:
                     INSERT INTO scan_results
                     (scan_id, host_id, port, protocol, state, discovery_method, discovered_at)
                     VALUES (?, ?, NULL, NULL, 'up', ?, ?)
-                """, (scan_id, host_id, discovery_method, datetime.now()))
+                """, (scan_id, host_id, discovery_method, discovered_at))
+            
+            # AISLAMIENTO: Guardar descubrimiento básico en metadata
+            cursor.execute("""
+                INSERT INTO host_scan_metadata (scan_id, host_id, last_seen)
+                VALUES (?, ?, ?)
+                ON CONFLICT(scan_id, host_id) DO UPDATE SET
+                    last_seen = COALESCE(excluded.last_seen, last_seen)
+            """, (scan_id, host_id, discovered_at))
+            
         except sqlite3.IntegrityError as e:
             print(f"⚠️  Error de integridad al guardar scan_result para host descubierto: {e}")
             conn.rollback()
@@ -582,7 +665,8 @@ class ScanStorage:
     def save_host_result(self, scan_id: int, host_ip: str, port: int,
                         protocol: str, state: str, service_data: Dict,
                         subnet: str = None, hostname: str = None,
-                        host_data: Dict = None, discovery_method: str = 'nmap'):
+                        host_data: Dict = None, discovery_method: str = 'nmap',
+                        timestamp: Optional[datetime] = None):
         """
         Guarda el resultado de un puerto de un host.
         Solo guarda direcciones IP privadas (filtra IPs públicas).
@@ -594,9 +678,22 @@ class ScanStorage:
         - Los scripts de Nmap se almacenan en scan_results.scripts_json
         """
         # Validar que es IP interna antes de proceder
-        if not is_internal_ip(host_ip):
-            # IP pública mundialmente enrutable, no guardar en la base de datos
+        if not host_ip or not is_internal_ip(host_ip):
+            # IP pública mundialmente enrutable o vacía, no guardar
             return False
+            
+        # Normalizar puerto a entero
+        try:
+            if port is not None:
+                if isinstance(port, str):
+                    if '/' in port:
+                        port = int(port.split('/')[0])
+                    else:
+                        port = int(port)
+                elif not isinstance(port, int):
+                    port = int(port)
+        except (ValueError, TypeError):
+            port = None
         is_private = True
         
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
@@ -605,17 +702,16 @@ class ScanStorage:
         cursor = conn.cursor()
         
         # Validar que el escaneo existe y traer organización
-        scan = cursor.execute("SELECT id, organization_name FROM scans WHERE id = ?", (scan_id,)).fetchone()
+        scan = cursor.execute("SELECT id, organization_name, target_range FROM scans WHERE id = ?", (scan_id,)).fetchone()
         if not scan:
             print(f"⚠️  El escaneo {scan_id} no existe")
             conn.close()
             return False
             
-        # Determinar subnet
+        # Determinar subnet (Match exacto > Target Range > /24 Fallback)
         organization_name = scan[1]
-        matched_network = self._get_matching_network(organization_name, host_ip)
-        if matched_network:
-            subnet = matched_network
+        target_range = scan[2]
+        subnet = self._get_effective_subnet(organization_name, host_ip, target_range)
         
         # Preparar datos adicionales del host
         hostnames_json = None
@@ -634,6 +730,10 @@ class ScanStorage:
             if 'host_scripts' in host_data and host_data['host_scripts']:
                 host_scripts_json = json.dumps(host_data['host_scripts'])
         
+        # Determinar timestamp
+        discovered_at = timestamp or datetime.now()
+
+        # Insertar o actualizar host
         cursor.execute("""
             INSERT INTO hosts (ip_address, hostname, hostnames_json, mac_address, vendor,
                              subnet, is_private, os_info_json, host_scripts_json,
@@ -649,7 +749,7 @@ class ScanStorage:
                 os_info_json = COALESCE(excluded.os_info_json, os_info_json),
                 host_scripts_json = COALESCE(excluded.host_scripts_json, host_scripts_json)
         """, (host_ip, hostname, hostnames_json, mac_address, vendor, subnet, is_private,
-              os_info_json, host_scripts_json, datetime.now(), datetime.now()))
+              os_info_json, host_scripts_json, discovered_at, discovered_at))
         
         host_id = cursor.execute(
             "SELECT id FROM hosts WHERE ip_address = ?", (host_ip,)
@@ -663,8 +763,8 @@ class ScanStorage:
         # Insertar resultado del escaneo
         # Si port es None o 0, guardamos el host sin puertos (port=NULL en la BD)
         # Esto permite que hosts descubiertos sin puertos también aparezcan en los resultados
-        port_value = port if port and port > 0 else None
-        protocol_value = protocol if port and port > 0 else None
+        port_value = port if port is not None and port > 0 else None
+        protocol_value = protocol if port_value is not None else None
         
         # Estado por defecto si no se proporciona
         state_value = state if state else 'up'
@@ -686,8 +786,27 @@ class ScanStorage:
                 service_data.get('reason_ttl') if port_value else None,
                 service_data.get('conf') if port_value else None,
                 scripts_json, discovery_method,
-                datetime.now()
+                discovered_at
             ))
+
+            # AISLAMIENTO: Guardar metadatos específicos de este escaneo
+            cursor.execute("""
+                INSERT INTO host_scan_metadata 
+                (scan_id, host_id, hostname, hostnames_json, mac_address, vendor, os_info_json, 
+                 host_scripts_json, interfaces_json, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(scan_id, host_id) DO UPDATE SET
+                    hostname = COALESCE(excluded.hostname, hostname),
+                    hostnames_json = COALESCE(excluded.hostnames_json, hostnames_json),
+                    mac_address = COALESCE(excluded.mac_address, mac_address),
+                    vendor = COALESCE(excluded.vendor, vendor),
+                    os_info_json = COALESCE(excluded.os_info_json, os_info_json),
+                    host_scripts_json = COALESCE(excluded.host_scripts_json, host_scripts_json),
+                    interfaces_json = COALESCE(excluded.interfaces_json, interfaces_json),
+                    last_seen = COALESCE(excluded.last_seen, last_seen)
+            """, (scan_id, host_id, hostname, hostnames_json, mac_address, vendor, os_info_json, 
+                  host_scripts_json, None, discovered_at))
+            
             conn.commit()
         except sqlite3.IntegrityError as e:
             print(f"⚠️  Error de integridad al guardar scan_result: {e}")
@@ -697,6 +816,145 @@ class ScanStorage:
         
         conn.close()
         return True
+
+    def save_host_results_bulk(self, scan_id: int, results_list: List[Dict]):
+        """
+        Guarda múltiples resultados de escaneo de forma eficiente en una sola transacción.
+        Cada elemento de results_list debe ser un diccionario compatible con save_host_result.
+        """
+        if not results_list:
+            return True
+            
+        conn = sqlite3.connect(str(self.db_path), timeout=60.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys = ON")
+        cursor = conn.cursor()
+        
+        try:
+            # Validar scan
+            scan = cursor.execute("SELECT organization_name, target_range FROM scans WHERE id = ?", (scan_id,)).fetchone()
+            if not scan:
+                conn.close()
+                return False
+            organization_name = scan[0]
+            target_range = scan[1]
+            
+            for res in results_list:
+                host_ip = res.get('host_ip')
+                if not host_ip or not is_internal_ip(host_ip):
+                    continue
+                
+                # Normalizar puerto
+                port = res.get('port')
+                try:
+                    if port is not None:
+                        if isinstance(port, str):
+                            if '/' in port: port = int(port.split('/')[0])
+                            else: port = int(port)
+                        else: port = int(port)
+                except (ValueError, TypeError):
+                    port = None
+                
+                protocol = res.get('protocol', 'tcp')
+                state = res.get('state', 'up')
+                service_data = res.get('service_data', {})
+                hostname = res.get('hostname')
+                host_data = res.get('host_data')
+                discovery_method = res.get('discovery_method', 'imported')
+                
+                # Subnet (Match exacto > Target Range > /24 Fallback)
+                subnet = self._get_effective_subnet(organization_name, host_ip, target_range)
+                
+                # Host Info
+                hostnames_json = None
+                mac_address = None
+                vendor = None
+                os_info_json = None
+                host_scripts_json = None
+                
+                if host_data:
+                    if 'hostnames' in host_data: hostnames_json = json.dumps(host_data['hostnames'])
+                    mac_address = host_data.get('mac_address')
+                    vendor = host_data.get('vendor')
+                    if 'os' in host_data and host_data['os']: os_info_json = json.dumps(host_data['os'])
+                    if 'host_scripts' in host_data and host_data['host_scripts']: host_scripts_json = json.dumps(host_data['host_scripts'])
+                
+                # Timestamp: Priorizar el timestamp real del descubrimiento si se proporciona
+                discovered_at = res.get('discovered_at') or res.get('timestamp') or datetime.now()
+
+                cursor.execute("""
+                    INSERT INTO hosts (ip_address, hostname, hostnames_json, mac_address, vendor,
+                                     subnet, is_private, os_info_json, host_scripts_json,
+                                     first_seen, last_seen)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(ip_address) DO UPDATE SET
+                        last_seen = excluded.last_seen,
+                        hostname = COALESCE(excluded.hostname, hostname),
+                        hostnames_json = COALESCE(excluded.hostnames_json, hostnames_json),
+                        mac_address = COALESCE(excluded.mac_address, mac_address),
+                        vendor = COALESCE(excluded.vendor, vendor),
+                        subnet = COALESCE(excluded.subnet, subnet),
+                        os_info_json = COALESCE(excluded.os_info_json, os_info_json),
+                        host_scripts_json = COALESCE(excluded.host_scripts_json, host_scripts_json)
+                """, (host_ip, hostname, hostnames_json, mac_address, vendor, subnet, True,
+                      os_info_json, host_scripts_json, discovered_at, discovered_at))
+                
+                host_id_row = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (host_ip,)).fetchone()
+                if not host_id_row: continue
+                host_id = host_id_row[0]
+                
+                scripts_json = None
+                if 'scripts' in service_data and service_data['scripts']:
+                    scripts_json = json.dumps(service_data['scripts'])
+                
+                port_value = port if port is not None and port > 0 else None
+                protocol_value = protocol if port_value is not None else None
+                
+
+                cursor.execute("""
+                    INSERT OR REPLACE INTO scan_results
+                    (scan_id, host_id, port, protocol, state, service_name, product,
+                     version, extrainfo, cpe, reason, reason_ttl, confidence, scripts_json, discovery_method, discovered_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    scan_id, host_id, port_value, protocol_value, state,
+                    service_data.get('name') if port_value else None,
+                    service_data.get('product') if port_value else None,
+                    service_data.get('version') if port_value else None,
+                    service_data.get('extrainfo') if port_value else None,
+                    service_data.get('cpe') if port_value else None,
+                    service_data.get('reason') if port_value else None,
+                    service_data.get('reason_ttl') if port_value else None,
+                    service_data.get('conf') if port_value else None,
+                    scripts_json, discovery_method, discovered_at
+                ))
+
+                # AISLAMIENTO: Guardar metadatos por escaneo en lote
+                cursor.execute("""
+                    INSERT INTO host_scan_metadata 
+                    (scan_id, host_id, hostname, hostnames_json, mac_address, vendor, os_info_json, 
+                     host_scripts_json, interfaces_json, last_seen)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(scan_id, host_id) DO UPDATE SET
+                        hostname = COALESCE(excluded.hostname, hostname),
+                        hostnames_json = COALESCE(excluded.hostnames_json, hostnames_json),
+                        mac_address = COALESCE(excluded.mac_address, mac_address),
+                        vendor = COALESCE(excluded.vendor, vendor),
+                        os_info_json = COALESCE(excluded.os_info_json, os_info_json),
+                        host_scripts_json = COALESCE(excluded.host_scripts_json, host_scripts_json),
+                        interfaces_json = COALESCE(excluded.interfaces_json, interfaces_json),
+                        last_seen = COALESCE(excluded.last_seen, last_seen)
+                """, (scan_id, host_id, hostname, hostnames_json, mac_address, vendor, os_info_json, 
+                      host_scripts_json, None, discovered_at))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"❌ Error en guardado por lotes: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
     
     def _get_connection(self):
         """Obtiene una conexión a la base de datos con row_factory."""
@@ -797,7 +1055,8 @@ class ScanStorage:
         conn.close()
     
     def complete_scan(self, scan_id: int, hosts_count: int = None,
-                     ports_count: int = None, error_message: str = None):
+                     ports_count: int = None, error_message: str = None,
+                     completed_at: Optional[datetime] = None):
         """Marca un escaneo como completado."""
         conn = None
         try:
@@ -823,7 +1082,7 @@ class ScanStorage:
                 SET status = ?, completed_at = ?, hosts_discovered = ?,
                     ports_found = ?, error_message = ?
                 WHERE id = ?
-            """, (status, datetime.now(), hosts_count, ports_count, 
+            """, (status, completed_at or datetime.now(), hosts_count, ports_count, 
                   error_message, scan_id))
             
             conn.commit()
@@ -986,18 +1245,24 @@ class ScanStorage:
 
     def add_network(self, organization: str, network_name: str, network_range: str, system_name: str = None) -> int:
         """Añade una red a la organización."""
-        # Validar rango
+        # Validar y normalizar rango
         try:
-            ipaddress.ip_network(network_range, strict=False)
+            # Usar strict=False para permitir rangos con bits de host (ej. 192.168.1.1/24)
+            # y obtener el objeto de red real (ej. 192.168.1.0/24)
+            net_obj = ipaddress.ip_network(network_range, strict=False)
+            normalized_range = str(net_obj)
         except ValueError as e:
             raise ValueError(f"Rango de red inválido: {e}")
             
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        cursor = conn.cursor()
+        
+        try:
             cursor.execute("""
                 INSERT INTO networks (organization_name, network_name, network_range, system_name)
                 VALUES (?, ?, ?, ?)
-            """, (organization.upper(), network_name, network_range, system_name))
+            """, (organization.upper(), network_name, normalized_range, system_name))
             
             network_id = cursor.lastrowid
             
@@ -1013,24 +1278,34 @@ class ScanStorage:
             """, (organization.upper(),))
             
             org_hosts = cursor.fetchall()
-            net_obj = ipaddress.ip_network(network_range)
             
             for h_id, h_ip in org_hosts:
                 try:
                     ip_obj = ipaddress.ip_address(h_ip)
                     if ip_obj in net_obj:
-                        cursor.execute("UPDATE hosts SET subnet = ? WHERE id = ?", (network_range, h_id))
+                        cursor.execute("UPDATE hosts SET subnet = ? WHERE id = ?", (normalized_range, h_id))
                 except ValueError:
                     pass
             
+            conn.commit()
             return network_id
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
 
     def delete_network(self, network_id: int) -> bool:
         """Elimina una red registrada."""
-        with sqlite3.connect(self.db_path) as conn:
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        try:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM networks WHERE id = ?", (network_id,))
-            return cursor.rowcount > 0
+            rows = cursor.rowcount
+            conn.commit()
+            return rows > 0
+        finally:
+            conn.close()
 
     def delete_organization(self, organization: str) -> dict:
         """Elimina una organización completa y todos sus datos."""
@@ -1327,18 +1602,138 @@ class ScanStorage:
         cursor = conn.cursor()
         
         try:
+            # Obtener info del escaneo
+            scan = cursor.execute("SELECT organization_name, target_range FROM scans WHERE id = ?", (scan_id,)).fetchone()
+            if not scan:
+                conn.close()
+                return
+            org_name, target_range = scan
+
             # Intentar actualizar si ya existe la conversación en este escaneo
             # (IPs y puertos en cualquier dirección para simplificar, o dirección específica)
             # Por ahora guardamos dirección específica src -> dst
+            now = datetime.now()
             cursor.execute("""
                 INSERT INTO passive_conversations 
                 (scan_id, src_ip, src_mac, src_port, dst_ip, dst_mac, dst_port, protocol, last_seen)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (scan_id, src_ip, src_mac, src_port, dst_ip, dst_mac, dst_port, protocol, datetime.now()))
+            """, (scan_id, src_ip, src_mac, src_port, dst_ip, dst_mac, dst_port, protocol, now))
+            
+            # AISLAMIENTO: Poblar metadata para ambos hosts
+            for ip, mac in [(src_ip, src_mac), (dst_ip, dst_mac)]:
+                if not ip: continue
+                # Calcular subnet
+                subnet = self._get_effective_subnet(org_name, ip, target_range)
+                
+                # Asegurar host global
+                cursor.execute("""
+                    INSERT INTO hosts (ip_address, first_seen, last_seen, is_private, subnet)
+                    VALUES (?, ?, ?, 1, ?)
+                    ON CONFLICT(ip_address) DO UPDATE SET 
+                        last_seen = MAX(last_seen, excluded.last_seen),
+                        subnet = COALESCE(subnet, excluded.subnet)
+                """, (ip, now, now, subnet))
+                h_id = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (ip,)).fetchone()[0]
+                # Poblar metadata scan
+                cursor.execute("""
+                    INSERT INTO host_scan_metadata (scan_id, host_id, mac_address, last_seen)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(scan_id, host_id) DO UPDATE SET
+                        mac_address = COALESCE(excluded.mac_address, mac_address),
+                        last_seen = COALESCE(excluded.last_seen, last_seen)
+                """, (scan_id, h_id, mac, now))
+
             conn.commit()
         except Exception as e:
             print(f"⚠️  Error guardando conversación pasiva: {e}")
             conn.rollback()
+        finally:
+            conn.close()
+
+    def save_passive_conversations_bulk(self, scan_id: int, conversations: List[Dict]):
+        """Guarda múltiples conversaciones pasivas de forma eficiente."""
+        if not conversations:
+            return True
+            
+        conn = sqlite3.connect(str(self.db_path), timeout=60.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        cursor = conn.cursor()
+        
+        try:
+            # Obtener info del escaneo
+            scan = cursor.execute("SELECT organization_name, target_range FROM scans WHERE id = ?", (scan_id,)).fetchone()
+            if not scan:
+                conn.close()
+                return False
+            org_name, target_range = scan
+
+            now = datetime.now()
+            # Preparar datos para executemany
+            data = []
+            for c in conversations:
+                # Usar el timestamp real si viene en el objeto, si no usar 'now'
+                c_timestamp = c.get('timestamp') or c.get('last_seen') or now
+                data.append((
+                    scan_id, c.get('src_ip'), c.get('src_mac'), c.get('src_port'),
+                    c.get('dst_ip'), c.get('dst_mac'), c.get('dst_port'),
+                    c.get('protocol'), c_timestamp
+                ))
+            
+            cursor.executemany("""
+                INSERT INTO passive_conversations 
+                (scan_id, src_ip, src_mac, src_port, dst_ip, dst_mac, dst_port, protocol, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, data)
+
+            # AISLAMIENTO: Poblar host_scan_metadata para hosts detectados pasivamente
+            # Extraer IPs únicas y sus MACs de este lote
+            unique_hosts = {} # ip -> {mac, last_seen}
+            for c in conversations:
+                c_now = c.get('timestamp') or c.get('last_seen') or now
+                # Source
+                sip = c.get('src_ip')
+                smac = c.get('src_mac')
+                if sip:
+                    if sip not in unique_hosts or c_now > unique_hosts[sip]['last_seen']:
+                        unique_hosts[sip] = {'mac': smac, 'last_seen': c_now}
+                # Destination
+                dip = c.get('dst_ip')
+                dmac = c.get('dst_mac')
+                if dip:
+                    if dip not in unique_hosts or c_now > unique_hosts[dip]['last_seen']:
+                        unique_hosts[dip] = {'mac': dmac, 'last_seen': c_now}
+
+            for ip, info in unique_hosts.items():
+                # Primero asegurar que el host existe en la tabla global para tener un host_id
+                # (save_passive_conversation usualmente no crea el host si no existe, 
+                # pero para aislamiento necesitamos que exista el host_id)
+                # NOTA: save_discovered_host ya hace esto de forma segura.
+                # Para simplificar y ser eficiente, usamos una query directa.
+                subnet = self._get_effective_subnet(org_name, ip, target_range)
+                cursor.execute("""
+                    INSERT INTO hosts (ip_address, first_seen, last_seen, is_private, subnet)
+                    VALUES (?, ?, ?, 1, ?)
+                    ON CONFLICT(ip_address) DO UPDATE SET 
+                        last_seen = MAX(last_seen, excluded.last_seen),
+                        subnet = COALESCE(subnet, excluded.subnet)
+                """, (ip, info['last_seen'], info['last_seen'], subnet))
+                
+                h_id = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (ip,)).fetchone()[0]
+                
+                cursor.execute("""
+                    INSERT INTO host_scan_metadata (scan_id, host_id, mac_address, last_seen)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(scan_id, host_id) DO UPDATE SET
+                        mac_address = COALESCE(excluded.mac_address, mac_address),
+                        last_seen = COALESCE(excluded.last_seen, last_seen)
+                """, (scan_id, h_id, info['mac'], info['last_seen']))
+
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"⚠️ Error en guardado masivo de conversaciones: {e}")
+            conn.rollback()
+            return False
         finally:
             conn.close()
 

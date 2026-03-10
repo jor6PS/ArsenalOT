@@ -84,6 +84,7 @@ class PassiveCapture:
             '-e', 'udp.dstport',
             '-e', 'eth.src',
             '-e', 'eth.dst',
+            '-e', 'frame.time_epoch',
             '-E', 'header=n',
             '-E', 'separator=|'
         ]
@@ -101,13 +102,23 @@ class PassiveCapture:
                     continue
                 
                 parts = line.split('|')
-                if len(parts) < 8:
+                if len(parts) < 9:
                     continue
                 
-                src_ip, dst_ip, tcp_sport, tcp_dport, udp_sport, udp_dport, src_mac, dst_mac = parts[:8]
+                src_ip, dst_ip, tcp_sport, tcp_dport, udp_sport, udp_dport, src_mac, dst_mac, epoch = parts[:9]
                 
                 if not src_ip or not dst_ip:
                     continue
+
+                # Timestamp real del paquete
+                timestamp = None
+                if epoch and epoch.strip():
+                    try:
+                        timestamp = datetime.fromtimestamp(float(epoch.strip()))
+                    except (ValueError, TypeError):
+                        timestamp = datetime.now()
+                else:
+                    timestamp = datetime.now()
 
                 protocol = None
                 src_port = None
@@ -141,7 +152,8 @@ class PassiveCapture:
                         'dst_port': dst_port,
                         'protocol': protocol,
                         'src_mac': src_mac.strip() if src_mac else None,
-                        'dst_mac': dst_mac.strip() if dst_mac else None
+                        'dst_mac': dst_mac.strip() if dst_mac else None,
+                        'timestamp': timestamp
                     })
                     seen_convs.add(conv_key)
             

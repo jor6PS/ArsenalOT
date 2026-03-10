@@ -66,11 +66,14 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
     # 1. Obtener redes y dispositivos críticos
     network_names_map = {}
     try:
-        networks = cursor.execute("SELECT organization_name, network_name, network_range FROM networks").fetchall()
+        networks = cursor.execute("SELECT organization_name, network_name, network_range, system_name FROM networks").fetchall()
         for net in networks:
             o_n = net['organization_name'].upper()
             if o_n not in network_names_map: network_names_map[o_n] = {}
-            network_names_map[o_n][net['network_range']] = net['network_name']
+            network_names_map[o_n][net['network_range']] = {
+                'name': net['network_name'],
+                'system': net['system_name']
+            }
     except: pass
     
     critical_ips_map = {}
@@ -83,8 +86,8 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                 if ip_a.strip(): critical_ips_map[o_n].add(ip_a.strip())
     except: pass
 
-    # 2. Filtrar escaneos
-    query_scans = "SELECT * FROM scans WHERE status = 'completed'"
+    # 2. Filtrar escaneos (incluir pasivos aunque no estén 'completed' para mayor visibilidad)
+    query_scans = "SELECT * FROM scans WHERE (status = 'completed' OR (scan_mode = 'passive' AND status != 'failed'))"
     params = []
     if org:
         query_scans += " AND organization_name = ?"
@@ -104,11 +107,19 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
         
         o_name = scan['organization_name'].upper()
         
-        # Obtener resultados activos
         query_results = """
-            SELECT h.*, sr.*, sr.id as scan_result_id
+            SELECT h.ip_address, h.subnet, h.first_seen, sr.*, sr.id as scan_result_id,
+                   m.hostname as isolation_hostname,
+                   m.hostnames_json as isolation_hostnames,
+                   m.mac_address as isolation_mac,
+                   m.vendor as isolation_vendor,
+                   m.os_info_json as isolation_os,
+                   m.host_scripts_json as isolation_scripts,
+                   m.interfaces_json as isolation_interfaces,
+                   m.last_seen as isolation_last_seen
             FROM scan_results sr
             JOIN hosts h ON h.id = sr.host_id
+            LEFT JOIN host_scan_metadata m ON m.scan_id = sr.scan_id AND m.host_id = sr.host_id
             WHERE sr.scan_id = ?
         """
         results = cursor.execute(query_results, (scan_id,)).fetchall()
@@ -119,27 +130,39 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
             ip = row['ip_address']
             if ip not in active_hosts_map:
                 subnet = None
+                # 1. Intentar match por rango exacto si está en la DB
                 if o_name in network_names_map:
+                    # Match por network_range (más rápido)
                     for net_range in network_names_map[o_name].keys():
                         if is_ip_in_network(ip, net_range):
                             subnet = net_range
                             break
+                
+                # 2. Si no hay match en redes conocidas, usar el registrado o Unknown
                 if not subnet:
                     subnet = row['subnet'] or "Unknown"
                 
-                subnet_name = network_names_map.get(o_name, {}).get(subnet) or subnet
+                net_info = network_names_map.get(o_name, {}).get(subnet, {})
+                subnet_name = net_info.get('name') or "Unknown" if subnet != "Unknown" else "Unknown"
+                system_name = net_info.get('system') or "Internal"
 
+                # AISLAMIENTO ESTRICTO: Solo lo que diga el escaneo (metadata)
                 active_hosts_map[ip] = {
                     'ip': ip,
-                    'hostname': row['hostname'] or '',
+                    'hostname': row['isolation_hostname'] or '',
                     'organization': o_name,
                     'mi_ip': scan['myip'] or 'N/A',
                     'subred': subnet,
                     'nombre_subred': subnet_name,
+                    'sistema': system_name,
                     'is_critical': ip in critical_ips_map.get(o_name, set()),
-                    'vendor': row['vendor'],
-                    'mac': row['mac_address'],
-                    'os_info': row['os_info_json'],
+                    'vendor': row['isolation_vendor'] or '',
+                    'mac': row['isolation_mac'] or '',
+                    'os_info': row['isolation_os'] or '',
+                    'hostnames': row['isolation_hostnames'] or '',
+                    'interfaces': row['isolation_interfaces'] or '',
+                    'scripts': row['isolation_scripts'] or '',
+                    'timestamp': row['isolation_last_seen'] or row['discovered_at'],
                     'services': []
                 }
             
@@ -172,8 +195,32 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                 passive_ips_info[conv['src_ip']] = conv['src_mac']
                 passive_ips_info[conv['dst_ip']] = conv['dst_mac']
             
+            # Obtener todos los hosts en una sola consulta
+            unique_ips = list(passive_ips_info.keys())
+            h_info_map = {}
+            if unique_ips:
+                # SQLite tiene un límite de variables, pero para IPs únicas suele estar bien
+                # No obstante, por seguridad dividimos en fragmentos de 500
+                for i in range(0, len(unique_ips), 500):
+                    batch_ips = unique_ips[i:i+500]
+                    placeholders = ','.join(['?'] * len(batch_ips))
+                    # JOIN con host_scan_metadata para aislamiento
+                    query_h = f"""
+                        SELECT h.ip_address, h.subnet, h.first_seen, 
+                               m.hostname as isolation_hostname,
+                               m.hostnames_json as isolation_hostnames,
+                               m.mac_address as isolation_mac,
+                               m.last_seen as isolation_last_seen
+                        FROM hosts h
+                        LEFT JOIN host_scan_metadata m ON m.host_id = h.id AND m.scan_id = ?
+                        WHERE h.ip_address IN ({placeholders})
+                    """
+                    rows = cursor.execute(query_h, [scan_id] + batch_ips).fetchall()
+                    for row in rows:
+                        h_info_map[row['ip_address']] = dict(row)
+
             for ip, mac in passive_ips_info.items():
-                h_info = cursor.execute("SELECT * FROM hosts WHERE ip_address = ?", (ip,)).fetchone()
+                h_info = h_info_map.get(ip)
                 subnet = None
                 if o_name in network_names_map:
                     for net_range in network_names_map[o_name].keys():
@@ -181,21 +228,30 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                             subnet = net_range
                             break
                 if not subnet and h_info:
-                    subnet = h_info['subnet']
+                    subnet = h_info.get('subnet')
                 
-                subnet_name = network_names_map.get(o_name, {}).get(subnet) or subnet or "Passive Detection"
+                # AISLAMIENTO ESTRICTO: No heredamos nada de la tabla global hosts
+                # Solo usamos lo que diga el escaneo actual (captura o metadata)
+                
+                net_info = network_names_map.get(o_name, {}).get(subnet or "Unknown", {})
+                subnet_name = net_info.get('name') or "Unknown"
+                system_name = net_info.get('system') or "Internal"
                 
                 scan_dict['hosts'].append({
                     'ip': ip,
-                    'hostname': h_info['hostname'] if h_info else '',
+                    'hostname': h_info.get('isolation_hostname') or '',
                     'organization': o_name,
                     'mi_ip': scan['myip'] or 'N/A',
                     'subred': subnet or 'N/A',
                     'nombre_subred': subnet_name,
+                    'sistema': system_name,
                     'is_critical': ip in critical_ips_map.get(o_name, set()),
-                    'vendor': h_info['vendor'] if h_info else '',
-                    'mac': mac or (h_info['mac_address'] if h_info else ''),
-                    'os_info': h_info['os_info_json'] if h_info else '',
+                    'vendor': '', # Aislado para pasivo por ahora, a menos que metadata diga lo contrario
+                    'mac': mac or h_info.get('isolation_mac') or '', # Captura pcap > metadata scan
+                    'os_info': '', # Aislado
+                    'hostnames': h_info.get('isolation_hostnames') or '',
+                    'interfaces': '', # Aislado
+                    'timestamp': h_info.get('isolation_last_seen') if h_info else None,
                     'services': [] 
                 })
         
@@ -207,7 +263,7 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
     return all_data
 
 def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
-    """Procesa los datos e importa a Neo4j con correlación y metadatos mejorados."""
+    """Procesa los datos e importa a Neo4j con correlación y metadatos mejorados (OPTIMIZADO)."""
     
     # Track de hosts creados para correlación posterior (IP -> List[Node])
     ip_nodes_map = {}
@@ -217,128 +273,134 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
         scan_mode = scan['scan_mode'] or 'active'
         is_active = scan_mode != 'passive'
         
-        # 1. Nodo ORGANIZACION
+        # 1. Nodo ORGANIZACION (Merge simple, es uno por scan o pocos)
         org_node = Node("ORGANIZACION", name=org_name)
         graph.merge(org_node, "ORGANIZACION", "name")
         
-        # 2. Nodo ESCANEO (Metadatos Explícitos solicitados)
-        scan_label = "ESCANEO_ACTIVO" if is_active else "ESCANEO_PASIVO"
-        scan_props = {
-            'id': scan['id'],
-            'type': scan['scan_type'],
-            'target': scan['target_range'],
-            'started_at': scan['started_at'],
-            'completed_at': scan['completed_at']
+        # 2. Nodo ORIGEN (Fusionado con ESCANEO)
+        myip = scan['myip'] or 'N/A'
+        origin_props = {
+            'NAME': "ESCANEO PASIVO" if not is_active else f"Escaneo {scan['id']}",
+            'ORGANIZACION': org_name,
+            'MI_IP': myip,
+            'SCAN_ID': scan['id'],
+            'SCAN_TYPE': scan['scan_type'],
+            'SCAN_MODE': scan['scan_mode'],
+            'TARGET_RANGE': scan['target_range'],
+            'PCAP_FILE': scan.get('pcap_file') or ('N/A' if is_active else scan['target_range']),
+            'INTERFACE': scan['interface'],
+            'COMMAND': scan.get('nmap_command') or 'N/A',
+            'STARTED_AT': scan['started_at'],
+            'COMPLETED_AT': scan['completed_at'],
+            'STATUS': scan['status'],
+            'LOCATION': scan['location']
         }
-        # Metadatos explícitos: Escaneo_Activo_ID o Escaneo_Pasivo_ID
-        if is_active:
-            scan_props['Escaneo_Activo_ID'] = scan['id']
-        else:
-            scan_props['Escaneo_Pasivo_ID'] = scan['id']
-
-        scan_node = Node(scan_label, **scan_props)
-        graph.merge(scan_node, scan_label, "id")
         
-        # Relación ORG -> ESCANEO
-        rel_org_scan = Relationship(org_node, "SCAN_TYPE", scan_node)
-        graph.merge(rel_org_scan)
+        origin_node = Node("ORIGEN", **origin_props)
+        graph.merge(origin_node, "ORIGEN", ("ORGANIZACION", "SCAN_ID"))
         
-        from_node = None
-        discovery_source = ""
-        if is_active:
-            # 3. Nodo ORIGEN (FROM)
-            myip = scan['myip'] or 'N/A'
-            subnet_display_name = scan['location'].replace("Network ", "")
-            from_node = Node("ORIGEN", 
-                             ORGANIZACION=org_name,
-                             MI_IP=myip,
-                             SUBRED=scan['target_range'], 
-                             NOMBRE_SUBRED=subnet_display_name)
-            graph.merge(from_node, "ORIGEN", ("ORGANIZACION", "MI_IP", "SUBRED"))
-            
-            # Relación ESCANEO_ACTIVO -> ORIGEN
-            rel_scan_from = Relationship(scan_node, "EXECUTED_FROM", from_node)
-            graph.merge(rel_scan_from)
-            discovery_source = f"Active:{myip}_{scan['id']}"
-        else:
-            discovery_source = f"Passive:{scan['id']}"
+        # Relación ORG -> ORIGEN
+        rel_org_origin = Relationship(org_node, "HAS_SOURCE", origin_node)
+        graph.merge(rel_org_origin)
+        
+        discovery_source = f"{scan['scan_mode']}:{scan['id']}"
 
-        # 4. Nodos HOST
+        # 4. PREPARAR DATOS PARA BULK INSERT (UNWIND)
+        hosts_data = []
+        services_data = []
+        
         for h in scan['hosts']:
-            clean_host_subnet_name = h['nombre_subred'].replace("Network ", "")
-            
-            host_props = {
-                'IP': h['ip'],
-                'HOSTNAME': h['hostname'],
-                'ORGANIZACION': h['organization'],
-                'MI_IP': h['mi_ip'],
-                'SUBRED': h['subred'],
-                'CRITICO_POR_IP': "SÍ" if h['is_critical'] else "NO",
-                'NOMBRE_SUBRED': clean_host_subnet_name,
-                'VENDOR': h['vendor'] or '',
-                'MAC': h['mac'] or '',
-                'OS': h['os_info'] or '',
+            h_props = {
+                'IP': h['ip'], 'HOSTNAME': h['hostname'], 'ORGANIZACION': h['organization'],
+                'CRITICO': "SÍ" if h['is_critical'] else "NO", 'SUBRED': h['subred'],
+                'NOMBRE_SUBRED': h['nombre_subred'], 'SISTEMA': h.get('sistema', 'N/A'),
+                'VENDOR': h['vendor'] or '', 'MAC': h['mac'] or '', 'OS': h['os_info'] or '',
+                'HOSTNAMES': h.get('hostnames') or '', 'INTERFACES': h.get('interfaces') or '',
+                'TIMESTAMP': h.get('timestamp') or '',
                 'DISCOVERY_SOURCE': discovery_source
             }
+            hosts_data.append(h_props)
             
-            host_node = Node("HOST", **host_props)
-            graph.merge(host_node, "HOST", ("ORGANIZACION", "IP", "DISCOVERY_SOURCE"))
-            
-            # Guardar para correlación posterior
-            if h['ip'] not in ip_nodes_map: ip_nodes_map[h['ip']] = []
-            ip_nodes_map[h['ip']].append(host_node)
-
-            if is_active and from_node:
-                rel_from_host = Relationship(from_node, "DISCOVERED_HOST", host_node)
-                graph.merge(rel_from_host)
-            else:
-                rel_scan_host = Relationship(scan_node, "DETECTED_HOST", host_node)
-                graph.merge(rel_scan_host)
-
-            # 5. Nodos de SERVICIO
             for s in h['services']:
-                service_id = f"{h['ip']}_{s['port']}_{s['protocol']}_{discovery_source}"
-                service_props = {
-                    'id': service_id,
-                    'port': s['port'],
-                    'protocol': s['protocol'],
-                    'name': s['name'] or 'unknown',
-                    'product': s['product'] or '',
-                    'version': s['version'] or '',
+                services_data.append({
+                    'host_ip': h['ip'],
+                    'id': f"{h['ip']}_{s['port']}_{s['protocol']}_{discovery_source}",
+                    'port': s['port'], 'protocol': s['protocol'], 'name': s['name'] or 'unknown',
+                    'product': s['product'] or '', 'version': s['version'] or '',
                     'vulnerabilities': ", ".join([v.get('cve_id') or v.get('vulnerability_id') for v in s['vulnerabilities']]) if s['vulnerabilities'] else ''
-                }
-                service_node = Node("SERVICE", **service_props)
-                graph.merge(service_node, "SERVICE", "id")
-                
-                rel_host_service = Relationship(host_node, "HAS_SERVICE", service_node)
-                graph.merge(rel_host_service)
+                })
 
-        # 6. Relaciones entre HOSTS (Pasivo)
-        if not is_active:
-            for conv in scan['passive_conversations']:
-                src_ip = conv['src_ip']
-                dst_ip = conv['dst_ip']
-                
-                src_node = graph.nodes.match("HOST", ORGANIZACION=org_name, IP=src_ip, DISCOVERY_SOURCE=discovery_source).first()
-                dst_node = graph.nodes.match("HOST", ORGANIZACION=org_name, IP=dst_ip, DISCOVERY_SOURCE=discovery_source).first()
-                
-                if src_node and dst_node:
-                    rel_comm = Relationship(src_node, "COMMUNICATES_WITH", dst_node, 
-                                            protocol=conv['protocol'],
-                                            port=conv['dst_port'],
-                                            last_seen=conv['last_seen'])
-                    graph.merge(rel_comm)
+        # --- EJECUTAR BULK HOSTS ---
+        print(f"📦 [Scan {scan['id']}] Exportando {len(hosts_data)} hosts...")
+        # Usar UNWIND para MERGE de hosts y relaciones con ORIGEN
+        graph.run("""
+            UNWIND $data AS row
+            MERGE (h:HOST {ORGANIZACION: row.ORGANIZACION, IP: row.IP, DISCOVERY_SOURCE: row.DISCOVERY_SOURCE})
+            SET h += row
+            WITH h, row
+            MATCH (o:ORIGEN {ORGANIZACION: row.ORGANIZACION, SCAN_ID: $scan_id})
+            MERGE (o)-[:DISCOVERED_HOST]->(h)
+        """, data=hosts_data, scan_id=scan['id'])
 
-    # 7. NUEVO: Correlación PROBABLY_SAME_HOST
+        # --- EJECUTAR BULK SERVICES ---
+        if services_data:
+            print(f"📦 [Scan {scan['id']}] Exportando {len(services_data)} servicios...")
+            graph.run("""
+                UNWIND $data AS row
+                MERGE (s:SERVICE {id: row.id})
+                SET s += row
+                WITH s, row
+                MATCH (h:HOST {ORGANIZACION: $org, IP: row.host_ip, DISCOVERY_SOURCE: $ds})
+                MERGE (h)-[:HAS_SERVICE]->(s)
+            """, data=services_data, org=org_name, ds=discovery_source)
+
+        # --- EJECUTAR BULK CONVERSACIONES (PASIVO) ---
+        if not is_active and scan['passive_conversations']:
+            print(f"📦 [Scan {scan['id']}] Exportando {len(scan['passive_conversations'])} conversaciones...")
+            
+            # Normalizar para evitar nulls en las propiedades del MERGE (causa SemanticError)
+            normalized_convs = []
+            for c in scan['passive_conversations']:
+                normalized_convs.append({
+                    'src_ip': c['src_ip'],
+                    'dst_ip': c['dst_ip'],
+                    'dst_port': c['dst_port'] if c['dst_port'] is not None else 0,
+                    'protocol': c['protocol'] if c['protocol'] is not None else 'N/A',
+                    'last_seen': c['last_seen']
+                })
+
+            # Fragmentar para evitar queries gigantescas
+            batch_size = 1000
+            for i in range(0, len(normalized_convs), batch_size):
+                batch = normalized_convs[i:i+batch_size]
+                graph.run("""
+                    UNWIND $data AS conv
+                    MATCH (src:HOST {ORGANIZACION: $org, IP: conv.src_ip, DISCOVERY_SOURCE: $ds})
+                    MATCH (dst:HOST {ORGANIZACION: $org, IP: conv.dst_ip, DISCOVERY_SOURCE: $ds})
+                    MERGE (src)-[r:COMMUNICATES_WITH {discovery_id: $scan_id, port: conv.dst_port, protocol: conv.protocol}]->(dst)
+                    SET r.last_seen = conv.last_seen
+                """, data=batch, org=org_name, ds=discovery_source, scan_id=scan['id'])
+
+        # Rellenar ip_nodes_map para el paso 7 (esto requiere otra query o matcheo)
+        # Como es para correlación, podemos hacerlo más eficiente después.
+        for h in scan['hosts']:
+            if h['ip'] not in ip_nodes_map: ip_nodes_map[h['ip']] = []
+            # Guardamos solo el source para correlacionar después
+            ip_nodes_map[h['ip']].append(discovery_source)
+
+    # 7. NUEVO: Correlación PROBABLY_SAME_HOST (Optimizado)
     print("🧠 Correlacionando hosts con misma IP...")
-    for ip, nodes in ip_nodes_map.items():
-        if len(nodes) > 1:
-            # Crear relaciones entre todos los nodos que comparten IP pero distinto source
-            for i in range(len(nodes)):
-                for j in range(i + 1, len(nodes)):
-                    if nodes[i]['DISCOVERY_SOURCE'] != nodes[j]['DISCOVERY_SOURCE']:
-                        rel_same = Relationship(nodes[i], "PROBABLY_SAME_HOST", nodes[j], ip=ip)
-                        graph.merge(rel_same)
+    for ip, sources in ip_nodes_map.items():
+        if len(sources) > 1:
+            for i in range(len(sources)):
+                for j in range(i + 1, len(sources)):
+                    graph.run("""
+                        MATCH (h1:HOST {IP: $ip, DISCOVERY_SOURCE: $ds1})
+                        MATCH (h2:HOST {IP: $ip, DISCOVERY_SOURCE: $ds2})
+                        WHERE h1.ORGANIZACION = h2.ORGANIZACION
+                        MERGE (h1)-[:PROBABLY_SAME_HOST {ip: $ip}]->(h2)
+                        MERGE (h2)-[:PROBABLY_SAME_HOST {ip: $ip}]->(h1)
+                    """, ip=ip, ds1=sources[i], ds2=sources[j])
 
 def main():
     parser = argparse.ArgumentParser(description='Importar resultados de escaneos a Neo4j (Consolidado - Remodelado)')
