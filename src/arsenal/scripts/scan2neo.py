@@ -78,12 +78,17 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
     
     critical_ips_map = {}
     try:
-        crit_devs = cursor.execute("SELECT organization_name, ips FROM critical_devices").fetchall()
+        crit_devs = cursor.execute("SELECT organization_name, name, reason, ips FROM critical_devices").fetchall()
         for dev in crit_devs:
             o_n = dev['organization_name'].upper()
-            if o_n not in critical_ips_map: critical_ips_map[o_n] = set()
+            if o_n not in critical_ips_map: critical_ips_map[o_n] = {}
             for ip_a in dev['ips'].split(','):
-                if ip_a.strip(): critical_ips_map[o_n].add(ip_a.strip())
+                ip_clean = ip_a.strip()
+                if ip_clean:
+                    critical_ips_map[o_n][ip_clean] = {
+                        'name': dev['name'],
+                        'reason': dev['reason']
+                    }
     except: pass
 
     # 2. Filtrar escaneos (incluir pasivos aunque no estén 'completed' para mayor visibilidad)
@@ -151,16 +156,15 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                 subnet_name = net_info.get('name') or "Unknown" if subnet != "Unknown" else "Unknown"
                 system_name = net_info.get('system') or "Internal"
 
+                is_crit = ip in critical_ips_map.get(o_name, {})
+                crit_info = critical_ips_map.get(o_name, {}).get(ip, {})
+
                 # AISLAMIENTO ESTRICTO: Solo lo que diga el escaneo (metadata)
                 active_hosts_map[ip] = {
                     'ip': ip,
                     'hostname': row['isolation_hostname'] or '',
                     'organization': o_name,
                     'mi_ip': scan['myip'] or 'N/A',
-                    'subred': subnet,
-                    'nombre_subred': subnet_name,
-                    'sistema': system_name,
-                    'is_critical': ip in critical_ips_map.get(o_name, set()),
                     'vendor': row['isolation_vendor'] or '',
                     'mac': row['isolation_mac'] or '',
                     'os_info': row['isolation_os'] or '',
@@ -168,6 +172,12 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                     'interfaces': row['isolation_interfaces'] or '',
                     'scripts': row['isolation_scripts'] or '',
                     'timestamp': row['isolation_last_seen'] or row['discovered_at'],
+                    'network_range': subnet if subnet and subnet != "Unknown" else None,
+                    'network_name': subnet_name,
+                    'network_system': system_name,
+                    'is_critical': is_crit,
+                    'critical_name': crit_info.get('name'),
+                    'critical_reason': crit_info.get('reason'),
                     'services': []
                 }
             
@@ -242,21 +252,26 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                 subnet_name = net_info.get('name') or "Unknown"
                 system_name = net_info.get('system') or "Internal"
                 
+                is_crit = ip in critical_ips_map.get(o_name, {})
+                crit_info = critical_ips_map.get(o_name, {}).get(ip, {})
+                
                 scan_dict['hosts'].append({
                     'ip': ip,
                     'hostname': h_info.get('isolation_hostname') or '',
                     'organization': o_name,
                     'mi_ip': scan['myip'] or 'N/A',
-                    'subred': subnet or 'N/A',
-                    'nombre_subred': subnet_name,
-                    'sistema': system_name,
-                    'is_critical': ip in critical_ips_map.get(o_name, set()),
                     'vendor': '', # Aislado para pasivo por ahora, a menos que metadata diga lo contrario
                     'mac': mac or h_info.get('isolation_mac') or '', # Captura pcap > metadata scan
                     'os_info': '', # Aislado
                     'hostnames': h_info.get('isolation_hostnames') or '',
                     'interfaces': '', # Aislado
                     'timestamp': h_info.get('isolation_last_seen') if h_info else None,
+                    'network_range': subnet if subnet and subnet != "Unknown" else None,
+                    'network_name': subnet_name,
+                    'network_system': system_name,
+                    'is_critical': is_crit,
+                    'critical_name': crit_info.get('name'),
+                    'critical_reason': crit_info.get('reason'),
                     'services': [] 
                 })
         
@@ -313,12 +328,14 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
         # 4. PREPARAR DATOS PARA BULK INSERT (UNWIND)
         hosts_data = []
         services_data = []
+        enrichments_data = []
         
         for h in scan['hosts']:
             h_props = {
                 'IP': h['ip'], 'HOSTNAME': h['hostname'], 'ORGANIZACION': h['organization'],
-                'CRITICO': "SÍ" if h['is_critical'] else "NO", 'SUBRED': h['subred'],
-                'NOMBRE_SUBRED': h['nombre_subred'], 'SISTEMA': h.get('sistema', 'N/A'),
+                'CRITICO': "SÍ" if h['is_critical'] else "NO", 'RAZON_CRITICO': h.get('critical_reason', ''), 'NOMBRE_CRITICO': h.get('critical_name', ''),
+                'SUBRED': h.get('network_range') or 'Unknown',
+                'NOMBRE_SUBRED': h.get('network_name') or 'Unknown', 'SISTEMA': h.get('network_system') or 'N/A',
                 'VENDOR': h['vendor'] or '', 'MAC': h['mac'] or '', 'OS': h['os_info'] or '',
                 'HOSTNAMES': h.get('hostnames') or '', 'INTERFACES': h.get('interfaces') or '',
                 'TIMESTAMP': h.get('timestamp') or '',
@@ -326,6 +343,7 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
             }
             hosts_data.append(h_props)
             
+            # Recolectar Servicios
             for s in h['services']:
                 services_data.append({
                     'host_ip': h['ip'],
@@ -334,6 +352,18 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
                     'product': s['product'] or '', 'version': s['version'] or '',
                     'vulnerabilities': ", ".join([v.get('cve_id') or v.get('vulnerability_id') for v in s['vulnerabilities']]) if s['vulnerabilities'] else ''
                 })
+                
+                # Extraer enrichments embebidos en el servicio
+                if 'enrichments' in s and s['enrichments']:
+                    for idx, e in enumerate(s['enrichments']):
+                        enrichments_data.append({
+                            'host_ip': h['ip'],
+                            'id': f"enr_{h['ip']}_{s['port']}_{idx}_{discovery_source}",
+                            'type': e.get('enrichment_type', 'unknown'),
+                            'data': e.get('data', ''),
+                            'port': s['port'],
+                            'protocol': s['protocol']
+                        })
 
         # --- EJECUTAR BULK HOSTS ---
         print(f"📦 [Scan {scan['id']}] Exportando {len(hosts_data)} hosts...")
@@ -358,6 +388,18 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
                 MATCH (h:HOST {ORGANIZACION: $org, IP: row.host_ip, DISCOVERY_SOURCE: $ds})
                 MERGE (h)-[:HAS_SERVICE]->(s)
             """, data=services_data, org=org_name, ds=discovery_source)
+
+        # --- EJECUTAR BULK ENRICHMENTS ---
+        if enrichments_data:
+            print(f"📦 [Scan {scan['id']}] Exportando {len(enrichments_data)} enrichments (capturas)...")
+            graph.run("""
+                UNWIND $data AS row
+                MERGE (e:ENRICHMENT {id: row.id})
+                SET e.type = row.type, e.data = row.data, e.port = row.port, e.protocol = row.protocol
+                WITH e, row
+                MATCH (h:HOST {ORGANIZACION: $org, IP: row.host_ip, DISCOVERY_SOURCE: $ds})
+                MERGE (h)-[:HAS_ENRICHMENT]->(e)
+            """, data=enrichments_data, org=org_name, ds=discovery_source)
 
         # --- EJECUTAR BULK CONVERSACIONES (PASIVO) ---
         if not is_active and scan['passive_conversations']:
@@ -392,20 +434,6 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
             if h['ip'] not in ip_nodes_map: ip_nodes_map[h['ip']] = []
             # Guardamos solo el source para correlacionar después
             ip_nodes_map[h['ip']].append(discovery_source)
-
-    # 7. NUEVO: Correlación PROBABLY_SAME_HOST (Optimizado)
-    print("🧠 Correlacionando hosts con misma IP...")
-    for ip, sources in ip_nodes_map.items():
-        if len(sources) > 1:
-            for i in range(len(sources)):
-                for j in range(i + 1, len(sources)):
-                    graph.run("""
-                        MATCH (h1:HOST {IP: $ip, DISCOVERY_SOURCE: $ds1})
-                        MATCH (h2:HOST {IP: $ip, DISCOVERY_SOURCE: $ds2})
-                        WHERE h1.ORGANIZACION = h2.ORGANIZACION
-                        MERGE (h1)-[:PROBABLY_SAME_HOST {ip: $ip}]->(h2)
-                        MERGE (h2)-[:PROBABLY_SAME_HOST {ip: $ip}]->(h1)
-                    """, ip=ip, ds1=sources[i], ds2=sources[j])
 
 def main():
     parser = argparse.ArgumentParser(description='Importar resultados de escaneos a Neo4j (Consolidado - Remodelado)')

@@ -532,13 +532,10 @@ class ScanStorage:
 
     def _get_effective_subnet(self, organization: str, ip_str: str, scan_target_range: str = None) -> str:
         """Determina la subred más específica para una IP.
-        Prioriza match exacto > target_range del escaneo > cálculo /24 estándar."""
-        # 1. Intentar match con redes conocidas definidas por el usuario
-        matched = self._get_matching_network(organization, ip_str)
-        if matched:
-            return matched['range']
+        Prioriza target_range del escaneo > cálculo /24 estándar.
+        La definición lógica de redes se traslada a la exportación a Neo4j."""
             
-        # 2. Si no hay match, intentar usar el target_range del escaneo (si no es 0.0.0.0/0)
+        # 1. Intentar usar el target_range del escaneo (si no es 0.0.0.0/0)
         if scan_target_range:
             try:
                 # Si hay múltiples rangos separados por espacio/coma, probar cada uno
@@ -554,7 +551,7 @@ class ScanStorage:
             except Exception:
                 pass
         
-        # 3. Fallback: Rangos privados estándar (RFC1918)
+        # 2. Fallback: Rangos privados estándar (RFC1918)
         try:
             ip_obj = ipaddress.ip_address(ip_str)
             if ip_obj.is_private:
@@ -569,7 +566,7 @@ class ScanStorage:
                     if ip_obj in rfc1918:
                         return str(rfc1918)
                 
-                # 4. Cálculo "natural" /24 como último recurso para IPs privadas no RFC1918 (o para mayor detalle)
+                # 3. Cálculo "natural" /24 como último recurso para IPs privadas no RFC1918 (o para mayor detalle)
                 # Devolver el /24 del segmento como "rango por defecto calculado"
                 return str(ipaddress.ip_network(f"{ip_str}/24", strict=False))
         except ValueError:
@@ -587,12 +584,15 @@ class ScanStorage:
         el host aparezca en los resultados aunque no tenga puertos abiertos.
         Solo guarda direcciones IP privadas (filtra IPs públicas).
         """
-        # Validar que es IP interna antes de proceder
-        if not is_internal_ip(host_ip):
-            # IP pública mundialmente enrutable, no guardar en la base de datos
+        # Validar IP
+        if not host_ip:
             return False
-        ip_obj = ipaddress.ip_address(host_ip)
-        is_private = True
+            
+        try:
+            ip_obj = ipaddress.ip_address(host_ip)
+            is_private = is_internal_ip(host_ip)
+        except ValueError:
+            return False
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys = ON")
@@ -681,9 +681,8 @@ class ScanStorage:
         - Las versiones se almacenan en scan_results.version
         - Los scripts de Nmap se almacenan en scan_results.scripts_json
         """
-        # Validar que es IP interna antes de proceder
-        if not host_ip or not is_internal_ip(host_ip):
-            # IP pública mundialmente enrutable o vacía, no guardar
+        # Validar IP
+        if not host_ip:
             return False
             
         # Normalizar puerto a entero
@@ -698,7 +697,8 @@ class ScanStorage:
                     port = int(port)
         except (ValueError, TypeError):
             port = None
-        is_private = True
+            
+        is_private = is_internal_ip(host_ip)
         
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -849,8 +849,9 @@ class ScanStorage:
             
             for res in results_list:
                 host_ip = res.get('host_ip')
-                if not host_ip or not is_internal_ip(host_ip):
+                if not host_ip:
                     continue
+                is_private = is_internal_ip(host_ip)
                 
                 # Normalizar puerto
                 port = res.get('port')
@@ -908,7 +909,7 @@ class ScanStorage:
                         END,
                         os_info_json = COALESCE(excluded.os_info_json, os_info_json),
                         host_scripts_json = COALESCE(excluded.host_scripts_json, host_scripts_json)
-                """, (host_ip, hostname, hostnames_json, mac_address, vendor, subnet, True,
+                """, (host_ip, hostname, hostnames_json, mac_address, vendor, subnet, is_private,
                       os_info_json, host_scripts_json, discovered_at, discovered_at))
                 
                 host_id_row = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (host_ip,)).fetchone()

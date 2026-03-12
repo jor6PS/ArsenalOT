@@ -694,15 +694,23 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     print(f"[Scan {scan_id}] ⚠️ Demasiados targets ({len(targets_to_process)}) para capturas sin Nmap. Limitando a los primeros 256.")
                     targets_to_process = targets_to_process[:256]
 
-                for host_ip in targets_to_process:
+                for target_str in targets_to_process:
                     try:
-                        # En modo específico sin Nmap, probamos puertos web comunes
-                        web_ports = [80, 443, 8080, 8443, 8000]
+                        # Detectar si el target tiene puerto específico (IP:PORT)
+                        target_parts = target_str.split(':')
+                        host_ip = target_parts[0]
+                        
+                        target_ports = []
+                        if len(target_parts) > 1 and target_parts[1].isdigit():
+                            target_ports = [int(target_parts[1])]
+                        else:
+                            # Fallback: En modo específico sin puerto, probamos puertos web comunes
+                            target_ports = [80, 443, 8080, 8443, 8000]
                         
                         # Registrar el host si no existe
                         storage.save_discovered_host(scan_id, host_ip, 'specific_capture')
                         
-                        for port_num in web_ports:
+                        for port_num in target_ports:
                             protocol = 'tcp'
                             
                             # Screenshots
@@ -747,7 +755,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                     pass
 
                     except Exception as e:
-                        print(f"[Scan {scan_id}] ⚠️ Error en capturas para {host_ip}: {e}")
+                        print(f"[Scan {scan_id}] ⚠️ Error en capturas para {target_str}: {e}")
 
         # ============================================================================
         # PASO 3: IOXIDRESOLVER (si está habilitado)
@@ -1328,28 +1336,14 @@ def process_pcap_file(scan_id: int, pcap_file: str, organization: str, location:
                 except ValueError:
                     continue
 
-                is_src_private = (
-                    ip_src_obj.is_private or ip_src_obj.is_loopback or ip_src_obj.is_link_local
-                    or ip_src_obj.is_reserved or ip_src_obj.is_unspecified or ip_src_obj.is_multicast
-                )
-                is_dst_private = (
-                    ip_dst_obj.is_private or ip_dst_obj.is_loopback or ip_dst_obj.is_link_local
-                    or ip_dst_obj.is_reserved or ip_dst_obj.is_unspecified or ip_dst_obj.is_multicast
-                )
-
-                if not is_src_private and not is_dst_private:
-                    continue
-
                 # Añadir a la lista para guardado masivo
                 conversations_to_save.append(conv)
                 
                 # Coleccionar IPs únicas con su último timestamp visto
-                if is_src_private:
-                    if ip_src not in ip_timestamps or ts > ip_timestamps[ip_src]:
-                        ip_timestamps[ip_src] = ts
-                if is_dst_private:
-                    if ip_dst not in ip_timestamps or ts > ip_timestamps[ip_dst]:
-                        ip_timestamps[ip_dst] = ts
+                if ip_src not in ip_timestamps or ts > ip_timestamps[ip_src]:
+                    ip_timestamps[ip_src] = ts
+                if ip_dst not in ip_timestamps or ts > ip_timestamps[ip_dst]:
+                    ip_timestamps[ip_dst] = ts
 
             except Exception as e:
                 print(f"[Scan {scan_id}] ⚠️  Error procesando conversación: {e}")

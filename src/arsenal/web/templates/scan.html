@@ -49,6 +49,10 @@
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     }
 
+    .mode-btn.active[data-mode="active"] {
+        background: #ef4444;
+    }
+
     .mode-btn.active[data-mode="passive"] {
         background: #10b981;
     }
@@ -126,29 +130,37 @@
         <div class="form-section">
             <h2>📋 Información Básica</h2>
 
-            <div class="form-group">
-                <label for="organization">Organización *</label>
-                {% if org_name %}
-                <input type="text" id="organization" name="organization" value="{{ org_name }}" readonly
-                    style="background: var(--bg-body); cursor: not-allowed; opacity: 0.8;">
-                {% else %}
-                <input type="text" id="organization" name="organization" required placeholder="Ej: Acme Corp"
-                    list="orgsList">
-                <datalist id="orgsList"></datalist>
-                {% endif %}
-            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="organization" style="font-size: 0.85rem; margin-bottom: 0.3rem;">Organización *</label>
+                    {% if org_name %}
+                    <input type="text" id="organization" name="organization" value="{{ org_name }}" readonly
+                        style="background: var(--bg-body); cursor: not-allowed; opacity: 0.8; padding: 0.5rem; font-size: 0.9rem;">
+                    {% else %}
+                    <input type="text" id="organization" name="organization" required placeholder="Ej: Acme Corp"
+                        list="orgsList" style="padding: 0.5rem; font-size: 0.9rem;">
+                    <datalist id="orgsList"></datalist>
+                    {% endif %}
+                </div>
 
-            <div class="form-group">
-                <label for="location">Origen (From) *</label>
-                <input type="text" id="location" name="location" required placeholder="Ej: Oficina Central">
-            </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="location" style="font-size: 0.85rem; margin-bottom: 0.3rem;">Origen (From) *</label>
+                    <input type="text" id="location" name="location" required placeholder="Ej: Oficina Central" list="locationsList" autocomplete="off" style="padding: 0.5rem; font-size: 0.9rem;">
+                    <datalist id="locationsList"></datalist>
+                </div>
 
-            <div id="interfaceGroup" class="form-group">
-                <label for="interface">Interfaz de Red *</label>
-                <select id="interface" name="interface" required
-                    style="width: 100%; padding: 0.75rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #e2e8f0; font-size: 0.95rem;">
-                    <option value="">-- Seleccionar Interfaz --</option>
-                </select>
+                <div id="interfaceGroup" class="form-group" style="margin-bottom: 0;">
+                    <label for="interface" style="font-size: 0.85rem; margin-bottom: 0.3rem;">Interfaz de Red *</label>
+                    <select id="interface" name="interface" required
+                        style="width: 100%; padding: 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #e2e8f0; font-size: 0.9rem;">
+                        <option value="">-- Seleccionar Interfaz --</option>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="myip" style="font-size: 0.85rem; margin-bottom: 0.3rem;">Mi IP (Opcional)</label>
+                    <input type="text" id="myip" name="myip" placeholder="Ej: 192.168.1.50" style="padding: 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #e2e8f0; font-size: 0.9rem;">
+                </div>
             </div>
         </div>
 
@@ -175,7 +187,6 @@
         <div class="form-section" id="activeScanSection">
             <h2>🔍 Capacidades de Escaneo Activo</h2>
 
-            <!-- Importación Nmap -->
             <details class="import-section"
                 style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed rgba(59, 130, 246, 0.3); border-radius: 8px;">
                 <summary style="cursor: pointer; color: var(--accent-blue); font-weight: 500; font-size: 0.9rem;">
@@ -186,21 +197,9 @@
                         <label for="xml_files" style="font-size: 0.8rem;">Archivo(s) XML de Nmap</label>
                         <input type="file" id="xml_files" name="xml_files" accept=".xml" multiple
                             style="font-size: 0.8rem; padding: 0.3rem;">
-                        <small style="display: block; color: #94a3b8; font-size: 0.7rem; margin-top: 2px;">Puedes seleccionar varios archivos</small>
+                        <small style="display: block; color: #94a3b8; font-size: 0.7rem; margin-top: 2px;">Puedes seleccionar varios archivos. Usará el Origen e Interfaz definidos arriba.</small>
                     </div>
-                    <div class="form-group" style="margin-bottom: 0.5rem;">
-                        <label for="xml_myip" style="font-size: 0.8rem;">IP de Origen (opcional)</label>
-                        <input type="text" id="xml_myip" name="myip" placeholder="Ej: 192.168.1.10"
-                            style="font-size: 0.8rem; padding: 0.3rem; width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                    </div>
-                    <div class="form-group" style="margin-bottom: 0.5rem;">
-                        <label for="xml_interface" style="font-size: 0.8rem;">Interfaz (opcional)</label>
-                        <select id="xml_interface" name="interface"
-                            style="font-size: 0.8rem; padding: 0.3rem; width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                            <option value="">-- Seleccionar Interfaz --</option>
-                        </select>
-                    </div>
-                    <button type="button" class="btn btn-sm" id="importXmlBtn" style="font-size: 0.75rem;">
+                    <button type="button" class="btn btn-sm" id="importXmlBtn" style="font-size: 0.75rem; background: var(--accent-blue); color: white;">
                         <span id="importBtnSpinner" class="spinner hidden" style="margin-right: 5px;">⏳</span>
                         <span id="importBtnText">📥 Importar XMLs</span>
                     </button>
@@ -362,7 +361,7 @@
         <div class="form-section" id="passiveScanSection" style="display: none;">
             <h2>🎧 Configuración de Escaneo Pasivo</h2>
 
-            <!-- Importación PCAP (Movido aquí) -->
+            <!-- Importación PCAP -->
             <details class="import-section"
                 style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 8px;">
                 <summary style="cursor: pointer; color: #10b981; font-weight: 500; font-size: 0.9rem;">
@@ -373,21 +372,9 @@
                         <label for="pcap_files" style="font-size: 0.8rem;">Archivo(s) PCAP/PCAPNG</label>
                         <input type="file" id="pcap_files" name="pcap_files" accept=".pcap,.pcapng" multiple
                             style="font-size: 0.8rem; padding: 0.3rem;">
-                        <small style="display: block; color: #94a3b8; font-size: 0.7rem; margin-top: 2px;">Puedes seleccionar varios archivos</small>
+                        <small style="display: block; color: #94a3b8; font-size: 0.7rem; margin-top: 2px;">Puedes seleccionar varios archivos. Usará el Origen e Interfaz definidos arriba.</small>
                     </div>
-                    <div class="form-group" style="margin-bottom: 0.5rem;">
-                        <label for="pcap_myip" style="font-size: 0.8rem;">IP de Origen (opcional)</label>
-                        <input type="text" id="pcap_myip" name="myip" placeholder="Ej: 192.168.1.10"
-                            style="font-size: 0.8rem; padding: 0.3rem; width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                    </div>
-                    <div class="form-group" style="margin-bottom: 0.5rem;">
-                        <label for="pcap_interface" style="font-size: 0.8rem;">Interfaz (opcional)</label>
-                        <select id="pcap_interface" name="interface"
-                            style="font-size: 0.8rem; padding: 0.3rem; width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                            <option value="">-- Seleccionar Interfaz --</option>
-                        </select>
-                    </div>
-                    <button type="button" class="btn btn-sm btn-success" id="importPcapBtn" style="font-size: 0.75rem; background: #10b981;">
+                    <button type="button" class="btn btn-sm btn-success" id="importPcapBtn" style="font-size: 0.75rem; background: #10b981; color: white;">
                         <span id="importPcapBtnSpinner" class="spinner hidden" style="margin-right: 5px;">⏳</span>
                         <span id="importPcapBtnText">🎧 Importar PCAPs</span>
                     </button>
@@ -533,6 +520,32 @@
         updateNmapCommand();
     }
 
+    // Cargar orígenes (locations) basado en organización
+    async function loadLocations() {
+        const orgInput = document.getElementById('organization');
+        const orgName = orgInput ? orgInput.value.trim() : '';
+        const datalist = document.getElementById('locationsList');
+        
+        if (!datalist) return;
+        
+        if (!orgName) {
+            datalist.innerHTML = '';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/locations?organization=${encodeURIComponent(orgName)}`);
+            if (response.ok) {
+                const locations = await response.json();
+                datalist.innerHTML = locations.map(loc =>
+                    `<option value="${loc.location}">${loc.location}</option>`
+                ).join('');
+            }
+        } catch (error) {
+            console.error('Error cargando orígenes:', error);
+        }
+    }
+
     // Cargar organizaciones para ambos formularios
     async function loadOrganizations() {
         try {
@@ -554,9 +567,7 @@
     // Cargar interfaces de red
     async function loadInterfaces() {
         const interfaceSelects = [
-            document.getElementById('interface'),
-            document.getElementById('xml_interface'),
-            document.getElementById('pcap_interface')
+            document.getElementById('interface')
         ].filter(el => el !== null);
 
         if (interfaceSelects.length === 0) return;
@@ -616,14 +627,14 @@
             
             if (webSuggestionsData.length > 0) {
                 webBox.style.display = 'block';
-                // Usamos un Set para IPs únicas
-                const uniqueWebIps = [...new Set(webSuggestionsData.map(t => t.ip_address))];
-                webList.innerHTML = uniqueWebIps.map(ip => {
-                    const info = webSuggestionsData.find(t => t.ip_address === ip);
-                    return `<span class="suggestion-badge" onclick="addTargetToSpecific('${ip}')" 
+                const uniqueWebIps = [...new Set(webSuggestionsData.map(t => `${t.ip_address}:${t.port}`))];
+                webList.innerHTML = uniqueWebIps.map(targetStr => {
+                    const [ip, port] = targetStr.split(':');
+                    const info = webSuggestionsData.find(t => t.ip_address === ip && t.port == port);
+                    return `<span class="suggestion-badge" onclick="addTargetToSpecific('${targetStr}')" 
                            style="background: #334155; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; border: 1px solid #475569; display: flex; flex-direction: column;">
                         <span style="color: #e2e8f0;">${ip}</span>
-                        <small style="color: #94a3b8; font-size: 0.65rem;">Puerto ${info.port} (${info.service_name})</small>
+                        <small style="color: #94a3b8; font-size: 0.65rem;">Puerto ${port} (${info.service_name})</small>
                     </span>`;
                 }).join('');
             } else {
@@ -650,11 +661,11 @@
         }
     }
 
-    function addTargetToSpecific(ip) {
+    function addTargetToSpecific(targetStr) {
         const input = document.getElementById('target_range_specific');
         const currentTargets = input.value.trim() === '' ? [] : input.value.split(',').map(i => i.trim());
-        if (!currentTargets.includes(ip)) {
-            currentTargets.push(ip);
+        if (!currentTargets.includes(targetStr)) {
+            currentTargets.push(targetStr);
             input.value = currentTargets.join(', ');
         }
     }
@@ -665,8 +676,9 @@
         const source = type === 'web' ? webSuggestionsData : winSuggestionsData;
         
         source.forEach(t => {
-            if (!currentTargets.includes(t.ip_address)) {
-                currentTargets.push(t.ip_address);
+            let targetStr = type === 'web' ? `${t.ip_address}:${t.port}` : t.ip_address;
+            if (!currentTargets.includes(targetStr)) {
+                currentTargets.push(targetStr);
             }
         });
         
@@ -1032,6 +1044,12 @@
     }
 
     // Event listeners para actualizar el comando cuando cambian las opciones
+    const orgInputEl = document.getElementById('organization');
+    if (orgInputEl && !orgInputEl.readOnly) {
+        orgInputEl.addEventListener('input', loadLocations);
+        orgInputEl.addEventListener('change', loadLocations);
+    }
+
     document.getElementById('scan_mode').addEventListener('change', function () {
         toggleScanMode();
         updateNmapCommand();
@@ -1091,6 +1109,7 @@
             location: formData.get('location'),
             target_range: targetRange,
             interface: formData.get('interface') || 'eth0',
+            myip: formData.get('myip') || null,
             scan_mode: scanMode,
             host_discovery: scanMode === 'active' ? formData.has('host_discovery') : false,
             nmap: scanMode === 'active' ? formData.has('nmap') : false,
@@ -1570,6 +1589,7 @@
 
     // Restaurar seguimiento cuando se carga la página
     loadOrganizations();
+    loadLocations();
     loadInterfaces();
     restoreScanTracking();
 
@@ -1629,11 +1649,12 @@
             formData.append('organization', org);
             formData.append('location', loc);
             
-            const myip = document.getElementById('xml_myip').value;
-            if (myip) formData.append('myip', myip);
-            
-            const iface = document.getElementById('xml_interface').value;
+            // Re-using global interface field
+            const iface = document.getElementById('interface') ? document.getElementById('interface').value : '';
             if (iface) formData.append('interface', iface);
+            
+            const myip = document.getElementById('myip') ? document.getElementById('myip').value : '';
+            if (myip) formData.append('myip', myip);
 
             try {
                 const response = await fetch('/api/scan/import-xml', {
@@ -1669,8 +1690,6 @@
 
                     // Limpiar campos
                     fileInput.value = '';
-                    const myipInput = document.getElementById('xml_myip');
-                    if (myipInput) myipInput.value = '';
                 } else {
                     importResult.style.display = 'block';
                     importResult.innerHTML = `
@@ -1766,11 +1785,12 @@
             formDataPcap.append('organization', orgPcap);
             formDataPcap.append('location', locPcap);
             
-            const myipPcap = document.getElementById('pcap_myip').value;
-            if (myipPcap) formDataPcap.append('myip', myipPcap);
-            
-            const ifacePcap = document.getElementById('pcap_interface').value;
+            // Re-using global interface field
+            const ifacePcap = document.getElementById('interface') ? document.getElementById('interface').value : '';
             if (ifacePcap) formDataPcap.append('interface', ifacePcap);
+            
+            const myipPcap = document.getElementById('myip') ? document.getElementById('myip').value : '';
+            if (myipPcap) formDataPcap.append('myip', myipPcap);
 
             try {
                 const response = await fetch('/api/scan/import-pcap', {
@@ -1806,8 +1826,6 @@
 
                     // Limpiar campos
                     fileInputPcap.value = '';
-                    const myipInputPcap = document.getElementById('pcap_myip');
-                    if (myipInputPcap) myipInputPcap.value = '';
                 } else {
                     importPcapResult.style.display = 'block';
                     importPcapResult.innerHTML = `
