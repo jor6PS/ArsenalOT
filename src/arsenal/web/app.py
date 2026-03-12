@@ -1487,8 +1487,13 @@ async def get_neo4j_organizations(request: Neo4jQueryRequest):
     graph = get_neo4j_graph(request.ip, request.username, request.password)
     
     try:
-        query = "MATCH (o:ORG) RETURN DISTINCT o.org as org ORDER BY o.org"
+        query = "MATCH (o:ORGANIZACION) RETURN DISTINCT o.name as org ORDER BY org"
         result = graph.run(query).data()
+        
+        # Fallback a (o:ORG) si no hay resultados
+        if not result:
+            query = "MATCH (o:ORG) RETURN DISTINCT o.org as org ORDER BY o.org"
+            result = graph.run(query).data()
         
         if not result:
             return []
@@ -1510,13 +1515,15 @@ async def get_neo4j_dashboard_stats(request: Neo4jQueryRequest):
         org_filter = "WHERE o.name = $org"
         host_filter = "WHERE h.ORGANIZACION = $org"
         service_where = "WHERE h.ORGANIZACION = $org"
+        seg_filter = "WHERE s.org = $org"
     else:
         org_filter = ""
         host_filter = ""
         service_where = ""
+        seg_filter = ""
     
     queries = {
-        "organizations": f"MATCH (o:ORG) {org_filter} RETURN count(DISTINCT o.org) as count",
+        "organizations": f"MATCH (o:ORGANIZACION) {org_filter} RETURN count(DISTINCT o.name) as count",
         "hosts": f"""
             MATCH (h:HOST) 
             {host_filter}
@@ -1533,9 +1540,9 @@ async def get_neo4j_dashboard_stats(request: Neo4jQueryRequest):
             RETURN count(s) as count
         """,
         "locations": f"""
-            MATCH (s:SEG) 
-            {seg_filter}
-            RETURN count(DISTINCT s.SEG) as count
+            MATCH (h:HOST) 
+            {host_filter} AND h.SUBRED IS NOT NULL AND h.SUBRED <> 'Unknown'
+            RETURN count(DISTINCT h.SUBRED) as count
         """
     }
     
@@ -1681,8 +1688,8 @@ async def get_neo4j_network_graph(request: Neo4jQueryRequest):
     params = {}
     if request.organization:
         params["org"] = request.organization
-        org_where = "WHERE n.org = $org"
-        rel_where = "WHERE a.org = $org AND b.org = $org"
+        org_where = "WHERE (n.org = $org OR n.ORGANIZACION = $org OR n.name = $org)"
+        rel_where = "WHERE (a.org = $org OR a.ORGANIZACION = $org OR a.name = $org) AND (b.org = $org OR b.ORGANIZACION = $org OR b.name = $org)"
     else:
         org_where = ""
         rel_where = ""

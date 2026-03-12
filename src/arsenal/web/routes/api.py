@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
-from arsenal.web.core.models import NetworkCreateRequest, CriticalDeviceRequest
+from arsenal.web.core.models import NetworkCreateRequest, NetworkUpdateRequest, CriticalDeviceRequest, CriticalDeviceUpdateRequest
 from arsenal.web.core.deps import storage
 
 router = APIRouter()
@@ -385,6 +385,30 @@ async def delete_network(network_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error eliminando red: {str(e)}")
 
+@router.put("/api/networks/{network_id}")
+async def update_network(network_id: int, request: NetworkUpdateRequest):
+    """Actualiza una red por su ID."""
+    try:
+        if hasattr(storage, 'update_network'):
+            updated = storage.update_network(
+                network_id=network_id,
+                network_name=request.network_name,
+                network_range=request.network_range,
+                system_name=request.system_name
+            )
+            if updated:
+                return {"status": "success", "message": "Red actualizada correctamente"}
+            else:
+                raise HTTPException(status_code=404, detail="Red no encontrada")
+        else:
+            raise HTTPException(status_code=501, detail="update_network no implementado en storage")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error actualizando red: {str(e)}")
+
 
 # ------------------------------------------------------------------ #
 #  DISPOSITIVOS CRÍTICOS                                              #
@@ -414,6 +438,23 @@ async def create_critical_device(req: CriticalDeviceRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.put("/api/critical-devices/{device_id}")
+async def update_critical_device(device_id: int, req: CriticalDeviceUpdateRequest):
+    """Actualiza un dispositivo crítico."""
+    try:
+        updated = storage.update_critical_device(
+            device_id=device_id,
+            name=req.name,
+            ips=req.ips,
+            reason=req.reason,
+        )
+        if updated:
+            return {"status": "success", "message": "Dispositivo crítico actualizado"}
+        else:
+            raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/api/critical-devices/{device_id}")
 async def delete_critical_device(device_id: int):

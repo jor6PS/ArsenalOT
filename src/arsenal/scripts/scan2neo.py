@@ -288,6 +288,12 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
     # Track de hosts creados para correlación posterior (IP -> List[Node])
     ip_nodes_map = {}
 
+    print("📊 Asegurando índices de rendimiento en Neo4j...")
+    try:
+        graph.run("CREATE INDEX host_org_ip_ds IF NOT EXISTS FOR (h:HOST) ON (h.ORGANIZACION, h.IP, h.DISCOVERY_SOURCE)")
+    except Exception as e:
+        print(f"⚠️ No se pudo crear el índice compuesto de HOST: {e}")
+
     for scan in all_scans:
         org_name = scan['organization_name'].upper()
         scan_mode = scan['scan_mode'] or 'active'

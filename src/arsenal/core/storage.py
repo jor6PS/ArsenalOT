@@ -1308,6 +1308,55 @@ class ScanStorage:
         finally:
             conn.close()
 
+    def update_network(self, network_id: int, network_name: str, network_range: str, system_name: str = None) -> bool:
+        """Actualiza una red existente."""
+        try:
+            # Usar strict=False para permitir rangos con bits de host (ej. 192.168.1.1/24)
+            net_obj = ipaddress.ip_network(network_range, strict=False)
+            normalized_range = str(net_obj)
+        except ValueError as e:
+            raise ValueError(f"Rango de red inválido: {e}")
+
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE networks
+                SET network_name = ?, network_range = ?, system_name = ?
+                WHERE id = ?
+            """, (network_name, normalized_range, system_name, network_id))
+            
+            rows = cursor.rowcount
+            
+            # Retroactive assignment si se actualizó
+            if rows > 0:
+                cursor.execute("SELECT organization_name FROM networks WHERE id = ?", (network_id,))
+                org_row = cursor.fetchone()
+                if org_row:
+                    organization = org_row[0]
+                    cursor.execute("""
+                        SELECT DISTINCT h.id, h.ip_address
+                        FROM hosts h
+                        JOIN scan_results sr ON sr.host_id = h.id
+                        JOIN scans s ON sr.scan_id = s.id
+                        WHERE s.organization_name = ?
+                    """, (organization,))
+                    
+                    org_hosts = cursor.fetchall()
+                    for h_id, h_ip in org_hosts:
+                        try:
+                            ip_obj = ipaddress.ip_address(h_ip)
+                            if ip_obj in net_obj:
+                                cursor.execute("UPDATE hosts SET subnet = ? WHERE id = ?", (normalized_range, h_id))
+                        except ValueError:
+                            pass
+            
+            conn.commit()
+            return rows > 0
+        finally:
+            conn.close()
+
     def delete_network(self, network_id: int) -> bool:
         """Elimina una red registrada."""
         conn = sqlite3.connect(self.db_path, timeout=30.0)
@@ -1564,6 +1613,23 @@ class ScanStorage:
         conn.commit()
         conn.close()
         return new_id
+
+    def update_critical_device(self, device_id: int, name: str, ips: str, reason: str) -> bool:
+        """Actualiza un dispositivo crítico."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE critical_devices
+                SET name = ?, ips = ?, reason = ?
+                WHERE id = ?
+            """, (name, ips.strip(), reason, device_id))
+            rows = cursor.rowcount
+            conn.commit()
+            return rows > 0
+        finally:
+            conn.close()
 
     def delete_critical_device(self, device_id: int) -> bool:
         """Elimina un dispositivo crítico por id. Devuelve True si se borró."""

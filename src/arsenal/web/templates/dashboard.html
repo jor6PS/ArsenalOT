@@ -452,6 +452,7 @@
                 html += nets.map(net => `
                     <div class="network-card">
                         <button class="network-delete-btn" onclick="deleteNetwork(${net.id})">🗑️</button>
+                        <button onclick='editNetwork(${net.id}, ${JSON.stringify(net.network_name)}, ${JSON.stringify(net.network_range)}, ${JSON.stringify(net.system_name || "")})' style="position: absolute; top: 0.5rem; right: 2rem; background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: none; border-radius: 4px; cursor: pointer; padding: 0.2rem 0.5rem; font-size: 0.8rem;" title="Editar">✏️</button>
                         <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem;">${net.network_name}</div>
                         <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8;">${net.network_range}</div>
                     </div>
@@ -513,6 +514,33 @@
             return;
         }
         window.location.href = `/api/networks/export?organization=${encodeURIComponent(org)}`;
+    }
+
+    async function editNetwork(id, currentName, currentRange, currentSystem) {
+        const newName = prompt('Nombre de la red:', currentName);
+        if (newName === null) return;
+        const newRange = prompt('Rango (ej: 192.168.1.0/24):', currentRange);
+        if (newRange === null) return;
+        const newSystem = prompt('Sistema Opcional:', currentSystem);
+        if (newSystem === null) return;
+        
+        try {
+            const response = await fetch(`/api/networks/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    network_name: newName,
+                    network_range: newRange,
+                    system_name: newSystem || null
+                })
+            });
+            if (!response.ok) throw new Error(await response.text());
+            const org = currentFilters.organization || document.getElementById('filterOrg').value;
+            loadNetworks(org);
+        } catch (error) {
+            console.error(error);
+            alert('Error al editar red: ' + error.message);
+        }
     }
 
     async function deleteNetwork(id) {
@@ -1290,6 +1318,8 @@
                 <div style="background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; padding: 1rem; position: relative;">
                     <button onclick="deleteCriticalDevice(${d.id})" title="Eliminar"
                         style="position: absolute; top: 0.6rem; right: 0.6rem; background: none; border: none; color: #f87171; cursor: pointer; font-size: 1rem;">🗑️</button>
+                    <button onclick='editCriticalDevice(${d.id}, ${JSON.stringify(d.name)}, ${JSON.stringify(d.ips)}, ${JSON.stringify(d.reason)})' title="Editar"
+                        style="position: absolute; top: 0.6rem; right: 2.2rem; background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 1rem;">✏️</button>
                     <div style="font-weight: 600; color: #f87171; margin-bottom: 0.3rem;">🚨 ${d.name}</div>
                     <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8; margin-bottom: 0.4rem;">${d.ips}</div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary);">${d.reason}</div>
@@ -1318,6 +1348,27 @@
             loadCriticalDevices();
         } catch (e) {
             alert('❌ Error añadiendo dispositivo crítico: ' + e.message);
+        }
+    }
+
+    async function editCriticalDevice(id, currentName, currentIps, currentReason) {
+        const newName = prompt('Nombre:', currentName);
+        if (newName === null) return;
+        const newIps = prompt('IPs separadas por coma:', currentIps);
+        if (newIps === null) return;
+        const newReason = prompt('Motivo de criticidad:', currentReason);
+        if (newReason === null) return;
+
+        try {
+            const resp = await fetch(`/api/critical-devices/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName, ips: newIps, reason: newReason })
+            });
+            if (!resp.ok) throw new Error(await resp.text());
+            loadCriticalDevices();
+        } catch (e) {
+            alert('❌ Error editando dispositivo crítico: ' + e.message);
         }
     }
 

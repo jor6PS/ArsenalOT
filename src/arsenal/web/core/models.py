@@ -40,8 +40,18 @@ class NetworkCreateRequest(BaseModel):
     network_range: str
     system_name: Optional[str] = None
 
+class NetworkUpdateRequest(BaseModel):
+    network_name: str
+    network_range: str
+    system_name: Optional[str] = None
+
 class CriticalDeviceRequest(BaseModel):
     organization: str
     name: str
     ips: str         # IPs separadas por comas: "192.168.1.1, 10.0.0.5"
+    reason: str
+
+class CriticalDeviceUpdateRequest(BaseModel):
+    name: str
+    ips: str
     reason: str
