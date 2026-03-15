@@ -54,10 +54,20 @@ def connect_to_neo4j(ip: str, username: str = None, password: str = None) -> Gra
 
 def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[Dict]:
     """Obtiene los datos de los escaneos de la base de datos."""
-    # Copiar la base de datos a un directorio temporal para evitar problemas de permisos
+    # Copiar la base de datos y sus archivos temporales a un directorio temporal
     temp_dir = tempfile.mkdtemp()
     temp_db_path = os.path.join(temp_dir, "scans.db")
+    
+    # Copiar main DB
     shutil.copy2(db_path, temp_db_path)
+    
+    # Copiar WAL y SHM si existen para asegurar que leemos los datos más recientes
+    wal_path = f"{db_path}-wal"
+    shm_path = f"{db_path}-shm"
+    if os.path.exists(wal_path):
+        shutil.copy2(wal_path, f"{temp_db_path}-wal")
+    if os.path.exists(shm_path):
+        shutil.copy2(shm_path, f"{temp_db_path}-shm")
     
     conn = sqlite3.connect(temp_db_path)
     conn.row_factory = sqlite3.Row
