@@ -20,7 +20,7 @@ PySocks==1.7.1
 python-nmap==0.7.1
 pytz==2025.1
 requests==2.32.3
-# selenium eliminado: las capturas web usan EyeWitness (ver Dockerfile / README)
+selenium==4.30.0
 six==1.17.0
 sniffio==1.3.1
 sortedcontainers==2.4.0
