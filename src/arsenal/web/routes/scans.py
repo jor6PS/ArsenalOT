@@ -57,12 +57,12 @@ async def get_scans_list(organization: Optional[str] = None, location: Optional[
         params = []
         
         if organization:
-            query += " AND organization_name = ?"
-            params.append(organization.upper())
-        
+            query += " AND UPPER(organization_name) = UPPER(?)"
+            params.append(organization)
+
         if location:
-            query += " AND location = ?"
-            params.append(location.upper())
+            query += " AND UPPER(location) = UPPER(?)"
+            params.append(location)
         
         query += " ORDER BY started_at DESC LIMIT 100"
         

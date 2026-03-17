@@ -1254,7 +1254,7 @@ class ScanStorage:
             cursor.execute("""
                 SELECT id, organization_name, system_name, network_name, network_range, created_at
                 FROM networks
-                WHERE organization_name = ?
+                WHERE UPPER(organization_name) = UPPER(?)
                 ORDER BY system_name, network_name
             """, (organization,))
             
@@ -1590,9 +1590,9 @@ class ScanStorage:
         rows = conn.execute(
             """SELECT id, organization_name, name, ips, reason, created_at
                FROM critical_devices
-               WHERE organization_name = ?
+               WHERE UPPER(organization_name) = UPPER(?)
                ORDER BY created_at DESC""",
-            (organization.upper(),)
+            (organization,)
         ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
@@ -1851,12 +1851,12 @@ class ScanStorage:
             query += " AND pc.scan_id = ?"
             params.append(scan_id)
         if organization:
-            query += " AND s.organization_name = ?"
-            params.append(organization.upper())
+            query += " AND UPPER(s.organization_name) = UPPER(?)"
+            params.append(organization)
         if location:
-            query += " AND s.location = ?"
-            params.append(location.upper())
-            
+            query += " AND UPPER(s.location) = UPPER(?)"
+            params.append(location)
+
         query += " ORDER BY pc.last_seen DESC"
         
         try:

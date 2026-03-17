@@ -29,16 +29,16 @@ async def get_stats(
     result_params = []
     
     if organization:
-        scan_filter += " AND s.organization_name = ?"
-        scan_params.append(organization.upper())
-        result_filter += " AND s.organization_name = ?"
-        result_params.append(organization.upper())
-        
+        scan_filter += " AND UPPER(s.organization_name) = UPPER(?)"
+        scan_params.append(organization)
+        result_filter += " AND UPPER(s.organization_name) = UPPER(?)"
+        result_params.append(organization)
+
     if location:
-        scan_filter += " AND s.location = ?"
-        scan_params.append(location.upper())
-        result_filter += " AND s.location = ?"
-        result_params.append(location.upper())
+        scan_filter += " AND UPPER(s.location) = UPPER(?)"
+        scan_params.append(location)
+        result_filter += " AND UPPER(s.location) = UPPER(?)"
+        result_params.append(location)
         
     if scan_id:
         scan_filter += " AND s.id = ?"
@@ -222,12 +222,12 @@ async def get_locations(organization: Optional[str] = None):
     
     if organization:
         query = """
-            SELECT DISTINCT location 
-            FROM scans 
-            WHERE organization_name = ?
+            SELECT DISTINCT location
+            FROM scans
+            WHERE UPPER(organization_name) = UPPER(?)
             ORDER BY location
         """
-        locations = cursor.execute(query, (organization.upper(),)).fetchall()
+        locations = cursor.execute(query, (organization,)).fetchall()
     else:
         query = """
             SELECT DISTINCT location 
@@ -247,11 +247,11 @@ async def get_target_suggestions(organization: str, location: Optional[str] = No
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    params = [organization.upper()]
+    params = [organization]
     loc_filter = ""
     if location:
-        loc_filter = " AND s.location = ?"
-        params.append(location.upper())
+        loc_filter = " AND UPPER(s.location) = UPPER(?)"
+        params.append(location)
         
     # 1. Sugerencias Web (para Screenshots/Source Code)
     web_query = f"""
@@ -259,10 +259,10 @@ async def get_target_suggestions(organization: str, location: Optional[str] = No
         FROM scan_results sr
         JOIN hosts h ON h.id = sr.host_id
         JOIN scans s ON s.id = sr.scan_id
-        WHERE s.organization_name = ? {loc_filter}
+        WHERE UPPER(s.organization_name) = UPPER(?) {loc_filter}
         AND (
-            sr.port IN (80, 443, 8080, 8443, 8888, 9090) 
-            OR sr.service_name LIKE '%http%' 
+            sr.port IN (80, 443, 8080, 8443, 8888, 9090)
+            OR sr.service_name LIKE '%http%'
             OR sr.service_name LIKE '%ssl/http%'
             OR sr.service_name LIKE '%https%'
         )
@@ -277,9 +277,9 @@ async def get_target_suggestions(organization: str, location: Optional[str] = No
         FROM hosts h
         JOIN scan_results sr ON h.id = sr.host_id
         JOIN scans s ON s.id = sr.scan_id
-        WHERE s.organization_name = ? {loc_filter}
+        WHERE UPPER(s.organization_name) = UPPER(?) {loc_filter}
         AND (
-            h.os_info_json LIKE '%Windows%' 
+            h.os_info_json LIKE '%Windows%'
             OR h.os_info_json LIKE '%Microsoft%'
             OR sr.port IN (135, 139, 445)
         )
@@ -308,7 +308,7 @@ async def get_target_suggestions(organization: str, location: Optional[str] = No
 async def get_networks(organization: str):
     """Obtiene lista de redes vinculadas a una organización."""
     try:
-        networks = getattr(storage, 'get_networks', lambda org: [])(organization.upper())
+        networks = getattr(storage, 'get_networks', lambda org: [])(organization)
         return [dict(n) for n in networks]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo redes: {str(e)}")
@@ -317,7 +317,7 @@ async def get_networks(organization: str):
 async def export_networks(organization: str):
     """Exporta las redes de una organización en un archivo TXT formateado."""
     try:
-        networks = getattr(storage, 'get_networks', lambda org: [])(organization.upper())
+        networks = getattr(storage, 'get_networks', lambda org: [])(organization)
         if not networks:
             return "No hay redes registradas para esta organización."
             
@@ -519,11 +519,11 @@ async def export_results_csv(
         where = "WHERE 1=1"
         res_params = []
         if organization:
-            where += " AND s.organization_name = ?"
-            res_params.append(organization.upper())
+            where += " AND UPPER(s.organization_name) = UPPER(?)"
+            res_params.append(organization)
         if location:
-            where += " AND s.location = ?"
-            res_params.append(location.upper())
+            where += " AND UPPER(s.location) = UPPER(?)"
+            res_params.append(location)
         if scan_id:
             where += " AND sr.scan_id = ?"
             res_params.append(scan_id)

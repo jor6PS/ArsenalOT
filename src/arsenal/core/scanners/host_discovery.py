@@ -11,6 +11,7 @@ Incluye múltiples técnicas de descubrimiento:
 """
 
 import subprocess
+import shutil
 import re
 import socket
 import ipaddress
@@ -61,9 +62,7 @@ class HostDiscovery:
         discovered: Dict[str, Dict] = {}
 
         # Verificar si arp-scan está disponible
-        try:
-            subprocess.run(["which", "arp-scan"], check=True, capture_output=True)
-        except (subprocess.CalledProcessError, FileNotFoundError):
+        if not shutil.which("arp-scan"):
             return discovered
 
         # Construir comando arp-scan

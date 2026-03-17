@@ -874,12 +874,12 @@ async def get_results(
     params = []
     
     if organization:
-        query += " AND s.organization_name = ?"
-        params.append(organization.upper())
-    
+        query += " AND UPPER(s.organization_name) = UPPER(?)"
+        params.append(organization)
+
     if location:
-        query += " AND s.location = ?"
-        params.append(location.upper())
+        query += " AND UPPER(s.location) = UPPER(?)"
+        params.append(location)
     
     if scan_id:
         query += " AND s.id = ?"
