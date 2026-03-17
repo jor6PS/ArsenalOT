@@ -104,33 +104,52 @@ async def cleanup_zombie_scans_endpoint(max_hours: float = 2.0):
     cleaned = 0
     for zombie in zombies:
         scan_id = zombie['id']
+        scan_id_str = str(scan_id)
+
+        # Terminar proceso/hilo si aún está vivo
+        if scan_id_str in running_processes:
+            try:
+                proc = running_processes[scan_id_str]
+                if proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=3)
+                    except Exception:
+                        proc.kill()
+            except Exception:
+                pass
+            del running_processes[scan_id_str]
+
+        if scan_id_str in running_scans:
+            del running_scans[scan_id_str]
+
         hosts_count = cursor.execute("""
             SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
         """, (scan_id,)).fetchone()[0]
-        
+
         ports_count = cursor.execute("""
             SELECT COUNT(*) FROM scan_results WHERE scan_id = ?
         """, (scan_id,)).fetchone()[0]
-        
+
         if hosts_count > 0 or ports_count > 0:
             status = 'completed'
             error_message = None
         else:
             status = 'failed'
             error_message = f"Escaneo zombie limpiado manualmente (más de {max_hours}h sin actualizar)."
-        
+
         cursor.execute("""
             UPDATE scans
             SET status = ?, completed_at = ?, hosts_discovered = ?,
                 ports_found = ?, error_message = ?
             WHERE id = ?
-        """, (status, datetime.now().isoformat(), hosts_count, ports_count, 
+        """, (status, datetime.now().isoformat(), hosts_count, ports_count,
               error_message, scan_id))
         cleaned += 1
-    
+
     conn.commit()
     conn.close()
-    
+
     return {"cleaned": cleaned, "message": f"Se limpiaron {cleaned} escaneo(s) zombie"}
 
 @app.get("/api/scan/{scan_id}/status")
@@ -310,48 +329,43 @@ async def start_scan(config: ScanConfig):
 
 @app.post("/api/scan/{scan_id}/stop")
 async def stop_scan(scan_id: int):
-    """Detiene un escaneo en ejecución sin borrarlo."""
+    """Detiene un escaneo en ejecución sin borrarlo (conserva los datos recogidos)."""
     scan_id_str = str(scan_id)
-    
-    # Verificar si el escaneo está en ejecución
-    if scan_id_str not in running_processes:
-        # Verificar en la BD si está running
-        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        scan = cursor.execute("SELECT status FROM scans WHERE id = ?", (scan_id,)).fetchone()
-        conn.close()
-        
-        if not scan:
-            raise HTTPException(status_code=404, detail="Escaneo no encontrado")
-        if scan['status'] != 'running':
-            raise HTTPException(status_code=400, detail=f"El escaneo no está en ejecución (estado: {scan['status']})")
-        
-        # Si no está en running_processes pero está running, marcar como detenido
-        storage.complete_scan(scan_id, error_message="Escaneo detenido por el usuario")
-        return {"status": "success", "message": "Escaneo detenido"}
-    
-    # Obtener el proceso
-    process = running_processes[scan_id_str]
-    
+
+    # Verificar que el escaneo existe y está en ejecución
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    scan = conn.execute("SELECT status FROM scans WHERE id = ?", (scan_id,)).fetchone()
+    conn.close()
+
+    if not scan:
+        raise HTTPException(status_code=404, detail="Escaneo no encontrado")
+    if scan['status'] != 'running':
+        raise HTTPException(status_code=400, detail=f"El escaneo no está en ejecución (estado: {scan['status']})")
+
     try:
-        # Terminar el proceso
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except:
-            process.kill()
-        
-        # Marcar como detenido en la BD
-        storage.complete_scan(scan_id, error_message="Escaneo detenido por el usuario")
-        
-        # Limpiar de los diccionarios
+        # Terminar subproceso si existe
         if scan_id_str in running_processes:
+            process = running_processes[scan_id_str]
+            try:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except Exception:
+                        process.kill()
+            except Exception:
+                pass
             del running_processes[scan_id_str]
+
+        # Limpiar hilo (el hilo detectará el cambio de estado en la BD y finalizará solo)
         if scan_id_str in running_scans:
             del running_scans[scan_id_str]
-        
-        return {"status": "success", "message": "Escaneo detenido correctamente"}
+
+        # Marcar como detenido en la BD — el hilo detectará status != 'running' y parará
+        storage.complete_scan(scan_id, error_message="Escaneo detenido por el usuario")
+
+        return {"status": "success", "message": "Escaneo detenido correctamente (datos conservados)"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deteniendo escaneo: {str(e)}")
 

@@ -50,7 +50,7 @@
                     style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);"></span>
                 <span id="connectionText" style="font-weight: 500; color: var(--text-primary);">Desconectado</span>
             </div>
-            <div style="display: flex; gap: 0.5rem;">
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <button type="button" id="connectBtn" class="btn"
                     style="background: #4ECDC4; color: white; padding: 0.5rem 1rem; font-size: 0.9rem;">
                     🔌 Conectar
@@ -58,6 +58,12 @@
                 <button type="button" id="disconnectBtn" class="btn"
                     style="background: #ef4444; color: white; padding: 0.5rem 1rem; font-size: 0.9rem; display: none;">
                     🔌 Desconectar
+                </button>
+                <button type="button" id="openBrowserBtn" class="btn"
+                    onclick="openNeo4jBrowser()"
+                    style="background: #7c3aed; color: white; padding: 0.5rem 1rem; font-size: 0.9rem; display: none;"
+                    title="Abrir Neo4j Browser en nueva pestaña">
+                    🌐 Abrir Neo4j Browser
                 </button>
             </div>
         </div>
@@ -1234,11 +1240,45 @@
         }
     }
 
+    async function openNeo4jBrowser() {
+        const ip = document.getElementById('neo4j_ip').value;
+        if (!ip) {
+            alert('❌ No se ha configurado la IP del servidor Neo4j.');
+            return;
+        }
+
+        const browserUrl = `http://${ip}:7474`;
+
+        if (!isConnected) {
+            alert('❌ Neo4j Browser no disponible: no hay conexión activa con el servidor Neo4j.\n\nConecta primero usando el botón "Conectar".');
+            return;
+        }
+
+        // Intentar verificar si el browser HTTP está accesible
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+            const response = await fetch(browserUrl, { method: 'HEAD', mode: 'no-cors', signal: controller.signal });
+            clearTimeout(timeoutId);
+            // no-cors siempre devuelve opaque (tipo 0), si llega aquí el servidor respondió
+            window.open(browserUrl, '_blank');
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                alert(`❌ Neo4j Browser no se encuentra habilitado o no está accesible en:\n${browserUrl}\n\nVerifica que el servicio Neo4j esté iniciado.`);
+            } else {
+                // fetch fallido por CORS u otro motivo — intentamos abrir igualmente
+                // ya que no-cors puede lanzar error de red si el servidor está caído
+                alert(`❌ Neo4j Browser no se encuentra habilitado o no está accesible en:\n${browserUrl}\n\nVerifica que el servicio Neo4j esté iniciado.`);
+            }
+        }
+    }
+
     function updateConnectionStatus(connected) {
         const indicator = document.getElementById('connectionIndicator');
         const text = document.getElementById('connectionText');
         const connectBtn = document.getElementById('connectBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
+        const openBrowserBtn = document.getElementById('openBrowserBtn');
         const exportBtn = document.getElementById('exportBtn');
         const clearAllBtn = document.getElementById('clearAllBtn');
 
@@ -1248,6 +1288,7 @@
             text.textContent = 'Conectado';
             connectBtn.style.display = 'none';
             disconnectBtn.style.display = 'inline-block';
+            if (openBrowserBtn) openBrowserBtn.style.display = 'inline-block';
             exportBtn.disabled = false;
             clearAllBtn.disabled = false;
         } else {
@@ -1256,6 +1297,7 @@
             text.textContent = 'Desconectado';
             connectBtn.style.display = 'inline-block';
             disconnectBtn.style.display = 'none';
+            if (openBrowserBtn) openBrowserBtn.style.display = 'none';
             exportBtn.disabled = true;
             clearAllBtn.disabled = true;
         }

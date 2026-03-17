@@ -156,14 +156,14 @@
                             <th class="sortable" data-column="ip_address">IP <span class="sort-indicator">⇅</span></th>
                             <th class="sortable" data-column="hostname">Hostname <span class="sort-indicator">⇅</span>
                             </th>
-                            <th class="sortable" data-column="port">Puerto <span class="sort-indicator">⇅</span></th>
-                            <th class="sortable" data-column="protocol">Protocolo <span class="sort-indicator">⇅</span>
+                            <th class="sortable" data-column="port">Puertos <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="protocol">Protocolos <span class="sort-indicator">⇅</span>
                             </th>
-                            <th class="sortable" data-column="service_name">Servicio <span
+                            <th class="sortable" data-column="service_name">Servicios <span
                                     class="sort-indicator">⇅</span></th>
-                            <th class="sortable" data-column="product">Producto <span class="sort-indicator">⇅</span>
+                            <th class="sortable" data-column="product">Productos <span class="sort-indicator">⇅</span>
                             </th>
-                            <th class="sortable" data-column="version">Versión <span class="sort-indicator">⇅</span>
+                            <th class="sortable" data-column="version">Versiones <span class="sort-indicator">⇅</span>
                             </th>
                             <th class="sortable" data-column="organization_name">Organización <span
                                     class="sort-indicator">⇅</span></th>
@@ -205,15 +205,15 @@
                                     class="sort-indicator-passive">⇅</span></th>
                             <th class="sortable-passive" data-column="src_mac">MAC Origen <span
                                     class="sort-indicator-passive">⇅</span></th>
-                            <th class="sortable-passive" data-column="src_port">Puerto Or. <span
+                            <th class="sortable-passive" data-column="src_port">Puertos Or. <span
                                     class="sort-indicator-passive">⇅</span></th>
-                            <th class="sortable-passive" data-column="dst_ip">IP Destino <span
+                            <th class="sortable-passive" data-column="dst_ip">IPs Destino <span
                                     class="sort-indicator-passive">⇅</span></th>
-                            <th class="sortable-passive" data-column="dst_mac">MAC Destino <span
+                            <th class="sortable-passive" data-column="dst_mac">MACs Destino <span
                                     class="sort-indicator-passive">⇅</span></th>
-                            <th class="sortable-passive" data-column="dst_port">Puerto Des. <span
+                            <th class="sortable-passive" data-column="dst_port">Puertos Des. <span
                                     class="sort-indicator-passive">⇅</span></th>
-                            <th class="sortable-passive" data-column="protocol">Protocolo <span
+                            <th class="sortable-passive" data-column="protocol">Protocolos <span
                                     class="sort-indicator-passive">⇅</span></th>
                             <th class="sortable-passive" data-column="last_seen">Última Vez <span
                                     class="sort-indicator-passive">⇅</span></th>
@@ -250,14 +250,76 @@
         }
 
         function exportCSV() {
-            const org = document.getElementById('filterOrg').value;
-            const loc = document.getElementById('filterLocation') ? document.getElementById('filterLocation').value : '';
-            const scan = document.getElementById('filterScan').value;
-            const params = new URLSearchParams();
-            if (org) params.append('organization', org);
-            if (loc) params.append('location', loc);
-            if (scan) params.append('scan_id', scan);
-            window.location.href = `/api/results/export-csv?${params}`;
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const columnFilter = document.getElementById('columnFilter').value;
+            const columnValue = document.getElementById('columnFilterValue').value.toLowerCase();
+
+            // Get currently visible filtered data
+            let filteredActive = [...allResults];
+            if (searchTerm) {
+                filteredActive = filteredActive.filter(r =>
+                    Object.values(r).some(val => val && val.toString().toLowerCase().includes(searchTerm))
+                );
+            }
+            if (columnFilter && columnValue) {
+                filteredActive = filteredActive.filter(r => {
+                    let val = r[columnFilter];
+                    if (columnFilter === 'has_screenshot' || columnFilter === 'has_source_code') {
+                        return (val === true) ? ['true', 'yes', 'sí', '1', 'si'].includes(columnValue) : ['false', 'no', '0'].includes(columnValue);
+                    }
+                    return val && val.toString().toLowerCase().includes(columnValue);
+                });
+            }
+
+            const consolidated = consolidateByIp(filteredActive);
+            const passiveConsolidated = consolidatePassiveByIp([...allPassiveResults]);
+
+            const escCsv = v => `"${String(v || '').replace(/"/g, '""')}"`;
+
+            // Active section
+            const activeHeaders = ['IP', 'Hostname', 'Puertos', 'Protocolos', 'Servicios', 'Productos', 'Versiones', 'Organización', 'Ubicación', 'Origen Descubrimiento', 'Screenshot', 'Web Source', 'Crítico'];
+            const activeRows = consolidated.map(row => {
+                const portNums = row.ports.map(p => p.port).filter(Boolean);
+                const protos = [...new Set(row.ports.map(p => p.protocol).filter(Boolean))];
+                const svcs = [...new Set(row.ports.map(p => p.service_name).filter(Boolean))];
+                const prods = [...new Set(row.ports.map(p => p.product).filter(Boolean))];
+                const vers = [...new Set(row.ports.map(p => p.version).filter(Boolean))];
+                const hasShot = row.ports.some(p => p.has_screenshot) ? 'Sí' : 'No';
+                const hasSrc = row.ports.some(p => p.has_source_code) ? 'Sí' : 'No';
+                return [
+                    escCsv(row.ip_address), escCsv(row.hostname), escCsv(portNums.join(';')),
+                    escCsv(protos.join(';')), escCsv(svcs.join(';')), escCsv(prods.join(';')),
+                    escCsv(vers.join(';')), escCsv(row.organization_name), escCsv(row.location),
+                    escCsv(row.discovery_method), escCsv(hasShot), escCsv(hasSrc),
+                    escCsv(row.is_critical ? 'SÍ' : 'No')
+                ].join(',');
+            });
+
+            // Passive section
+            const passiveHeaders = ['IP Origen', 'MAC Origen', 'Puertos Origen', 'IPs Destino', 'MACs Destino', 'Puertos Destino', 'Protocolos', 'Última Vez'];
+            const passiveRows = passiveConsolidated.map(row => [
+                escCsv(row.src_ip), escCsv(row.src_mac), escCsv(row.src_ports.join(';')),
+                escCsv(row.dst_ips.join(';')), escCsv(row.dst_macs.join(';')),
+                escCsv(row.dst_ports.join(';')), escCsv(row.protocols.join(';')), escCsv(row.last_seen)
+            ].join(','));
+
+            let csvContent = 'sep=,\r\n';
+            csvContent += '=== RESULTADOS ACTIVOS ===\r\n';
+            csvContent += activeHeaders.map(escCsv).join(',') + '\r\n';
+            csvContent += activeRows.join('\r\n');
+            if (passiveRows.length > 0) {
+                csvContent += '\r\n\r\n=== RESULTADOS PASIVOS ===\r\n';
+                csvContent += passiveHeaders.map(escCsv).join(',') + '\r\n';
+                csvContent += passiveRows.join('\r\n');
+            }
+
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `resultados_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         async function loadOrganizations() {
@@ -317,6 +379,79 @@
         let currentSortDirection = 'asc';
         let currentSortColumnPassive = null;
         let currentSortDirectionPassive = 'asc';
+
+        // Consolida resultados activos por IP — una fila por host
+        function consolidateByIp(results) {
+            const map = new Map();
+            for (const r of results) {
+                const ip = r.ip_address;
+                if (!map.has(ip)) {
+                    map.set(ip, {
+                        ip_address: ip,
+                        hostname: r.hostname || null,
+                        organization_name: r.organization_name,
+                        location: r.location,
+                        interfaces_json: r.interfaces_json,
+                        is_critical: !!r.is_critical,
+                        discovery_method: r.discovery_method,
+                        ports: []
+                    });
+                }
+                const host = map.get(ip);
+                if (!host.hostname && r.hostname) host.hostname = r.hostname;
+                if (r.is_critical) host.is_critical = true;
+                if (r.interfaces_json && !host.interfaces_json) host.interfaces_json = r.interfaces_json;
+                if (r.port) {
+                    host.ports.push({
+                        port: r.port,
+                        protocol: r.protocol,
+                        service_name: r.service_name,
+                        product: r.product,
+                        version: r.version,
+                        scan_id: r.scan_id,
+                        has_screenshot: !!r.has_screenshot,
+                        has_source_code: !!r.has_source_code
+                    });
+                }
+            }
+            return [...map.values()];
+        }
+
+        // Consolida resultados pasivos por IP origen — una fila por host origen
+        function consolidatePassiveByIp(results) {
+            const map = new Map();
+            for (const r of results) {
+                const ip = r.src_ip;
+                if (!map.has(ip)) {
+                    map.set(ip, {
+                        src_ip: ip,
+                        src_mac: r.src_mac || null,
+                        src_ports: new Set(),
+                        dst_ips: new Set(),
+                        dst_macs: new Set(),
+                        dst_ports: new Set(),
+                        protocols: new Set(),
+                        last_seen: r.last_seen || ''
+                    });
+                }
+                const host = map.get(ip);
+                if (!host.src_mac && r.src_mac) host.src_mac = r.src_mac;
+                if (r.src_port) host.src_ports.add(r.src_port);
+                if (r.dst_ip) host.dst_ips.add(r.dst_ip);
+                if (r.dst_mac) host.dst_macs.add(r.dst_mac);
+                if (r.dst_port) host.dst_ports.add(r.dst_port);
+                if (r.protocol) host.protocols.add(r.protocol);
+                if (r.last_seen && r.last_seen > host.last_seen) host.last_seen = r.last_seen;
+            }
+            return [...map.values()].map(h => ({
+                ...h,
+                src_ports: [...h.src_ports].sort((a, b) => a - b),
+                dst_ips: [...h.dst_ips],
+                dst_macs: [...h.dst_macs],
+                dst_ports: [...h.dst_ports].sort((a, b) => a - b),
+                protocols: [...h.protocols]
+            }));
+        }
 
         async function loadStats(org, location, scanId) {
             try {
@@ -428,69 +563,95 @@
                 });
             }
 
-            // --- 3. RENDERIZAR TABLA ACTIVA ---
+            // --- 3. RENDERIZAR TABLA ACTIVA (consolidada por IP) ---
             const activeTbody = document.getElementById('resultsBody');
-            document.getElementById('activeCount').textContent = `(${filteredActive.length})`;
-            if (filteredActive.length === 0) {
+            const consolidatedActive = consolidateByIp(filteredActive);
+            document.getElementById('activeCount').textContent = `(${consolidatedActive.length} hosts, ${filteredActive.length} puertos)`;
+            if (consolidatedActive.length === 0) {
                 activeTbody.innerHTML = '<tr><td colspan="14" class="empty">No hay resultados activos</td></tr>';
             } else {
-                activeTbody.innerHTML = filteredActive.map(r => {
+                const methodLabels = { 'nmap': '🔌 Nmap', 'passive_capture': '🎧 Captura Pasiva', 'host_discovery': '🔍 Host Discovery', 'arp_scan': '🔍 ARP Scan', 'icmp_ping': '🔍 ICMP Ping', 'syn_scan': '🔍 SYN Scan' };
+                activeTbody.innerHTML = consolidatedActive.map(row => {
+                    // Interfaces
                     let interfacesHtml = '-';
-                    if (r.interfaces_json) {
+                    if (row.interfaces_json) {
                         try {
-                            const interfaces = JSON.parse(r.interfaces_json);
-                            if (Array.isArray(interfaces) && interfaces.length > 0) {
-                                interfacesHtml = `<div class="interfaces-list">${interfaces.map(ip => `<span class="interface-badge">${ip}</span>`).join('')}</div>`;
+                            const ifaces = JSON.parse(row.interfaces_json);
+                            if (Array.isArray(ifaces) && ifaces.length > 0) {
+                                interfacesHtml = `<div class="interfaces-list">${ifaces.map(ip => `<span class="interface-badge">${ip}</span>`).join('')}</div>`;
                             }
                         } catch (e) { }
                     }
-                    let screenshotButton = (r.has_screenshot && r.port) ? `<button class="btn-evidence" onclick="showScreenshot(${r.scan_id}, '${r.ip_address}', ${r.port})" title="Ver captura de pantalla">📸</button>` : '-';
-                    let sourceButton = (r.has_source_code && r.port) ? `<button class="btn-evidence" onclick="showSourceCode(${r.scan_id}, '${r.ip_address}', ${r.port})" title="Ver código fuente">📄</button>` : '-';
-                    const discoveryMethodDisplay = { 'nmap': '🔌 Nmap', 'passive_capture': '🎧 Captura Pasiva', 'host_discovery': '🔍 Host Discovery', 'arp_scan': '🔍 ARP Scan', 'icmp_ping': '🔍 ICMP Ping', 'syn_scan': '🔍 SYN Scan' }[r.discovery_method] || r.discovery_method || '-';
-                    const isCritical = r.is_critical || criticalIps.has(r.ip_address);
+
+                    // Ports badges
+                    const portBadges = row.ports.length > 0
+                        ? row.ports.map(p => `<span class="port-badge">${p.port}${p.protocol ? '/' + p.protocol : ''}</span>`).join('')
+                        : '<span style="color:#94a3b8">-</span>';
+
+                    // Unique values for other columns
+                    const protos = [...new Set(row.ports.map(p => p.protocol).filter(Boolean))].join(', ') || '-';
+                    const svcs = [...new Set(row.ports.map(p => p.service_name).filter(Boolean))].join(', ') || (row.ports.length === 0 ? 'Host activo' : '-');
+                    const prods = [...new Set(row.ports.map(p => p.product).filter(Boolean))].join(', ') || '-';
+                    const vers = [...new Set(row.ports.map(p => p.version).filter(Boolean))].join(', ') || '-';
+
+                    // Evidence buttons per port
+                    const shotButtons = row.ports.filter(p => p.has_screenshot).map(p =>
+                        `<button class="btn-evidence" onclick="showScreenshot(${p.scan_id}, '${row.ip_address}', ${p.port})" title="Captura puerto ${p.port}">📸<small>${p.port}</small></button>`
+                    ).join('') || '-';
+                    const srcButtons = row.ports.filter(p => p.has_source_code).map(p =>
+                        `<button class="btn-evidence" onclick="showSourceCode(${p.scan_id}, '${row.ip_address}', ${p.port})" title="Código fuente puerto ${p.port}">📄<small>${p.port}</small></button>`
+                    ).join('') || '-';
+
+                    const isCritical = row.is_critical || criticalIps.has(row.ip_address);
                     const rowStyle = isCritical ? ' style="border-left: 3px solid #ef4444; background: rgba(239,68,68,0.05);"' : '';
                     const criticalBadge = isCritical ? ' <span title="Dispositivo Crítico" style="color:#ef4444;font-size:0.9rem;">🚨</span>' : '';
+                    const discoveryDisplay = methodLabels[row.discovery_method] || row.discovery_method || '-';
 
                     return `<tr${rowStyle}>
-                        <td>${r.ip_address || '-'}${criticalBadge}</td>
-                        <td>${r.hostname || '-'}</td>
-                        <td>${r.port || '-'}</td>
-                        <td>${r.protocol || '-'}</td>
-                        <td>${r.service_name || (r.port ? '-' : 'Host activo')}</td>
-                        <td>${r.product || '-'}</td>
-                        <td>${r.version || '-'}</td>
-                        <td>${r.organization_name || '-'}</td>
-                        <td>${r.location || '-'}</td>
-                        <td>${discoveryMethodDisplay}</td>
-                        <td style="text-align: center;">${screenshotButton}</td>
-                        <td style="text-align: center;">${sourceButton}</td>
+                        <td>${row.ip_address || '-'}${criticalBadge}</td>
+                        <td>${row.hostname || '-'}</td>
+                        <td><div class="port-badges">${portBadges}</div></td>
+                        <td>${protos}</td>
+                        <td>${svcs}</td>
+                        <td>${prods}</td>
+                        <td>${vers}</td>
+                        <td>${row.organization_name || '-'}</td>
+                        <td>${row.location || '-'}</td>
+                        <td>${discoveryDisplay}</td>
+                        <td style="text-align: center;"><div class="evidence-buttons">${shotButtons}</div></td>
+                        <td style="text-align: center;"><div class="evidence-buttons">${srcButtons}</div></td>
                         <td style="font-size: 0.85rem;">${interfacesHtml}</td>
-                        <td style="text-align: center;">${r.is_critical ? '🚨 SÍ' : 'No'}</td>
+                        <td style="text-align: center;">${isCritical ? '🚨 SÍ' : 'No'}</td>
                     </tr>`;
                 }).join('');
             }
 
-            // --- 4. RENDERIZAR TABLA PASIVA ---
+            // --- 4. RENDERIZAR TABLA PASIVA (consolidada por IP origen) ---
             const passiveTbody = document.getElementById('passiveResultsBody');
-            document.getElementById('passiveCount').textContent = `(${filteredPassive.length})`;
-            if (filteredPassive.length === 0) {
-                // Si es un escaneo pasivo seleccionado, dar feedback específico
+            const consolidatedPassive = consolidatePassiveByIp(filteredPassive);
+            document.getElementById('passiveCount').textContent = `(${consolidatedPassive.length} hosts, ${filteredPassive.length} conversaciones)`;
+            if (consolidatedPassive.length === 0) {
                 if (scanId) {
                     passiveTbody.innerHTML = '<tr><td colspan="8" class="empty">No hay conversaciones detectadas en este escaneo pasivo</td></tr>';
                 } else {
                     passiveTbody.innerHTML = '<tr><td colspan="8" class="empty">No hay conversaciones pasivas</td></tr>';
                 }
             } else {
-                passiveTbody.innerHTML = filteredPassive.map(r => {
+                passiveTbody.innerHTML = consolidatedPassive.map(row => {
+                    const srcPorts = row.src_ports.length > 0 ? row.src_ports.map(p => `<span class="port-badge">${p}</span>`).join('') : '-';
+                    const dstPorts = row.dst_ports.length > 0 ? row.dst_ports.map(p => `<span class="port-badge">${p}</span>`).join('') : '-';
+                    const dstIps = row.dst_ips.length > 0 ? row.dst_ips.map(ip => `<span class="interface-badge">${ip}</span>`).join('') : '-';
+                    const dstMacs = row.dst_macs.length > 0 ? row.dst_macs.join(', ') : '-';
+                    const protocols = row.protocols.length > 0 ? row.protocols.join(', ') : '-';
                     return `<tr>
-                        <td>${r.src_ip}</td>
-                        <td>${r.src_mac || '-'}</td>
-                        <td>${r.src_port || '-'}</td>
-                        <td>${r.dst_ip}</td>
-                        <td>${r.dst_mac || '-'}</td>
-                        <td>${r.dst_port || '-'}</td>
-                        <td>${r.protocol || '-'}</td>
-                        <td>${r.last_seen}</td>
+                        <td>${row.src_ip}</td>
+                        <td>${row.src_mac || '-'}</td>
+                        <td><div class="port-badges">${srcPorts}</div></td>
+                        <td><div class="interfaces-list">${dstIps}</div></td>
+                        <td style="font-size:0.8rem">${dstMacs}</td>
+                        <td><div class="port-badges">${dstPorts}</div></td>
+                        <td>${protocols}</td>
+                        <td>${row.last_seen}</td>
                     </tr>`;
                 }).join('');
             }
@@ -1110,6 +1271,37 @@
             border-radius: 4px;
             font-size: 0.75rem;
             border: 1px solid #334155;
+        }
+
+        .port-badge {
+            background: #0f172a;
+            color: #34d399;
+            padding: 0.1rem 0.45rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: 'Courier New', monospace;
+            border: 1px solid #1e3a2e;
+            white-space: nowrap;
+        }
+
+        .port-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem;
+            max-width: 220px;
+        }
+
+        .evidence-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem;
+            justify-content: center;
+        }
+
+        .btn-evidence small {
+            display: block;
+            font-size: 0.6rem;
+            line-height: 1;
         }
     </style>
     {% endblock %}

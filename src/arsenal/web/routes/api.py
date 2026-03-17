@@ -59,15 +59,18 @@ async def get_stats(
     else:
         orgs_count = cursor.execute("SELECT COUNT(DISTINCT name) FROM organizations").fetchone()[0]
     
-    # Escaneos
-    total_scans_query = f"SELECT COUNT(*) FROM scans s {scan_filter}"
-    total_scans = cursor.execute(total_scans_query, scan_params).fetchone()[0]
-    
-    completed_query = f"SELECT COUNT(*) FROM scans s {scan_filter} AND s.status = 'completed'"
-    completed_scans = cursor.execute(completed_query, scan_params).fetchone()[0]
-    
-    running_query = f"SELECT COUNT(*) FROM scans s {scan_filter} AND s.status = 'running'"
-    running_scans_count = cursor.execute(running_query, scan_params).fetchone()[0]
+    # Escaneos (una sola query con CASE en lugar de tres COUNT separados)
+    scans_row = cursor.execute(
+        f"""SELECT
+            COUNT(*),
+            SUM(CASE WHEN s.status = 'completed' THEN 1 ELSE 0 END),
+            SUM(CASE WHEN s.status = 'running'   THEN 1 ELSE 0 END)
+        FROM scans s {scan_filter}""",
+        scan_params
+    ).fetchone()
+    total_scans       = scans_row[0] or 0
+    completed_scans   = scans_row[1] or 0
+    running_scans_count = scans_row[2] or 0
     
     # Determinar si el escaneo solicitado es pasivo
     is_single_passive = False

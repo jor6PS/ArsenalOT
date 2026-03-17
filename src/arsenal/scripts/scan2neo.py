@@ -105,11 +105,11 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
     query_scans = "SELECT * FROM scans WHERE (status = 'completed' OR (scan_mode = 'passive' AND status != 'failed'))"
     params = []
     if org:
-        query_scans += " AND organization_name = ?"
-        params.append(org.upper())
+        query_scans += " AND UPPER(organization_name) = UPPER(?)"
+        params.append(org)
     if location:
-        query_scans += " AND location = ?"
-        params.append(location.upper())
+        query_scans += " AND UPPER(location) = UPPER(?)"
+        params.append(location)
     
     scans = cursor.execute(query_scans, params).fetchall()
     all_data = []

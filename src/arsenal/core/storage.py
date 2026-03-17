@@ -347,8 +347,12 @@ class ScanStorage:
             ON scan_results(scan_id)
         """)
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_scan_results_host 
+            CREATE INDEX IF NOT EXISTS idx_scan_results_host
             ON scan_results(host_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_scan_results_scan_host
+            ON scan_results(scan_id, host_id)
         """)
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_scan_results_port 
@@ -574,94 +578,97 @@ class ScanStorage:
             
         return "Unknown"
     
-    def save_discovered_host(self, scan_id: int, host_ip: str, 
+    def save_discovered_host(self, scan_id: int, host_ip: str,
                              discovery_method: str = 'host_discovery',
                              subnet: str = None,
-                             timestamp: Optional[datetime] = None):
+                             timestamp: Optional[datetime] = None,
+                             mac_address: str = None,
+                             vendor: str = None,
+                             hostname: str = None):
         """
         Guarda un host descubierto por host discovery (sin puertos aún).
+        Acepta MAC, vendor y hostname cuando están disponibles (p.ej. desde arp-scan).
         IMPORTANTE: También crea un registro en scan_results con port=NULL para que
         el host aparezca en los resultados aunque no tenga puertos abiertos.
-        Solo guarda direcciones IP privadas (filtra IPs públicas).
         """
-        # Validar IP
         if not host_ip:
             return False
-            
+
         try:
-            ip_obj = ipaddress.ip_address(host_ip)
+            ipaddress.ip_address(host_ip)
             is_private = is_internal_ip(host_ip)
         except ValueError:
             return False
+
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys = ON")
         cursor = conn.cursor()
-        
-        # Validar que el escaneo existe
-        scan = cursor.execute("SELECT id, organization_name, target_range FROM scans WHERE id = ?", (scan_id,)).fetchone()
+
+        scan = cursor.execute(
+            "SELECT id, organization_name, target_range FROM scans WHERE id = ?", (scan_id,)
+        ).fetchone()
         if not scan:
             print(f"⚠️  El escaneo {scan_id} no existe")
             conn.close()
             return False
-            
-        # Determinar subnet dinámica (Match exacto > Target Range > /24 Fallback)
+
         organization_name = scan[1]
         target_range = scan[2]
         subnet = self._get_effective_subnet(organization_name, host_ip, target_range)
-        
-        # Insertar o actualizar host
+
         discovered_at = timestamp or datetime.now()
+
+        # Insertar o actualizar host — MAC y vendor enriquecen el registro existente
         cursor.execute("""
-            INSERT INTO hosts (ip_address, hostname, subnet, is_private,
+            INSERT INTO hosts (ip_address, hostname, mac_address, vendor, subnet, is_private,
                              first_seen, last_seen)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(ip_address) DO UPDATE SET
                 last_seen = MAX(last_seen, excluded.last_seen),
-                subnet = CASE 
-                    WHEN subnet IS NULL OR subnet IN ('10.0.0.0/8', '192.168.0.0/16', '172.16.0.0/12', 'Unknown') 
-                    THEN excluded.subnet 
-                    ELSE subnet 
+                hostname  = COALESCE(excluded.hostname, hostname),
+                mac_address = COALESCE(excluded.mac_address, mac_address),
+                vendor    = COALESCE(excluded.vendor, vendor),
+                subnet = CASE
+                    WHEN subnet IS NULL OR subnet IN ('10.0.0.0/8', '192.168.0.0/16', '172.16.0.0/12', 'Unknown')
+                    THEN excluded.subnet
+                    ELSE subnet
                 END
-        """, (host_ip, None, subnet, is_private, discovered_at, discovered_at))
-        
-        # Obtener el host_id
-        host_id = cursor.execute(
-            "SELECT id FROM hosts WHERE ip_address = ?", (host_ip,)
-        ).fetchone()[0]
-        
-        
-        # Crear un registro en scan_results con port=NULL para que el host aparezca en resultados
-        # Esto es importante para que hosts descubiertos sin puertos también se muestren
+        """, (host_ip, hostname, mac_address, vendor, subnet, is_private, discovered_at, discovered_at))
+
+        host_id = cursor.lastrowid
+
         try:
-            # Verificar si ya existe un registro para este host en este escaneo sin puerto
             existing = cursor.execute("""
-                SELECT id FROM scan_results 
+                SELECT id FROM scan_results
                 WHERE scan_id = ? AND host_id = ? AND port IS NULL
             """, (scan_id, host_id)).fetchone()
-            
+
             if not existing:
-                # Crear registro en scan_results con port=NULL
                 cursor.execute("""
                     INSERT INTO scan_results
                     (scan_id, host_id, port, protocol, state, discovery_method, discovered_at)
                     VALUES (?, ?, NULL, NULL, 'up', ?, ?)
                 """, (scan_id, host_id, discovery_method, discovered_at))
-            
-            # AISLAMIENTO: Guardar descubrimiento básico en metadata
+
+            # AISLAMIENTO: metadata por escaneo (incluye MAC/vendor del momento)
             cursor.execute("""
-                INSERT INTO host_scan_metadata (scan_id, host_id, last_seen)
-                VALUES (?, ?, ?)
+                INSERT INTO host_scan_metadata
+                    (scan_id, host_id, hostname, mac_address, vendor, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(scan_id, host_id) DO UPDATE SET
-                    last_seen = COALESCE(excluded.last_seen, last_seen)
-            """, (scan_id, host_id, discovered_at))
-            
+                    hostname    = COALESCE(excluded.hostname, hostname),
+                    mac_address = COALESCE(excluded.mac_address, mac_address),
+                    vendor      = COALESCE(excluded.vendor, vendor),
+                    last_seen   = COALESCE(excluded.last_seen, last_seen)
+            """, (scan_id, host_id, hostname, mac_address, vendor, discovered_at))
+
         except sqlite3.IntegrityError as e:
             print(f"⚠️  Error de integridad al guardar scan_result para host descubierto: {e}")
             conn.rollback()
             conn.close()
             return False
-        
+
         conn.commit()
         conn.close()
         return True
@@ -759,10 +766,8 @@ class ScanStorage:
         """, (host_ip, hostname, hostnames_json, mac_address, vendor, subnet, is_private,
               os_info_json, host_scripts_json, discovered_at, discovered_at))
         
-        host_id = cursor.execute(
-            "SELECT id FROM hosts WHERE ip_address = ?", (host_ip,)
-        ).fetchone()[0]
-        
+        host_id = cursor.lastrowid
+
         # Preparar scripts JSON
         scripts_json = None
         if 'scripts' in service_data and service_data['scripts']:
@@ -912,9 +917,8 @@ class ScanStorage:
                 """, (host_ip, hostname, hostnames_json, mac_address, vendor, subnet, is_private,
                       os_info_json, host_scripts_json, discovered_at, discovered_at))
                 
-                host_id_row = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (host_ip,)).fetchone()
-                if not host_id_row: continue
-                host_id = host_id_row[0]
+                host_id = cursor.lastrowid
+                if not host_id: continue
                 
                 scripts_json = None
                 if 'scripts' in service_data and service_data['scripts']:

@@ -50,253 +50,138 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
         
         # Determinar qué datos exportar
         if scan_id:
-            # Exportar solo un escaneo
-            scan = cursor.execute("""
-                SELECT * FROM scans WHERE id = ?
-            """, (scan_id,)).fetchone()
+            scan = cursor.execute("SELECT * FROM scans WHERE id = ?", (scan_id,)).fetchone()
             if not scan:
                 conn.close()
                 raise ValueError(f"Escaneo {scan_id} no encontrado")
-            
+
+            scan_results = cursor.execute(
+                "SELECT * FROM scan_results WHERE scan_id = ?", (scan_id,)
+            ).fetchall()
+            host_ids      = list(set(r['host_id'] for r in scan_results))
+            sr_ids        = [r['id'] for r in scan_results]
+            ph_h          = ','.join('?' * len(host_ids))  if host_ids else '0'
+            ph_sr         = ','.join('?' * len(sr_ids))    if sr_ids   else '0'
+
             export_data = {
                 'type': 'scan',
                 'scan_id': scan_id,
                 'metadata': dict(scan),
-                'scan_results': [],
-                'hosts': [],
-                'vulnerabilities': [],
-                'enrichments': [],
-                'networks': [],
-                'critical_devices': []
+                'scans': [dict(scan)],
+                'scan_results':         [dict(r) for r in scan_results],
+                'hosts':                [dict(h) for h in cursor.execute(f"SELECT * FROM hosts WHERE id IN ({ph_h})", host_ids).fetchall()] if host_ids else [],
+                'host_scan_metadata':   [dict(h) for h in cursor.execute("SELECT * FROM host_scan_metadata WHERE scan_id = ?", (scan_id,)).fetchall()],
+                'vulnerabilities':      [dict(v) for v in cursor.execute(f"SELECT * FROM vulnerabilities WHERE scan_result_id IN ({ph_sr})", sr_ids).fetchall()] if sr_ids else [],
+                'enrichments':          [dict(e) for e in cursor.execute(f"SELECT * FROM enrichments WHERE scan_result_id IN ({ph_sr})", sr_ids).fetchall()] if sr_ids else [],
+                'passive_conversations': [dict(p) for p in cursor.execute("SELECT * FROM passive_conversations WHERE scan_id = ?", (scan_id,)).fetchall()],
+                'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (scan['organization_name'],)).fetchall()],
+                'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (scan['organization_name'],)).fetchall()],
             }
-            
-            # Obtener redes de la organización
-            networks = cursor.execute("""
-                SELECT * FROM networks WHERE organization_name = ?
-            """, (scan['organization_name'],)).fetchall()
-            export_data['networks'] = [dict(n) for n in networks]
-            
-            # Obtener dispositivos críticos
-            critical_devs = cursor.execute("""
-                SELECT * FROM critical_devices WHERE organization_name = ?
-            """, (scan['organization_name'],)).fetchall()
-            export_data['critical_devices'] = [dict(d) for d in critical_devs]
-            
-            # Obtener scan_results
-            scan_results = cursor.execute("""
-                SELECT * FROM scan_results WHERE scan_id = ?
-            """, (scan_id,)).fetchall()
-            export_data['scan_results'] = [dict(r) for r in scan_results]
-            
-            # Obtener hosts relacionados
-            host_ids = [r['host_id'] for r in scan_results]
-            if host_ids:
-                placeholders = ','.join('?' * len(host_ids))
-                hosts = cursor.execute(f"""
-                    SELECT * FROM hosts WHERE id IN ({placeholders})
-                """, host_ids).fetchall()
-                export_data['hosts'] = [dict(h) for h in hosts]
-            
-            # Obtener vulnerabilidades
-            scan_result_ids = [r['id'] for r in scan_results]
-            if scan_result_ids:
-                placeholders = ','.join('?' * len(scan_result_ids))
-                vulns = cursor.execute(f"""
-                    SELECT * FROM vulnerabilities WHERE scan_result_id IN ({placeholders})
-                """, scan_result_ids).fetchall()
-                export_data['vulnerabilities'] = [dict(v) for v in vulns]
-                
-                enrichments = cursor.execute(f"""
-                    SELECT * FROM enrichments WHERE scan_result_id IN ({placeholders})
-                """, scan_result_ids).fetchall()
-                export_data['enrichments'] = [dict(e) for e in enrichments]
-            
-            # Guardar JSON en ZIP
+
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
-            
-            # Exportar archivos del escaneo
-            scan_dir = storage.get_scan_directory(
-                scan['organization_name'],
-                scan['location'],
-                scan_id
-            )
+
+            scan_dir = storage.get_scan_directory(scan['organization_name'], scan['location'], scan_id)
             if scan_dir.exists():
                 _add_directory_to_zip(zipf, scan_dir, f"scans/{scan_dir.name}")
-            
+
         elif location and organization:
-            # Exportar organización + ubicación
-            scans = cursor.execute("""
-                SELECT * FROM scans 
-                WHERE organization_name = ? AND location = ?
-            """, (organization.upper(), location.upper())).fetchall()
-            
+            scans = cursor.execute(
+                "SELECT * FROM scans WHERE organization_name = ? AND location = ?",
+                (organization.upper(), location.upper())
+            ).fetchall()
+            scan_ids = [s['id'] for s in scans]
+            ph_s     = ','.join('?' * len(scan_ids)) if scan_ids else '0'
+
+            scan_results = cursor.execute(f"SELECT * FROM scan_results WHERE scan_id IN ({ph_s})", scan_ids).fetchall() if scan_ids else []
+            host_ids     = list(set(r['host_id'] for r in scan_results))
+            sr_ids       = [r['id'] for r in scan_results]
+            ph_h         = ','.join('?' * len(host_ids)) if host_ids else '0'
+            ph_sr        = ','.join('?' * len(sr_ids))   if sr_ids   else '0'
+
             export_data = {
                 'type': 'location',
                 'organization': organization.upper(),
                 'location': location.upper(),
-                'scans': [dict(s) for s in scans],
-                'scan_results': [],
-                'hosts': [],
-                'vulnerabilities': [],
-                'enrichments': []
+                'scans':                [dict(s) for s in scans],
+                'scan_results':         [dict(r) for r in scan_results],
+                'hosts':                [dict(h) for h in cursor.execute(f"SELECT * FROM hosts WHERE id IN ({ph_h})", host_ids).fetchall()] if host_ids else [],
+                'host_scan_metadata':   [dict(h) for h in cursor.execute(f"SELECT * FROM host_scan_metadata WHERE scan_id IN ({ph_s})", scan_ids).fetchall()] if scan_ids else [],
+                'vulnerabilities':      [dict(v) for v in cursor.execute(f"SELECT * FROM vulnerabilities WHERE scan_result_id IN ({ph_sr})", sr_ids).fetchall()] if sr_ids else [],
+                'enrichments':          [dict(e) for e in cursor.execute(f"SELECT * FROM enrichments WHERE scan_result_id IN ({ph_sr})", sr_ids).fetchall()] if sr_ids else [],
+                'passive_conversations': [dict(p) for p in cursor.execute(f"SELECT * FROM passive_conversations WHERE scan_id IN ({ph_s})", scan_ids).fetchall()] if scan_ids else [],
+                'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (organization.upper(),)).fetchall()],
+                'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (organization.upper(),)).fetchall()],
             }
-            
-            # Obtener redes de la organización
-            networks = cursor.execute("""
-                SELECT * FROM networks WHERE organization_name = ?
-            """, (organization.upper(),)).fetchall()
-            export_data['networks'] = [dict(n) for n in networks]
-            
-            # Obtener dispositivos críticos
-            critical_devs = cursor.execute("""
-                SELECT * FROM critical_devices WHERE organization_name = ?
-            """, (organization.upper(),)).fetchall()
-            export_data['critical_devices'] = [dict(d) for d in critical_devs]
-            
-            
-            scan_ids = [s['id'] for s in scans]
-            if scan_ids:
-                placeholders = ','.join('?' * len(scan_ids))
-                scan_results = cursor.execute(f"""
-                    SELECT * FROM scan_results WHERE scan_id IN ({placeholders})
-                """, scan_ids).fetchall()
-                export_data['scan_results'] = [dict(r) for r in scan_results]
-                
-                host_ids = list(set([r['host_id'] for r in scan_results]))
-                if host_ids:
-                    placeholders = ','.join('?' * len(host_ids))
-                    hosts = cursor.execute(f"""
-                        SELECT * FROM hosts WHERE id IN ({placeholders})
-                    """, host_ids).fetchall()
-                    export_data['hosts'] = [dict(h) for h in hosts]
-                
-                scan_result_ids = [r['id'] for r in scan_results]
-                if scan_result_ids:
-                    placeholders = ','.join('?' * len(scan_result_ids))
-                    vulns = cursor.execute(f"""
-                        SELECT * FROM vulnerabilities WHERE scan_result_id IN ({placeholders})
-                    """, scan_result_ids).fetchall()
-                    export_data['vulnerabilities'] = [dict(v) for v in vulns]
-                    
-                    enrichments = cursor.execute(f"""
-                        SELECT * FROM enrichments WHERE scan_result_id IN ({placeholders})
-                    """, scan_result_ids).fetchall()
-                    export_data['enrichments'] = [dict(e) for e in enrichments]
-            
+
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
-            
-            # Exportar directorio de la ubicación
+
             location_dir = storage.results_root / organization.upper() / location.upper()
             if location_dir.exists():
                 _add_directory_to_zip(zipf, location_dir, f"{organization.upper()}/{location.upper()}")
-            
+
         elif organization:
-            # Exportar toda la organización
-            org_data = cursor.execute("""
-                SELECT * FROM organizations WHERE name = ?
-            """, (organization.upper(),)).fetchone()
-            
-            scans = cursor.execute("""
-                SELECT * FROM scans WHERE organization_name = ?
-            """, (organization.upper(),)).fetchall()
-            
+            org_data = cursor.execute("SELECT * FROM organizations WHERE name = ?", (organization.upper(),)).fetchone()
+            scans    = cursor.execute("SELECT * FROM scans WHERE organization_name = ?", (organization.upper(),)).fetchall()
+            scan_ids = [s['id'] for s in scans]
+            ph_s     = ','.join('?' * len(scan_ids)) if scan_ids else '0'
+
+            scan_results = cursor.execute(f"SELECT * FROM scan_results WHERE scan_id IN ({ph_s})", scan_ids).fetchall() if scan_ids else []
+            host_ids     = list(set(r['host_id'] for r in scan_results))
+            sr_ids       = [r['id'] for r in scan_results]
+            ph_h         = ','.join('?' * len(host_ids)) if host_ids else '0'
+            ph_sr        = ','.join('?' * len(sr_ids))   if sr_ids   else '0'
+
             export_data = {
                 'type': 'organization',
-                'organization': dict(org_data) if org_data else None,
-                'scans': [dict(s) for s in scans],
-                'scan_results': [],
-                'hosts': [],
-                'vulnerabilities': [],
-                'enrichments': []
+                'organization':         dict(org_data) if org_data else None,
+                'scans':                [dict(s) for s in scans],
+                'scan_results':         [dict(r) for r in scan_results],
+                'hosts':                [dict(h) for h in cursor.execute(f"SELECT * FROM hosts WHERE id IN ({ph_h})", host_ids).fetchall()] if host_ids else [],
+                'host_scan_metadata':   [dict(h) for h in cursor.execute(f"SELECT * FROM host_scan_metadata WHERE scan_id IN ({ph_s})", scan_ids).fetchall()] if scan_ids else [],
+                'vulnerabilities':      [dict(v) for v in cursor.execute(f"SELECT * FROM vulnerabilities WHERE scan_result_id IN ({ph_sr})", sr_ids).fetchall()] if sr_ids else [],
+                'enrichments':          [dict(e) for e in cursor.execute(f"SELECT * FROM enrichments WHERE scan_result_id IN ({ph_sr})", sr_ids).fetchall()] if sr_ids else [],
+                'passive_conversations': [dict(p) for p in cursor.execute(f"SELECT * FROM passive_conversations WHERE scan_id IN ({ph_s})", scan_ids).fetchall()] if scan_ids else [],
+                'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (organization.upper(),)).fetchall()],
+                'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (organization.upper(),)).fetchall()],
             }
-            
-            # Obtener redes de la organización
-            networks = cursor.execute("""
-                SELECT * FROM networks WHERE organization_name = ?
-            """, (organization.upper(),)).fetchall()
-            export_data['networks'] = [dict(n) for n in networks]
-            
-            # Obtener dispositivos críticos
-            critical_devs = cursor.execute("""
-                SELECT * FROM critical_devices WHERE organization_name = ?
-            """, (organization.upper(),)).fetchall()
-            export_data['critical_devices'] = [dict(d) for d in critical_devs]
-            
-            
-            scan_ids = [s['id'] for s in scans]
-            if scan_ids:
-                placeholders = ','.join('?' * len(scan_ids))
-                scan_results = cursor.execute(f"""
-                    SELECT * FROM scan_results WHERE scan_id IN ({placeholders})
-                """, scan_ids).fetchall()
-                export_data['scan_results'] = [dict(r) for r in scan_results]
-                
-                host_ids = list(set([r['host_id'] for r in scan_results]))
-                if host_ids:
-                    placeholders = ','.join('?' * len(host_ids))
-                    hosts = cursor.execute(f"""
-                        SELECT * FROM hosts WHERE id IN ({placeholders})
-                    """, host_ids).fetchall()
-                    export_data['hosts'] = [dict(h) for h in hosts]
-                
-                scan_result_ids = [r['id'] for r in scan_results]
-                if scan_result_ids:
-                    placeholders = ','.join('?' * len(scan_result_ids))
-                    vulns = cursor.execute(f"""
-                        SELECT * FROM vulnerabilities WHERE scan_result_id IN ({placeholders})
-                    """, scan_result_ids).fetchall()
-                    export_data['vulnerabilities'] = [dict(v) for v in vulns]
-                    
-                    enrichments = cursor.execute(f"""
-                        SELECT * FROM enrichments WHERE scan_result_id IN ({placeholders})
-                    """, scan_result_ids).fetchall()
-                    export_data['enrichments'] = [dict(e) for e in enrichments]
-            
+
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
-            
-            # Exportar directorio completo de la organización
+
             org_dir = storage.results_root / organization.upper()
             if org_dir.exists():
                 _add_directory_to_zip(zipf, org_dir, organization.upper())
-            
+
         else:
             # Exportar todo
             organizations = cursor.execute("SELECT * FROM organizations").fetchall()
-            scans = cursor.execute("SELECT * FROM scans").fetchall()
-            scan_results = cursor.execute("SELECT * FROM scan_results").fetchall()
-            hosts = cursor.execute("SELECT * FROM hosts").fetchall()
-            vulnerabilities = cursor.execute("SELECT * FROM vulnerabilities").fetchall()
-            enrichments = cursor.execute("SELECT * FROM enrichments").fetchall()
-            
+            scans         = cursor.execute("SELECT * FROM scans").fetchall()
+            scan_results  = cursor.execute("SELECT * FROM scan_results").fetchall()
+            hosts         = cursor.execute("SELECT * FROM hosts").fetchall()
+            sr_ids        = [r['id'] for r in scan_results]
+            ph_sr         = ','.join('?' * len(sr_ids)) if sr_ids else '0'
+
             export_data = {
                 'type': 'all',
-                'organizations': [dict(o) for o in organizations],
-                'scans': [dict(s) for s in scans],
-                'scan_results': [dict(r) for r in scan_results],
-                'hosts': [dict(h) for h in hosts],
-                'vulnerabilities': [dict(v) for v in vulnerabilities],
-                'enrichments': [dict(e) for e in enrichments],
-                'networks': [],
-                'critical_devices': []
+                'organizations':        [dict(o) for o in organizations],
+                'scans':                [dict(s) for s in scans],
+                'scan_results':         [dict(r) for r in scan_results],
+                'hosts':                [dict(h) for h in hosts],
+                'host_scan_metadata':   [dict(h) for h in cursor.execute("SELECT * FROM host_scan_metadata").fetchall()],
+                'vulnerabilities':      [dict(v) for v in cursor.execute(f"SELECT * FROM vulnerabilities WHERE scan_result_id IN ({ph_sr})", sr_ids).fetchall()] if sr_ids else [],
+                'enrichments':          [dict(e) for e in cursor.execute(f"SELECT * FROM enrichments WHERE scan_result_id IN ({ph_sr})", sr_ids).fetchall()] if sr_ids else [],
+                'passive_conversations': [dict(p) for p in cursor.execute("SELECT * FROM passive_conversations").fetchall()],
+                'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks").fetchall()],
+                'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices").fetchall()],
             }
-            
-            # Obtener todas las redes
-            networks = cursor.execute("SELECT * FROM networks").fetchall()
-            export_data['networks'] = [dict(n) for n in networks]
-            
-            # Obtener todos los dispositivos críticos
-            critical_devs = cursor.execute("SELECT * FROM critical_devices").fetchall()
-            export_data['critical_devices'] = [dict(d) for d in critical_devs]
-            
+
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
-            
-            # Exportar todo el directorio results (excepto scans.db y ZIPs)
+
             if storage.results_root.exists():
                 for item in storage.results_root.iterdir():
                     if item.is_dir() and item.name != '__pycache__':
                         _add_directory_to_zip(zipf, item, item.name)
                     elif item.is_file() and item.suffix == '.zip':
-                        continue  # No incluir otros ZIPs
+                        continue
         
         conn.close()
     
@@ -494,108 +379,269 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
 
 
 def _import_scan_data(cursor, export_data: Dict, import_stats: Dict):
-    """Helper para importar datos de escaneos."""
-    # Importar hosts
+    """
+    Importa todos los datos de escaneo con remapping seguro de IDs.
+
+    El remapping es necesario porque los IDs del origen pueden colisionar con
+    los IDs ya existentes en el destino. Se construyen mapas:
+        old_host_id   → new_host_id
+        old_scan_id   → new_scan_id
+        old_sr_id     → new_sr_id
+    que se usan en las FKs de las tablas dependientes.
+    """
+    host_id_map: Dict[int, int] = {}   # old_host_id → new_host_id
+    scan_id_map: Dict[int, int] = {}   # old_scan_id → new_scan_id
+    sr_id_map:   Dict[int, int] = {}   # old_scan_result_id → new_scan_result_id
+
+    # ------------------------------------------------------------------ #
+    # 1. HOSTS — insertar sin ID explícito; resolver conflictos por IP    #
+    # ------------------------------------------------------------------ #
     for host in export_data.get('hosts', []):
+        old_id = host.get('id')
+        ip     = host['ip_address']
+
         cursor.execute("""
-            INSERT INTO hosts 
-            (id, ip_address, hostname, hostnames_json, mac_address, vendor,
-             subnet, is_private, os_info_json, host_scripts_json,
-             first_seen, last_seen)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO hosts
+                (ip_address, hostname, hostnames_json, mac_address, vendor,
+                 subnet, is_private, os_info_json, host_scripts_json,
+                 first_seen, last_seen)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(ip_address) DO UPDATE SET
-                hostname = COALESCE(excluded.hostname, hostname),
-                hostnames_json = COALESCE(excluded.hostnames_json, hostnames_json),
-                mac_address = COALESCE(excluded.mac_address, mac_address),
-                vendor = COALESCE(excluded.vendor, vendor),
-                subnet = COALESCE(excluded.subnet, subnet),
-                os_info_json = COALESCE(excluded.os_info_json, os_info_json),
+                hostname          = COALESCE(excluded.hostname,          hostname),
+                hostnames_json    = COALESCE(excluded.hostnames_json,    hostnames_json),
+                mac_address       = COALESCE(excluded.mac_address,       mac_address),
+                vendor            = COALESCE(excluded.vendor,            vendor),
+                subnet            = COALESCE(excluded.subnet,            subnet),
+                os_info_json      = COALESCE(excluded.os_info_json,      os_info_json),
                 host_scripts_json = COALESCE(excluded.host_scripts_json, host_scripts_json),
-                last_seen = excluded.last_seen
+                last_seen         = excluded.last_seen
         """, (
-            host.get('id'), host['ip_address'], host.get('hostname'),
-            host.get('hostnames_json'), host.get('mac_address'),
-            host.get('vendor'), host.get('subnet'), host.get('is_private'),
+            ip, host.get('hostname'), host.get('hostnames_json'),
+            host.get('mac_address'), host.get('vendor'),
+            host.get('subnet'), host.get('is_private'),
             host.get('os_info_json'), host.get('host_scripts_json'),
             host.get('first_seen'), host.get('last_seen')
         ))
+
+        # Obtener el ID real en el destino (puede ser el existente o el recién creado)
+        new_id = cursor.execute(
+            "SELECT id FROM hosts WHERE ip_address = ?", (ip,)
+        ).fetchone()[0]
+
+        if old_id is not None:
+            host_id_map[old_id] = new_id
         import_stats['hosts'] += 1
-    
-    # Importar escaneos
+
+    # ------------------------------------------------------------------ #
+    # 2. SCANS — insertar sin ID explícito; todos los campos              #
+    # ------------------------------------------------------------------ #
     scans = export_data.get('scans', [])
     if not scans and export_data.get('metadata'):
         scans = [export_data['metadata']]
-    
+
     for scan in scans:
-        # Normalizar nombres
+        old_id   = scan.get('id')
         org_name = scan['organization_name'].strip().upper()
         loc_name = scan['location'].strip().upper()
-        
+
         cursor.execute("""
-            INSERT OR REPLACE INTO scans 
-            (id, organization_name, location, scan_type, target_range, interface,
-             nmap_command, started_at, completed_at, status, hosts_discovered,
-             ports_found, error_message, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO scans
+                (organization_name, location, scan_type, target_range, interface,
+                 myip, nmap_command, started_at, completed_at, status,
+                 hosts_discovered, ports_found, error_message, created_by,
+                 scan_mode, pcap_file,
+                 enable_version_detection, enable_vulnerability_scan,
+                 enable_screenshots, enable_source_code)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            scan.get('id'), org_name, loc_name,
-            scan['scan_type'], scan['target_range'], scan.get('interface'),
+            org_name, loc_name,
+            scan.get('scan_type', 'mixed'), scan.get('target_range', ''),
+            scan.get('interface'), scan.get('myip'),
             scan.get('nmap_command'), scan.get('started_at'),
             scan.get('completed_at'), scan.get('status', 'completed'),
-            scan.get('hosts_discovered'), scan.get('ports_found'),
-            scan.get('error_message'), scan.get('created_by')
+            scan.get('hosts_discovered', 0), scan.get('ports_found', 0),
+            scan.get('error_message'), scan.get('created_by'),
+            scan.get('scan_mode', 'active'), scan.get('pcap_file'),
+            scan.get('enable_version_detection', 0),
+            scan.get('enable_vulnerability_scan', 0),
+            scan.get('enable_screenshots', 0),
+            scan.get('enable_source_code', 0),
         ))
+        new_id = cursor.lastrowid
+        if old_id is not None:
+            scan_id_map[old_id] = new_id
         import_stats['scans'] += 1
-    
-    # Importar scan_results
+
+    # ------------------------------------------------------------------ #
+    # 3. SCAN_RESULTS — usar IDs remapeados de host y scan                #
+    # ------------------------------------------------------------------ #
     for result in export_data.get('scan_results', []):
+        old_id      = result.get('id')
+        old_scan_id = result.get('scan_id')
+        old_host_id = result.get('host_id')
+
+        new_scan_id = scan_id_map.get(old_scan_id, old_scan_id)
+        new_host_id = host_id_map.get(old_host_id, old_host_id)
+
+        # Verificar que FK existe (evitar violaciones silenciosas)
+        host_exists = cursor.execute(
+            "SELECT 1 FROM hosts WHERE id = ?", (new_host_id,)
+        ).fetchone()
+        scan_exists = cursor.execute(
+            "SELECT 1 FROM scans WHERE id = ?", (new_scan_id,)
+        ).fetchone()
+        if not host_exists or not scan_exists:
+            print(f"⚠️ import scan_result: FK faltante host_id={new_host_id} scan_id={new_scan_id}, omitiendo")
+            continue
+
         cursor.execute("""
-            INSERT OR REPLACE INTO scan_results
-            (id, scan_id, host_id, port, protocol, state, service_name,
-             product, version, extrainfo, cpe, reason, reason_ttl,
-             confidence, scripts_json, discovered_at)
+            INSERT OR IGNORE INTO scan_results
+                (scan_id, host_id, port, protocol, state, service_name,
+                 product, version, extrainfo, cpe, reason, reason_ttl,
+                 confidence, scripts_json, discovery_method, discovered_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            result.get('id'), result['scan_id'], result['host_id'],
-            result.get('port'), result.get('protocol'), result['state'],
+            new_scan_id, new_host_id,
+            result.get('port'), result.get('protocol'),
+            result.get('state', 'up'),
             result.get('service_name'), result.get('product'),
             result.get('version'), result.get('extrainfo'),
             result.get('cpe'), result.get('reason'),
             result.get('reason_ttl'), result.get('confidence'),
-            result.get('scripts_json'), result.get('discovered_at')
+            result.get('scripts_json'), result.get('discovery_method'),
+            result.get('discovered_at', datetime.now().isoformat())
         ))
+
+        new_id = cursor.lastrowid
+        if old_id is not None and new_id:
+            sr_id_map[old_id] = new_id
+        elif old_id is not None:
+            # La fila ya existía (INSERT OR IGNORE no hizo nada): recuperar ID real
+            row = cursor.execute("""
+                SELECT id FROM scan_results
+                WHERE scan_id=? AND host_id=?
+                  AND port IS ? AND protocol IS ?
+            """, (new_scan_id, new_host_id,
+                  result.get('port'), result.get('protocol'))).fetchone()
+            if row:
+                sr_id_map[old_id] = row[0]
+
         import_stats['scan_results'] += 1
-    
-    # Importar vulnerabilidades
+
+    # ------------------------------------------------------------------ #
+    # 4. VULNERABILIDADES — columnas correctas + remapping sr_id          #
+    # ------------------------------------------------------------------ #
     for vuln in export_data.get('vulnerabilities', []):
+        old_sr_id = vuln.get('scan_result_id')
+        new_sr_id = sr_id_map.get(old_sr_id, old_sr_id)
+
+        if not new_sr_id:
+            continue
+
         cursor.execute("""
-            INSERT OR REPLACE INTO vulnerabilities
-            (id, scan_result_id, vulnerability_id, title, description,
-             severity, cvss_score, references, discovered_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO vulnerabilities
+                (scan_result_id, vulnerability_id, vulnerability_name, severity,
+                 description, cve_id, cvss_score, script_source, script_output,
+                 discovered_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            vuln.get('id'), vuln['scan_result_id'],
-            vuln['vulnerability_id'], vuln.get('title'),
-            vuln.get('description'), vuln.get('severity'),
-            vuln.get('cvss_score'), vuln.get('references'),
-            vuln.get('discovered_at')
+            new_sr_id,
+            vuln.get('vulnerability_id'),
+            vuln.get('vulnerability_name') or vuln.get('title'),   # compatibilidad legada
+            vuln.get('severity'),
+            vuln.get('description'),
+            vuln.get('cve_id') or vuln.get('references'),          # compatibilidad legada
+            vuln.get('cvss_score'),
+            vuln.get('script_source'),
+            vuln.get('script_output'),
+            vuln.get('discovered_at', datetime.now().isoformat())
         ))
         import_stats['vulnerabilities'] += 1
-    
-    # Importar enrichments
+
+    # ------------------------------------------------------------------ #
+    # 5. ENRICHMENTS — remapping sr_id                                    #
+    # ------------------------------------------------------------------ #
     for enrich in export_data.get('enrichments', []):
-        # Usar created_at si existe, si no usar discovered_at (compatibilidad), o datetime actual
+        old_sr_id = enrich.get('scan_result_id')
+        new_sr_id = sr_id_map.get(old_sr_id, old_sr_id)
+
+        if not new_sr_id:
+            continue
+
         created_at = enrich.get('created_at') or enrich.get('discovered_at') or datetime.now().isoformat()
         cursor.execute("""
-            INSERT OR REPLACE INTO enrichments
-            (id, scan_result_id, enrichment_type, file_path, data, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO enrichments
+                (scan_result_id, enrichment_type, data, file_path, created_at)
+            VALUES (?, ?, ?, ?, ?)
         """, (
-            enrich.get('id'), enrich['scan_result_id'],
-            enrich['enrichment_type'], enrich.get('file_path'),
-            enrich.get('data'), created_at
+            new_sr_id,
+            enrich.get('enrichment_type'),
+            enrich.get('data'),
+            enrich.get('file_path'),
+            created_at
         ))
         import_stats['enrichments'] += 1
+
+    # ------------------------------------------------------------------ #
+    # 6. PASSIVE_CONVERSATIONS — remapping scan_id                        #
+    # ------------------------------------------------------------------ #
+    passive_count = 0
+    for conv in export_data.get('passive_conversations', []):
+        old_scan_id = conv.get('scan_id')
+        new_scan_id = scan_id_map.get(old_scan_id, old_scan_id)
+
+        if not new_scan_id:
+            continue
+
+        cursor.execute("""
+            INSERT OR IGNORE INTO passive_conversations
+                (scan_id, src_ip, src_mac, src_port,
+                 dst_ip, dst_mac, dst_port, protocol, last_seen)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            new_scan_id,
+            conv.get('src_ip'), conv.get('src_mac'), conv.get('src_port'),
+            conv.get('dst_ip'), conv.get('dst_mac'), conv.get('dst_port'),
+            conv.get('protocol'), conv.get('last_seen')
+        ))
+        passive_count += 1
+
+    if passive_count:
+        import_stats['passive_conversations'] = passive_count
+
+    # ------------------------------------------------------------------ #
+    # 7. HOST_SCAN_METADATA — remapping scan_id y host_id                 #
+    # ------------------------------------------------------------------ #
+    for meta in export_data.get('host_scan_metadata', []):
+        old_scan_id = meta.get('scan_id')
+        old_host_id = meta.get('host_id')
+        new_scan_id = scan_id_map.get(old_scan_id, old_scan_id)
+        new_host_id = host_id_map.get(old_host_id, old_host_id)
+
+        if not new_scan_id or not new_host_id:
+            continue
+
+        cursor.execute("""
+            INSERT INTO host_scan_metadata
+                (scan_id, host_id, hostname, hostnames_json, mac_address, vendor,
+                 os_info_json, host_scripts_json, interfaces_json, last_seen)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(scan_id, host_id) DO UPDATE SET
+                hostname          = COALESCE(excluded.hostname,          hostname),
+                hostnames_json    = COALESCE(excluded.hostnames_json,    hostnames_json),
+                mac_address       = COALESCE(excluded.mac_address,       mac_address),
+                vendor            = COALESCE(excluded.vendor,            vendor),
+                os_info_json      = COALESCE(excluded.os_info_json,      os_info_json),
+                host_scripts_json = COALESCE(excluded.host_scripts_json, host_scripts_json),
+                interfaces_json   = COALESCE(excluded.interfaces_json,   interfaces_json),
+                last_seen         = COALESCE(excluded.last_seen,         last_seen)
+        """, (
+            new_scan_id, new_host_id,
+            meta.get('hostname'), meta.get('hostnames_json'),
+            meta.get('mac_address'), meta.get('vendor'),
+            meta.get('os_info_json'), meta.get('host_scripts_json'),
+            meta.get('interfaces_json'), meta.get('last_seen')
+        ))
 
 
 def _merge_directory(source: Path, dest: Path):

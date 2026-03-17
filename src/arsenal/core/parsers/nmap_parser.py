@@ -2,6 +2,7 @@
 Parser para procesar archivos XML de Nmap y construir estructuras de datos
 """
 
+import re
 import xml.etree.ElementTree as ET
 import ipaddress
 from typing import Dict, List, Optional
@@ -42,7 +43,6 @@ class NmapXMLParser:
                     if hosts_up > 0:
                         # Intentar extraer IPs del comando o del target
                         # Esto es un fallback cuando --open no muestra hosts sin puertos abiertos
-                        import re
                         args = scan_info.get('args', '')
                         # Buscar IPs en los argumentos del comando
                         ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'

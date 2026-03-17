@@ -15,7 +15,7 @@ import re
 import socket
 import ipaddress
 import concurrent.futures
-from typing import Set, List, Optional
+from typing import Set, List, Optional, Dict
 from datetime import datetime
 
 
@@ -45,30 +45,30 @@ class HostDiscovery:
         except Exception:
             return '127.0.0.1'
     
-    def arp_scan(self, target_range: str, process_callback: Optional[callable] = None) -> Set[str]:
+    def arp_scan(self, target_range: str, process_callback: Optional[callable] = None) -> Dict[str, Dict]:
         """
         Ejecuta un escaneo ARP en la interfaz especificada.
-        
+
         ARP scan es muy rápido y efectivo en redes locales porque no depende
         de respuestas de capa 3. Detecta hosts incluso si tienen firewall activo.
-        
+
         Args:
             target_range: Rango de IPs a escanear (ej: 192.168.1.0/24)
-            
+
         Returns:
-            Set de direcciones IP descubiertas
+            Dict IP -> {mac_address, vendor} con la información de cada host descubierto
         """
-        discovered = set()
-        
+        discovered: Dict[str, Dict] = {}
+
         # Verificar si arp-scan está disponible
         try:
             subprocess.run(["which", "arp-scan"], check=True, capture_output=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
             return discovered
-        
+
         # Construir comando arp-scan
         cmd = ["arp-scan", "--interface", self.interface, "--local", target_range]
-        
+
         try:
             self.current_process = subprocess.Popen(
                 cmd,
@@ -76,36 +76,56 @@ class HostDiscovery:
                 stderr=subprocess.PIPE,
                 text=True
             )
-            
-            # Notificar callback
+
             if process_callback:
                 try:
                     process_callback(self.current_process)
                 except:
                     pass
-            
+
             stdout, stderr = self.current_process.communicate()
-            
+
             if self.current_process.returncode == 0 or stdout:
-                # Extraer IPs de la salida (formato: IP MAC Vendor)
-                ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
-                ips = re.findall(ip_pattern, stdout)
-                
-                # Filtrar IPs válidas y excluir IPs locales comunes
-                for ip_str in ips:
+                # Formato de salida arp-scan: IP\tMAC\tVendor  (una línea por host)
+                mac_pattern = re.compile(r'([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})', re.IGNORECASE)
+                ip_pattern = re.compile(r'\b((?:\d{1,3}\.){3}\d{1,3})\b')
+
+                for line in stdout.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    ip_match = ip_pattern.search(line)
+                    mac_match = mac_pattern.search(line)
+                    if not ip_match or not mac_match:
+                        continue
+                    ip_str = ip_match.group(1)
+                    mac_str = mac_match.group(1).upper()
                     try:
-                        ip = ipaddress.ip_address(ip_str)
-                        # Excluir IPs de broadcast y multicast
-                        if not ip.is_multicast and not ip.is_reserved:
-                            discovered.add(str(ip))
+                        ip_obj = ipaddress.ip_address(ip_str)
+                        if ip_obj.is_multicast or ip_obj.is_reserved:
+                            continue
                     except ValueError:
                         continue
-                        
+
+                    # Extraer vendor: todo lo que sigue a la MAC en la línea
+                    parts = re.split(r'\s+', line, maxsplit=2)
+                    vendor = parts[2].strip() if len(parts) >= 3 else None
+                    # Ignorar entradas duplicadas (arp-scan las marca con "(DUP: N)")
+                    if vendor and vendor.startswith('(DUP:'):
+                        continue
+                    # Vaciar vendor vacío o genérico
+                    if not vendor:
+                        vendor = None
+
+                    # Conservar la entrada más completa si ya existe
+                    if ip_str not in discovered:
+                        discovered[ip_str] = {'mac_address': mac_str, 'vendor': vendor}
+
         except subprocess.TimeoutExpired:
             pass
         except Exception as e:
             print(f"⚠️  Error en ARP scan: {e}")
-        
+
         return discovered
     
     def icmp_ping_scan(self, target_range: str) -> Set[str]:
@@ -249,34 +269,35 @@ class HostDiscovery:
         
         return discovered
     
-    def discover_hosts(self, target_range: str, techniques: Optional[List[str]] = None, 
+    def discover_hosts(self, target_range: str, techniques: Optional[List[str]] = None,
                       process_callback: Optional[callable] = None,
-                      is_cancelled_callback: Optional[callable] = None) -> Set[str]:
+                      is_cancelled_callback: Optional[callable] = None) -> Dict[str, Dict]:
         """
         Descubre hosts usando múltiples técnicas de forma inteligente.
-        
+
         Combina diferentes técnicas para maximizar el descubrimiento:
-        1. ARP scan (más rápido en LAN)
+        1. ARP scan (más rápido en LAN, aporta MAC y vendor)
         2. ICMP ping (técnica estándar)
         3. SYN quick scan (para hosts que filtran ICMP)
-        
+
         Args:
             target_range: Rango de IPs a escanear
             techniques: Lista de técnicas a usar. Si None, usa todas disponibles.
                         Opciones: 'arp', 'icmp', 'syn'
-                        
+
         Returns:
-            Set de direcciones IP descubiertas (sin duplicados)
+            Dict IP -> {mac_address, vendor} con todos los hosts descubiertos.
+            Para hosts encontrados sólo por ICMP/SYN, mac_address y vendor serán None.
         """
         if techniques is None:
             techniques = ['arp', 'icmp', 'syn']
-        
-        all_discovered = set()
-        
+
+        all_discovered: Dict[str, Dict] = {}
+
         print(f"🔍 Iniciando descubrimiento de hosts en {target_range}...")
         print(f"   Técnicas seleccionadas: {', '.join(techniques)}")
-        
-        # Técnica 1: ARP scan (más rápido en redes locales)
+
+        # Técnica 1: ARP scan (más rápido en redes locales, aporta MAC + vendor)
         if 'arp' in techniques:
             if is_cancelled_callback and is_cancelled_callback(): return all_discovered
             print("   📡 Ejecutando ARP scan...")
@@ -284,36 +305,76 @@ class HostDiscovery:
             all_discovered.update(arp_results)
             print(f"      ✓ Descubiertos {len(arp_results)} hosts vía ARP")
             if is_cancelled_callback and is_cancelled_callback(): return all_discovered
-        
+
         # Técnica 2: ICMP ping (técnica estándar)
         if 'icmp' in techniques:
             if is_cancelled_callback and is_cancelled_callback(): return all_discovered
             print("   📡 Ejecutando ICMP ping scan...")
             icmp_results = self.icmp_ping_scan(target_range)
-            all_discovered.update(icmp_results)
+            for ip in icmp_results:
+                if ip not in all_discovered:
+                    all_discovered[ip] = {'mac_address': None, 'vendor': None}
             print(f"      ✓ Descubiertos {len(icmp_results)} hosts vía ICMP")
             if is_cancelled_callback and is_cancelled_callback(): return all_discovered
-        
+
         # Técnica 3: SYN quick scan (para hosts que filtran ICMP)
-        # Solo si las técnicas anteriores no encontraron suficientes hosts
-        # o si se solicita explícitamente
         if 'syn' in techniques and len(all_discovered) < 10:
             if is_cancelled_callback and is_cancelled_callback(): return all_discovered
             print("   📡 Ejecutando SYN quick scan (puertos comunes)...")
             syn_results = self.syn_quick_scan(target_range)
-            all_discovered.update(syn_results)
+            for ip in syn_results:
+                if ip not in all_discovered:
+                    all_discovered[ip] = {'mac_address': None, 'vendor': None}
             print(f"      ✓ Descubiertos {len(syn_results)} hosts vía SYN scan")
             if is_cancelled_callback and is_cancelled_callback(): return all_discovered
-        
+
         print(f"✅ Total de hosts únicos descubiertos: {len(all_discovered)}")
-        
+
         return all_discovered
     
     def extract_ips_from_output(self, output: str) -> Set[str]:
         """Extrae direcciones IP de una cadena de salida."""
-        ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
-        ips = re.findall(ip_pattern, output)
-        return {ip for ip in ips if self._is_valid_ip(ip)}
+        return set(self.extract_hosts_from_output(output).keys())
+
+    def extract_hosts_from_output(self, output: str) -> Dict[str, Dict]:
+        """
+        Extrae hosts con MAC y vendor de una salida de texto.
+        Soporta formato arp-scan (IP\\tMAC\\tVendor) y salida genérica (solo IPs).
+
+        Returns:
+            Dict IP -> {mac_address, vendor}
+        """
+        discovered: Dict[str, Dict] = {}
+        mac_pattern = re.compile(r'([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})', re.IGNORECASE)
+        ip_pattern_full = re.compile(r'\b((?:\d{1,3}\.){3}\d{1,3})\b')
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            ip_match = ip_pattern_full.search(line)
+            if not ip_match:
+                continue
+            ip_str = ip_match.group(1)
+            if not self._is_valid_ip(ip_str):
+                continue
+
+            mac_match = mac_pattern.search(line)
+            if mac_match:
+                mac_str = mac_match.group(1).upper()
+                parts = re.split(r'\s+', line, maxsplit=2)
+                vendor = parts[2].strip() if len(parts) >= 3 else None
+                if vendor and vendor.startswith('(DUP:'):
+                    continue
+                if not vendor:
+                    vendor = None
+                if ip_str not in discovered:
+                    discovered[ip_str] = {'mac_address': mac_str, 'vendor': vendor}
+            else:
+                if ip_str not in discovered:
+                    discovered[ip_str] = {'mac_address': None, 'vendor': None}
+
+        return discovered
     
     def _is_valid_ip(self, ip_str: str) -> bool:
         """Valida si una cadena es una IP válida y no es reservada."""

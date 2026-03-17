@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
     sudo \
+    git \
+    chromium \
+    chromium-driver \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -22,6 +25,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd -r wireshark && \
     usermod -aG wireshark root && \
     setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap
+
+# Instalar EyeWitness (capturas web con Chromium)
+RUN git clone --depth 1 https://github.com/FortyNorthSecurity/EyeWitness.git /opt/eyewitness \
+    && pip install --no-cache-dir -r /opt/eyewitness/requirements.txt
+
+# Variables de entorno para que EyeWitness localice Chromium
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-dev-shm-usage"
 
 # Establecer el directorio de trabajo
 WORKDIR /app

@@ -169,14 +169,12 @@ async def get_scans(
                 if process.poll() is None:  # None significa que el proceso sigue ejecutándose
                     continue  # Saltar este escaneo, está realmente en ejecución
             
-            # Verificar si hay resultados
-            hosts_count = cursor.execute("""
-                SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
-            """, (scan_id,)).fetchone()[0]
-            
-            ports_count = cursor.execute("""
-                SELECT COUNT(*) FROM scan_results WHERE scan_id = ?
-            """, (scan_id,)).fetchone()[0]
+            # Verificar si hay resultados (una sola query en lugar de dos)
+            counts_row = cursor.execute("""
+                SELECT COUNT(DISTINCT host_id), COUNT(*) FROM scan_results WHERE scan_id = ?
+            """, (scan_id,)).fetchone()
+            hosts_count = counts_row[0]
+            ports_count = counts_row[1]
             
             # Si hay resultados, marcar como completado, si no, como fallido
             if hosts_count > 0 or ports_count > 0:
@@ -202,12 +200,12 @@ async def get_scans(
     params = []
     
     if organization:
-        query += " AND organization_name = ?"
-        params.append(organization.upper())
-        
+        query += " AND UPPER(organization_name) = UPPER(?)"
+        params.append(organization)
+
     if location:
-        query += " AND location = ?"
-        params.append(location.upper())
+        query += " AND UPPER(location) = UPPER(?)"
+        params.append(location)
         
     if scan_id:
         query += " AND id = ?"
@@ -227,36 +225,40 @@ async def get_scans(
     for scan in scans:
         scan_dict = dict(scan)
         scan_id_str = str(scan_dict['id'])
-        
-        # Verificar si está realmente en ejecución
+
+        is_really_running = False
         if scan_dict['status'] == 'running':
+            # Primero comprobar si hay un proceso nativo activo
             if scan_id_str in running_processes:
                 process = running_processes[scan_id_str]
-                if process.poll() is None:  # Proceso sigue vivo
-                    scan_dict['is_really_running'] = True
-                else:
-                    # Proceso terminó pero no se actualizó el estado
-                    scan_dict['is_really_running'] = False
-            else:
-                scan_dict['is_really_running'] = False
-        else:
-            scan_dict['is_really_running'] = False
-        
+                if process.poll() is None:  # proceso sigue vivo
+                    is_really_running = True
+            # Si no hay proceso (p.ej. fase de host discovery sin subproceso),
+            # comprobar si el hilo de ejecución sigue vivo
+            if not is_really_running and scan_id_str in running_scans:
+                thread = running_scans[scan_id_str]
+                if thread.is_alive():
+                    is_really_running = True
+
+        scan_dict['is_really_running'] = is_really_running
         result.append(scan_dict)
-    
+
     return result
 
 def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
     """Ejecuta el escaneo en background usando scanners directamente."""
     try:
-        # Importar módulos de screenshots/source code si están disponibles
+        # Importar módulos de capturas web (EyeWitness) si están disponibles
         try:
-            from arsenal.core.protocols.web import take_screenshot, get_source
+            from arsenal.core.protocols.web import (
+                take_screenshot, get_source, capture_web_evidence_batch
+            )
             WEB_PROTOCOLS_AVAILABLE = True
         except ImportError:
             WEB_PROTOCOLS_AVAILABLE = False
             take_screenshot = None
             get_source = None
+            capture_web_evidence_batch = None
         
         # Actualizar progreso inicial
         try:
@@ -315,12 +317,11 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 custom_cmd = config.custom_host_discovery_command
                 placeholder = "El comando aparecerá aquí"
                 
+                host_discovery = HostDiscovery(interface=config.interface)
+
                 if custom_cmd and custom_cmd.strip() and placeholder not in custom_cmd:
                     print(f"[Scan {scan_id}] 📡 Fase 1: Ejecutando comando personalizado: {custom_cmd}")
-                    # Execute custom command
                     cmd_args = shlex.split(custom_cmd)
-                    
-                    # Usar Popen para registrar el proceso antes de que bloquee
                     process = subprocess.Popen(
                         cmd_args,
                         stdout=subprocess.PIPE,
@@ -329,36 +330,40 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     )
                     register_process(process)
                     stdout, stderr = process.communicate()
-                    
-                    # Extract IPs using HostDiscovery utility
-                    host_discovery = HostDiscovery(interface=config.interface)
+
+                    # Intentar extraer MAC/vendor si el output es formato arp-scan
+                    discovered_host_info = {}
                     if process.returncode == 0 or stdout:
-                        discovered_ips = host_discovery.extract_ips_from_output(stdout)
-                    
-                    if process.returncode != 0 and not discovered_ips:
+                        discovered_host_info = host_discovery.extract_hosts_from_output(stdout)
+
+                    if process.returncode != 0 and not discovered_host_info:
                         print(f"[Scan {scan_id}] ⚠️ El comando de descubrimiento devolvió error y no se encontraron IPs")
                 else:
-                    host_discovery = HostDiscovery(interface=config.interface)
-                    discovered_ips = host_discovery.discover_hosts(
-                        config.target_range, 
+                    discovered_host_info = host_discovery.discover_hosts(
+                        config.target_range,
                         process_callback=register_process,
                         is_cancelled_callback=is_scan_cancelled
                     )
-                
+
+                discovered_ips = set(discovered_host_info.keys())
+
                 if is_scan_cancelled():
                     print(f"[Scan {scan_id}] 🛑 Escaneo cancelado durante descubrimiento")
                     return
-                
+
                 print(f"[Scan {scan_id}] ✅ Descubiertos {len(discovered_ips)} hosts")
-                
-                # Guardar hosts descubiertos en la BD
+
+                # Guardar hosts descubiertos en la BD con toda la información disponible
                 for host_ip in discovered_ips:
                     if is_scan_cancelled(): return
                     try:
+                        host_info = discovered_host_info.get(host_ip, {})
                         storage.save_discovered_host(
                             scan_id=scan_id,
                             host_ip=host_ip,
-                            discovery_method='host_discovery'
+                            discovery_method='host_discovery',
+                            mac_address=host_info.get('mac_address'),
+                            vendor=host_info.get('vendor')
                         )
                     except Exception as e:
                         print(f"[Scan {scan_id}] ⚠️  Error guardando host {host_ip}: {e}")
@@ -432,8 +437,14 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                 protocol=None,
                                 state=host_data.get('status', 'up'),
                                 service_data={},
-                                hostname=hostname,
-                                host_data={'vendor': host_data.get('vendor')},
+                                hostname=host_data.get('hostname'),
+                                host_data={
+                                    'hostnames': host_data.get('hostnames', []),
+                                    'mac_address': host_data.get('mac_address'),
+                                    'vendor': host_data.get('vendor'),
+                                    'os': host_data.get('os', {}),
+                                    'host_scripts': host_data.get('host_scripts', {})
+                                },
                                 discovery_method='nmap_ping',
                                 timestamp=host_data.get('endtime') or host_data.get('starttime')
                             )
@@ -605,14 +616,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                         host_ip=host_ip,
                                         port=port_num,
                                         protocol=proto,
-                                        vulnerability_type=vuln.get('type', 'unknown'),
-                                        title=vuln.get('title', ''),
-                                        description=vuln.get('description', ''),
-                                        severity=vuln.get('severity', 'info'),
-                                        cvss_score=vuln.get('cvss', None),
-                                        references=vuln.get('references', ''),
-                                        script_id=script_id,
-                                        script_output=output_text
+                                        vulnerability_data=vuln
                                     )
                             
                             # Screenshots (si está habilitado y es servicio web)
@@ -900,141 +904,80 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 
                 print(f"[Scan {scan_id}] 🎯 Objetivos únicos tras deduplicar: {len(unique_targets)}")
                 
-                # 2. Inicializar driver compartido si los screenshots están habilitados
-                shared_driver = None
-                if config.screenshots and take_screenshot:
-                    try:
-                        from selenium import webdriver
-                        from selenium.webdriver.firefox.options import Options
-                        from selenium.webdriver.firefox.service import Service
-                        import os
-                        
-                        opts = Options()
-                        opts.add_argument("--headless")
-                        opts.add_argument("--no-sandbox")
-                        opts.add_argument("--disable-dev-shm-usage")
-                        opts.add_argument("--window-size=1920,1080")
-                        
-                        # Ubicación del Firefox de Kali
-                        opts.binary_location = '/usr/bin/firefox-esr'
-                        
-                        # 1. Configuración de seguridad para root
-                        os.environ["MOZ_DISABLE_CONTENT_SANDBOX"] = "1"
-                        os.environ["HOME"] = "/tmp"
-                        
-                        # 2. LA CURA AL ERROR: Borramos el rastro del entorno gráfico del usuario kali
-                        os.environ.pop("XAUTHORITY", None)
-                        os.environ.pop("DISPLAY", None)
-                        
-                        # 3. Servicio usando el Geckodriver que descargamos
-                        servicio = Service(executable_path='/usr/local/bin/geckodriver', log_path='/tmp/geckodriver.log')
-                        
-                        shared_driver = webdriver.Firefox(service=servicio, options=opts)
-                        print(f"[Scan {scan_id}] 🚀 Driver de Firefox compartido iniciado.")
-                    except Exception as e:
-                        print(f"[Scan {scan_id}] ⚠️ No se pudo iniciar el driver compartido de Firefox: {e}")
-                        if "geckodriver" in str(e).lower():
-                            print(f"[Scan {scan_id}] 💡 Sugerencia: Instala geckodriver (sudo apt install firefox-geckodriver)")
-
+                # Cachear enriquecimientos existentes para evitar duplicados entre escaneos
+                existing_enrichments = set()
                 try:
-                    # 2.5 Cachear enriquecimientos existentes para evitar duplicados entre escaneos
-                    # Buscamos qué (ip, port, tipo) ya tienen enriquecimiento registrado en la BD para esta organización
-                    existing_enrichments = set()
-                    try:
-                        conn = sqlite3.connect(str(storage.db_path))
-                        cursor = conn.cursor()
-                        # Solo consideramos enriquecimientos exitosos (que tengan file_path o data) en esta organización
-                        cursor.execute("""
-                            SELECT h.ip_address, sr.port, e.enrichment_type
-                            FROM enrichments e
-                            JOIN scan_results sr ON e.scan_result_id = sr.id
-                            JOIN hosts h ON sr.host_id = h.id
-                            JOIN scans s ON sr.scan_id = s.id
-                            WHERE s.organization_name = ?
-                        """, (config.organization.upper(),))
-                        for row in cursor.fetchall():
-                            existing_enrichments.add((row[0], row[1], row[2]))
-                        conn.close()
-                    except Exception as e:
-                        print(f"[Scan {scan_id}] ⚠️ Error consultando enriquecimientos previos: {e}")
+                    conn = sqlite3.connect(str(storage.db_path))
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT h.ip_address, sr.port, e.enrichment_type
+                        FROM enrichments e
+                        JOIN scan_results sr ON e.scan_result_id = sr.id
+                        JOIN hosts h ON sr.host_id = h.id
+                        JOIN scans s ON sr.scan_id = s.id
+                        WHERE s.organization_name = ?
+                    """, (config.organization.upper(),))
+                    for row in cursor.fetchall():
+                        existing_enrichments.add((row[0], row[1], row[2]))
+                    conn.close()
+                except Exception as e:
+                    print(f"[Scan {scan_id}] ⚠️ Error consultando enriquecimientos previos: {e}")
 
-                    for svc in unique_targets:
-                        host_ip = svc['ip_address']
-                        port_num = svc['port']
-                        proto = svc['protocol']
-                        
-                        # 3. Obtener Código Fuente
-                        source_obtained = False
-                        if config.source_code and get_source:
-                            # Check duplicado cross-scan
-                            if (host_ip, port_num, 'Websource') in existing_enrichments:
-                                print(f"[Scan {scan_id}] ⏩ Código fuente ya capturado en otro escaneo para {host_ip}:{port_num}, saltando.")
-                                source_obtained = True 
-                            else:
-                                try:
-                                    source = get_source(host_ip, port_num, str(source_dir))
-                                    if source:
-                                        source_obtained = True
-                                        # Registrar en el escaneo actual para que la UI lo vea
-                                        storage.save_host_result(scan_id=scan_id, host_ip=host_ip, port=port_num, protocol=proto, state='open', service_data={'name': svc.get('service_name', ''), 'product': svc.get('product', '')}, discovery_method='enrichment')
-                                        storage.save_enrichment(
-                                            scan_id=scan_id,
-                                            host_ip=host_ip,
-                                            port=port_num,
-                                            protocol=proto,
-                                            enrichment_type='Websource',
-                                            data=source,
-                                            file_path=str(source_dir / f"{host_ip}_{port_num}.txt")
-                                        )
-                                except Exception as e:
-                                    print(f"[Scan {scan_id}] ⚠️ Error obteniendo código de {host_ip}:{port_num}: {e}")
-                        
-                        # 4. Capturar Pantalla
-                        if config.screenshots and take_screenshot:
-                            # Check duplicado cross-scan
-                            if (host_ip, port_num, 'Screenshot') in existing_enrichments:
-                                print(f"[Scan {scan_id}] ⏩ Captura ya realizada en otro escaneo para {host_ip}:{port_num}, saltando.")
-                                continue
+                # Filtrar objetivos que aún necesitan captura
+                new_targets = []
+                for t in unique_targets:
+                    needs_screenshot = config.screenshots and (t['ip_address'], t['port'], 'Screenshot') not in existing_enrichments
+                    needs_source     = config.source_code  and (t['ip_address'], t['port'], 'Websource')    not in existing_enrichments
+                    if needs_screenshot or needs_source:
+                        new_targets.append({**t, 'needs_screenshot': needs_screenshot, 'needs_source': needs_source})
 
-                            if is_scan_cancelled(): 
-                                print(f"[Scan {scan_id}] 🛑 Cancelando fase de enriquecimiento...")
-                                break
-                            
-                            # Si source_code falló COMPLETAMENTE (ni siquiera status), saltamos
-                            # Pero si get_source devolvió algo (aunque no sea 200), tiramos captura
-                            if config.source_code and not source_obtained:
-                                # Hacemos un último intento rápido de ver si el puerto responde a NADA 
-                                # para no lanzar Firefox en balde
-                                try:
-                                    import socket
-                                    with socket.create_connection((host_ip, port_num), timeout=1):
-                                        pass
-                                except:
-                                    continue # Puerto cerrado o no responde
+                if new_targets and capture_web_evidence_batch:
+                    print(f"[Scan {scan_id}] 📸 Lanzando EyeWitness sobre {len(new_targets)} objetivo(s)...")
+                    batch_results = capture_web_evidence_batch(new_targets, str(img_dir), str(source_dir))
 
+                    for t in new_targets:
+                        if is_scan_cancelled():
+                            print(f"[Scan {scan_id}] 🛑 Cancelando fase de enriquecimiento...")
+                            break
+
+                        ip       = t['ip_address']
+                        port_num = t['port']
+                        proto    = t['protocol']
+                        evidence = batch_results.get((ip, port_num), {})
+
+                        if t['needs_source'] and evidence.get('source'):
                             try:
-                                screenshot = take_screenshot(host_ip, port_num, str(img_dir), driver=shared_driver)
-                                if screenshot:
-                                    # Registrar en el escaneo actual
-                                    storage.save_host_result(scan_id=scan_id, host_ip=host_ip, port=port_num, protocol=proto, state='open', service_data={'name': svc.get('service_name', ''), 'product': svc.get('product', '')}, discovery_method='enrichment')
-                                    storage.save_enrichment(
-                                        scan_id=scan_id,
-                                        host_ip=host_ip,
-                                        port=port_num,
-                                        protocol=proto,
-                                        enrichment_type='Screenshot',
-                                        data=screenshot,
-                                        file_path=str(img_dir / f"{host_ip}_{port_num}.png")
-                                    )
+                                storage.save_host_result(
+                                    scan_id=scan_id, host_ip=ip, port=port_num, protocol=proto,
+                                    state='open', service_data={'name': t.get('service_name', ''), 'product': t.get('product', '')},
+                                    discovery_method='enrichment'
+                                )
+                                storage.save_enrichment(
+                                    scan_id=scan_id, host_ip=ip, port=port_num, protocol=proto,
+                                    enrichment_type='Websource', data=evidence['source'],
+                                    file_path=str(source_dir / f"{ip}_{port_num}.txt")
+                                )
+                                print(f"[Scan {scan_id}] 📝 Código fuente guardado: {ip}:{port_num}")
                             except Exception as e:
-                                print(f"[Scan {scan_id}] ⚠️ Error capturando imagen de {host_ip}:{port_num}: {e}")
-                finally:
-                    if shared_driver:
-                        try:
-                            shared_driver.quit()
-                            print(f"[Scan {scan_id}] 🛑 Driver de Firefox compartido cerrado.")
-                        except:
-                            pass
+                                print(f"[Scan {scan_id}] ⚠️ Error guardando source de {ip}:{port_num}: {e}")
+
+                        if t['needs_screenshot'] and evidence.get('screenshot'):
+                            try:
+                                storage.save_host_result(
+                                    scan_id=scan_id, host_ip=ip, port=port_num, protocol=proto,
+                                    state='open', service_data={'name': t.get('service_name', ''), 'product': t.get('product', '')},
+                                    discovery_method='enrichment'
+                                )
+                                storage.save_enrichment(
+                                    scan_id=scan_id, host_ip=ip, port=port_num, protocol=proto,
+                                    enrichment_type='Screenshot', data=evidence['screenshot'],
+                                    file_path=str(img_dir / f"{ip}_{port_num}.png")
+                                )
+                                print(f"[Scan {scan_id}] 📸 Screenshot guardado: {ip}:{port_num}")
+                            except Exception as e:
+                                print(f"[Scan {scan_id}] ⚠️ Error guardando screenshot de {ip}:{port_num}: {e}")
+                else:
+                    print(f"[Scan {scan_id}] ⏩ Todos los objetivos ya tienen enriquecimientos previos.")
             else:
                 if not config.nmap and not config.host_discovery:
                     msg = f"No se han encontrado activos o servicios web en el rango {config.target_range} para procesar. Se recomienda ejecutar acompañado de un escaneo Nmap o descubrimiento de hosts."
@@ -1206,7 +1149,7 @@ def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 # Procesar lo que quede en el pcap antes de salir
                 print(f"[Scan {scan_id}] 📦 Procesando datos finales antes de cerrar...")
                 try:
-                    scans_module.process_pcap_file(scan_id, str(pcap_file), organization, location)
+                    process_pcap_file(scan_id, str(pcap_file), organization, location)
                 except:
                     pass
                 break
@@ -1547,15 +1490,7 @@ def run_ioxid_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     # Guardar host en la base de datos si no existe
                     storage.save_discovered_host(scan_id, ip, discovery_method='ioxid')
                     
-                    # Obtener host_id
-                    conn = sqlite3.connect(str(storage.db_path))
-                    cursor = conn.cursor()
-                    host_id_row = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (ip,)).fetchone()
-                    conn.close()
-                    
-                    if host_id_row:
-                        host_id = host_id_row[0]
-                        storage.add_host_interfaces(host_id, interfaces)
+                    storage.add_host_interfaces(ip, interfaces)
                         interfaces_found += len(interfaces)
                     
                     hosts_discovered += 1
