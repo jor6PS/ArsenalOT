@@ -11,15 +11,39 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nmap \
     tshark \
     tcpdump \
+    arp-scan \
     libpcap-dev \
     gcc \
     python3-dev \
     sudo \
+    git \
+    wget \
+    curl \
+    xvfb \
+    xauth \
+    firefox-esr \
+    chromium \
+    chromium-driver \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Configurar tshark para que pueda ser ejecutado por un usuario no root (aunque correremos como root para escaneos)
-RUN groupadd -r wireshark && \
+# Instalar geckodriver para Firefox
+ENV GECKO_VERSION v0.36.0
+RUN wget https://github.com/mozilla/geckodriver/releases/download/$GECKO_VERSION/geckodriver-$GECKO_VERSION-linux64.tar.gz \
+    && tar -xzf geckodriver-$GECKO_VERSION-linux64.tar.gz \
+    && mv geckodriver /usr/local/bin/ \
+    && rm geckodriver-$GECKO_VERSION-linux64.tar.gz
+
+# Instalar EyeWitness
+RUN git clone https://github.com/FortyNorthSecurity/EyeWitness.git /opt/EyeWitness && \
+    cd /opt/EyeWitness/setup && \
+    # EyeWitness setup.sh installs many things, we use its requirements
+    pip install --no-cache-dir -r requirements.txt && \
+    ln -s /opt/EyeWitness/Python/EyeWitness.py /usr/bin/eyewitness && \
+    chmod +x /usr/bin/eyewitness
+
+# Configurar tshark y permisos
+RUN groupadd -r wireshark || true && \
     usermod -aG wireshark root && \
     setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap
 

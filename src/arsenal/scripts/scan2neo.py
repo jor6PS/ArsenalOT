@@ -131,6 +131,7 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                    m.os_info_json as isolation_os,
                    m.host_scripts_json as isolation_scripts,
                    m.interfaces_json as isolation_interfaces,
+                   h.interfaces_json as global_interfaces,
                    m.last_seen as isolation_last_seen
             FROM scan_results sr
             JOIN hosts h ON h.id = sr.host_id
@@ -178,8 +179,8 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                     'vendor': row['isolation_vendor'] or '',
                     'mac': row['isolation_mac'] or '',
                     'os_info': row['isolation_os'] or '',
-                    'hostnames': row['isolation_hostnames'] or '',
-                    'interfaces': row['isolation_interfaces'] or '',
+                    'hostnames': ", ".join([s.strip('\x00') for s in json.loads(row['isolation_hostnames'])]) if row['isolation_hostnames'] else '',
+                    'interfaces': ", ".join([s.strip('\x00') for s in json.loads(row['isolation_interfaces'] or row['global_interfaces'])]) if (row['isolation_interfaces'] or row['global_interfaces']) else '',
                     'scripts': row['isolation_scripts'] or '',
                     'timestamp': row['isolation_last_seen'] or row['discovered_at'],
                     'network_range': subnet if subnet and subnet != "Unknown" else None,
@@ -195,7 +196,7 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                 enrs = cursor.execute("SELECT enrichment_type, data FROM enrichments WHERE scan_result_id = ?", (row['scan_result_id'],)).fetchall()
                 vulns = cursor.execute("SELECT * FROM vulnerabilities WHERE scan_result_id = ?", (row['scan_result_id'],)).fetchall()
                 
-                active_hosts_map[ip]['services'].append({
+                service_dict = {
                     'port': row['port'],
                     'protocol': row['protocol'],
                     'name': row['service_name'],
@@ -203,9 +204,22 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                     'version': row['version'],
                     'extrainfo': row['extrainfo'],
                     'scripts': row['scripts_json'],
-                    'enrichments': [dict(e) for e in enrs],
                     'vulnerabilities': [dict(v) for v in vulns]
-                })
+                }
+                
+                # Procesar enriquecimientos como propiedades del servicio
+                for e in enrs:
+                    etype = e['enrichment_type']
+                    if etype == 'Screenshot':
+                        service_dict['SCREENSHOT'] = e['data']
+                    elif etype == 'Websource':
+                        service_dict['WEBSOURCE'] = e['data']
+                    elif etype == 'IOXIDResolver':
+                        service_dict['IOXID'] = e['data']
+                    else:
+                        service_dict[f'ENRICHMENT_{etype.upper()}'] = e['data']
+                
+                active_hosts_map[ip]['services'].append(service_dict)
 
         scan_dict['hosts'] = list(active_hosts_map.values())
         
@@ -235,6 +249,8 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                                m.hostname as isolation_hostname,
                                m.hostnames_json as isolation_hostnames,
                                m.mac_address as isolation_mac,
+                               m.interfaces_json as isolation_interfaces,
+                               h.interfaces_json as global_interfaces,
                                m.last_seen as isolation_last_seen
                         FROM hosts h
                         LEFT JOIN host_scan_metadata m ON m.host_id = h.id AND m.scan_id = ?
@@ -257,7 +273,6 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                 
                 # AISLAMIENTO ESTRICTO: No heredamos nada de la tabla global hosts
                 # Solo usamos lo que diga el escaneo actual (captura o metadata)
-                
                 net_info = network_names_map.get(o_name, {}).get(subnet or "Unknown", {})
                 subnet_name = net_info.get('name') or "Unknown"
                 system_name = net_info.get('system') or "Internal"
@@ -273,8 +288,8 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                     'vendor': '', # Aislado para pasivo por ahora, a menos que metadata diga lo contrario
                     'mac': mac or h_info.get('isolation_mac') or '', # Captura pcap > metadata scan
                     'os_info': '', # Aislado
-                    'hostnames': h_info.get('isolation_hostnames') or '',
-                    'interfaces': '', # Aislado
+                    'hostnames': ", ".join([s.strip('\x00') for s in json.loads(h_info.get('isolation_hostnames'))]) if h_info and h_info.get('isolation_hostnames') else '',
+                    'interfaces': ", ".join([s.strip('\x00') for s in json.loads(h_info.get('isolation_interfaces') or h_info.get('global_interfaces'))]) if h_info and (h_info.get('isolation_interfaces') or h_info.get('global_interfaces')) else '',
                     'timestamp': h_info.get('isolation_last_seen') if h_info else None,
                     'network_range': subnet if subnet and subnet != "Unknown" else None,
                     'network_name': subnet_name,
@@ -344,7 +359,6 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
         # 4. PREPARAR DATOS PARA BULK INSERT (UNWIND)
         hosts_data = []
         services_data = []
-        enrichments_data = []
         
         for h in scan['hosts']:
             h_props = {
@@ -361,25 +375,20 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
             
             # Recolectar Servicios
             for s in h['services']:
-                services_data.append({
+                s_props = {
                     'host_ip': h['ip'],
                     'id': f"{h['ip']}_{s['port']}_{s['protocol']}_{discovery_source}",
                     'port': s['port'], 'protocol': s['protocol'], 'name': s['name'] or 'unknown',
                     'product': s['product'] or '', 'version': s['version'] or '',
                     'vulnerabilities': ", ".join([v.get('cve_id') or v.get('vulnerability_id') for v in s['vulnerabilities']]) if s['vulnerabilities'] else ''
-                })
+                }
                 
-                # Extraer enrichments embebidos en el servicio
-                if 'enrichments' in s and s['enrichments']:
-                    for idx, e in enumerate(s['enrichments']):
-                        enrichments_data.append({
-                            'host_ip': h['ip'],
-                            'id': f"enr_{h['ip']}_{s['port']}_{idx}_{discovery_source}",
-                            'type': e.get('enrichment_type', 'unknown'),
-                            'data': e.get('data', ''),
-                            'port': s['port'],
-                            'protocol': s['protocol']
-                        })
+                # Añadir enriquecimientos (ahora son propiedades en s)
+                for k, v in s.items():
+                    if k not in ['port', 'protocol', 'name', 'product', 'version', 'extrainfo', 'scripts', 'vulnerabilities']:
+                        s_props[k] = v
+                
+                services_data.append(s_props)
 
         # --- EJECUTAR BULK HOSTS ---
         print(f"📦 [Scan {scan['id']}] Exportando {len(hosts_data)} hosts...")
@@ -405,17 +414,6 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
                 MERGE (h)-[:HAS_SERVICE]->(s)
             """, data=services_data, org=org_name, ds=discovery_source)
 
-        # --- EJECUTAR BULK ENRICHMENTS ---
-        if enrichments_data:
-            print(f"📦 [Scan {scan['id']}] Exportando {len(enrichments_data)} enrichments (capturas)...")
-            graph.run("""
-                UNWIND $data AS row
-                MERGE (e:ENRICHMENT {id: row.id})
-                SET e.type = row.type, e.data = row.data, e.port = row.port, e.protocol = row.protocol
-                WITH e, row
-                MATCH (h:HOST {ORGANIZACION: $org, IP: row.host_ip, DISCOVERY_SOURCE: $ds})
-                MERGE (h)-[:HAS_ENRICHMENT]->(e)
-            """, data=enrichments_data, org=org_name, ds=discovery_source)
 
         # --- EJECUTAR BULK CONVERSACIONES (PASIVO) ---
         if not is_active and scan['passive_conversations']:

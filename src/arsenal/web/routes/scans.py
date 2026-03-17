@@ -251,12 +251,13 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
     try:
         # Importar módulos de screenshots/source code si están disponibles
         try:
-            from arsenal.core.protocols.web import take_screenshot, get_source
+            from arsenal.core.protocols.web import take_screenshot, get_source, run_eyewitness_batch
             WEB_PROTOCOLS_AVAILABLE = True
         except ImportError:
             WEB_PROTOCOLS_AVAILABLE = False
             take_screenshot = None
             get_source = None
+            run_eyewitness_batch = None
         
         # Actualizar progreso inicial
         try:
@@ -425,6 +426,9 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         
                         # Guardar host en BD (aunque no tenga puertos)
                         try:
+                            # Intentar obtener hostname del parser
+                            hostname = host_data.get('hostname') or (host_data.get('hostnames', [])[0] if host_data.get('hostnames') else None)
+                            
                             storage.save_host_result(
                                 scan_id=scan_id,
                                 host_ip=host_ip,
@@ -693,7 +697,11 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 if len(targets_to_process) > 256:
                     print(f"[Scan {scan_id}] ⚠️ Demasiados targets ({len(targets_to_process)}) para capturas sin Nmap. Limitando a los primeros 256.")
                     targets_to_process = targets_to_process[:256]
-
+                
+                # 1. Preparar objetivos para EyeWitness
+                unique_eyewitness_targets = []
+                seen_targets = set()
+                
                 for target_str in targets_to_process:
                     try:
                         # Detectar si el target tiene puerto específico (IP:PORT)
@@ -705,57 +713,56 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                             target_ports = [int(target_parts[1])]
                         else:
                             # Fallback: En modo específico sin puerto, probamos puertos web comunes
-                            target_ports = [80, 443, 8080, 8443, 8000]
-                        
-                        # Registrar el host si no existe
-                        storage.save_discovered_host(scan_id, host_ip, 'specific_capture')
+                            target_ports = [80, 443, 8000, 8080, 8081, 8443, 8888, 9090, 10000]
                         
                         for port_num in target_ports:
-                            protocol = 'tcp'
-                            
-                            # Screenshots
-                            if config.screenshots and take_screenshot:
-                                try:
-                                    # take_screenshot ya debería manejar el timeout internamente
-                                    screenshot = take_screenshot(host_ip, port_num, str(img_dir))
-                                    if screenshot:
-                                        print(f"[Scan {scan_id}] 📸 Screenshot capturado: {host_ip}:{port_num}")
-                                        # Guardar host result mínimo para vincular el enrichment
-                                        res_id = storage.save_host_result(
-                                            scan_id=scan_id, host_ip=host_ip, port=port_num, 
-                                            protocol=protocol, state='open', service_data={'name': 'http-alt' if port_num != 80 and port_num != 443 else 'http'},
-                                            discovery_method='specific_capture'
-                                        )
-                                        storage.save_enrichment(
-                                            scan_id=scan_id, host_ip=host_ip, port=port_num,
-                                            protocol=protocol, enrichment_type='Screenshot',
-                                            data=screenshot, file_path=str(img_dir / f"{host_ip}_{port_num}.png")
-                                        )
-                                except Exception as e:
-                                    pass # Silencioso para no saturar si el puerto está cerrado
-                            
-                            # Source code
-                            if config.source_code and get_source:
-                                try:
-                                    source = get_source(host_ip, port_num, str(source_dir))
-                                    if source:
-                                        print(f"[Scan {scan_id}] 📝 Source code capturado: {host_ip}:{port_num}")
-                                        # Guardar host result si no se hizo en el paso anterior
-                                        storage.save_host_result(
-                                            scan_id=scan_id, host_ip=host_ip, port=port_num, 
-                                            protocol=protocol, state='open', service_data={'name': 'http-alt'},
-                                            discovery_method='specific_capture'
-                                        )
-                                        storage.save_enrichment(
-                                            scan_id=scan_id, host_ip=host_ip, port=port_num,
-                                            protocol=protocol, enrichment_type='Websource',
-                                            data=source, file_path=str(source_dir / f"{host_ip}_{port_num}.txt")
-                                        )
-                                except Exception as e:
-                                    pass
+                            key = (host_ip, port_num)
+                            if key not in seen_targets:
+                                unique_eyewitness_targets.append({
+                                    'ip_address': host_ip,
+                                    'port': port_num,
+                                    'protocol': 'tcp'
+                                })
+                                seen_targets.add(key)
+                    except Exception:
+                        continue
 
+                if unique_eyewitness_targets:
+                    print(f"[Scan {scan_id}] 🎯 Ejecutando EyeWitness para {len(unique_eyewitness_targets)} objetivos específicos...")
+                    try:
+                        ew_results = run_eyewitness_batch(unique_eyewitness_targets, str(img_dir), str(source_dir))
+                        
+                        # 2. Guardar resultados en la BD
+                        for (ip, port), data in ew_results.items():
+                            svc_data = {'name': 'http-alt' if port not in [80, 443] else 'http'}
+                            proto = 'tcp'
+
+                            # Registrar el host y puerto si se encontró algo
+                            if data.get("screenshot") or data.get("source"):
+                                storage.save_host_result(
+                                    scan_id=scan_id, host_ip=ip, port=port, 
+                                    protocol=proto, state='open', service_data=svc_data,
+                                    discovery_method='specific_capture'
+                                )
+
+                            # Guardar Screenshot
+                            if data.get("screenshot"):
+                                storage.save_enrichment(
+                                    scan_id=scan_id, host_ip=ip, port=port,
+                                    protocol=proto, enrichment_type='Screenshot',
+                                    data=data["screenshot"], file_path=str(img_dir / f"{ip}_{port}.png")
+                                )
+
+                            # Guardar Código Fuente
+                            if data.get("source"):
+                                storage.save_enrichment(
+                                    scan_id=scan_id, host_ip=ip, port=port,
+                                    protocol=proto, enrichment_type='Websource',
+                                    data=data["source"], file_path=str(source_dir / f"{ip}_{port}.txt")
+                                )
+                        print(f"[Scan {scan_id}] ✅ Fase de EyeWitness específica completada.")
                     except Exception as e:
-                        print(f"[Scan {scan_id}] ⚠️ Error en capturas para {target_str}: {e}")
+                        print(f"[Scan {scan_id}] ⚠️ Error en EyeWitness específico: {e}")
 
         # ============================================================================
         # PASO 3: IOXIDRESOLVER (si está habilitado)
@@ -764,10 +771,6 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
             print(f"[Scan {scan_id}] 📌 Iniciando escaneo IOXIDResolver...")
             try:
                 ioxid_scanner = IOXIDResolverScanner()
-                
-                # Obtener hosts para IOXID
-                conn = sqlite3.connect(str(storage.db_path))
-                cursor = conn.cursor()
                 ioxid_targets = [row[0] for row in cursor.execute(
                     "SELECT DISTINCT ip_address FROM hosts h JOIN scan_results sr ON h.id = sr.host_id WHERE sr.scan_id = ?",
                     (scan_id,)
@@ -815,7 +818,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         if interfaces:
                             # Si es un host nuevo (no descubierto por Nmap/HD), registrarlo
                             storage.save_discovered_host(scan_id, host_ip, discovery_method='ioxid')
-                            storage.add_host_interfaces(host_ip, interfaces)
+                            storage.add_host_interfaces(host_ip, interfaces, scan_id=scan_id)
                             print(f"[Scan {scan_id}] ✅ IOXID {host_ip}: {len(interfaces)} interfaces")
                     except Exception as e:
                         pass
@@ -823,9 +826,9 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 print(f"[Scan {scan_id}] ⚠️  Error en paso IOXIDResolver: {e}")
 
         # ============================================================================
-        # PASO 4: ENRIQUECIMIENTO STANDALONE (si está habilitado y no se hizo en Paso 2)
+        # PASO 4: ENRIQUECIMIENTO STANDALONE (si está habilitado y no se hizo en Modo Específico)
         # ============================================================================
-        if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE:
+        if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE and config.scan_mode != "specific":
             print(f"[Scan {scan_id}] 🌐 Iniciando fase de enriquecimiento standalone...")
             
             enrichment_targets = []
@@ -861,6 +864,9 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         
                         for t in targets_to_check:
                             try:
+                                # Limpiar puerto si existe en el target string para la comparación de IP
+                                t_ip_only = t.split(':')[0]
+                                
                                 if '/' in t:
                                     # Es un rango CIDR
                                     if svc_ip in ipaddress.ip_network(t, strict=False):
@@ -868,12 +874,12 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                         break
                                 else:
                                     # Intentar como IP única
-                                    if svc_ip == ipaddress.ip_address(t):
+                                    if svc_ip == ipaddress.ip_address(t_ip_only):
                                         matches = True
                                         break
                             except ValueError:
-                                # Si no es IP ni CIDR, comparar literal
-                                if svc_ip_str == t:
+                                # Comparación literal como fallback
+                                if svc_ip_str == t or svc_ip_str == t_ip_only:
                                     matches = True
                                     break
                                     
@@ -888,153 +894,63 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
             if enrichment_targets:
                 print(f"[Scan {scan_id}] 📸 Procesando {len(enrichment_targets)} servicios web para enriquecimiento...")
                 
-                # Optimizaciones: 
-                # 1. Deduplicar objetivos (evitar procesar mismo IP:PORT varias veces)
-                unique_targets = []
+                # 1. Deduplicar y preparar objetivos para EyeWitness
+                unique_eyewitness_targets = []
                 seen_targets = set()
                 for t in enrichment_targets:
                     key = (t['ip_address'], t['port'])
                     if key not in seen_targets:
-                        unique_targets.append(t)
+                        unique_eyewitness_targets.append({
+                            'ip_address': t['ip_address'],
+                            'port': t['port'],
+                            'protocol': t['protocol'],
+                            'service_name': t.get('service_name', ''),
+                            'product': t.get('product', '')
+                        })
                         seen_targets.add(key)
                 
-                print(f"[Scan {scan_id}] 🎯 Objetivos únicos tras deduplicar: {len(unique_targets)}")
+                print(f"[Scan {scan_id}] 🎯 Objetivos únicos para EyeWitness: {len(unique_eyewitness_targets)}")
                 
-                # 2. Inicializar driver compartido si los screenshots están habilitados
-                shared_driver = None
-                if config.screenshots and take_screenshot:
-                    try:
-                        from selenium import webdriver
-                        from selenium.webdriver.firefox.options import Options
-                        from selenium.webdriver.firefox.service import Service
-                        import os
-                        
-                        opts = Options()
-                        opts.add_argument("--headless")
-                        opts.add_argument("--no-sandbox")
-                        opts.add_argument("--disable-dev-shm-usage")
-                        opts.add_argument("--window-size=1920,1080")
-                        
-                        # Ubicación del Firefox de Kali
-                        opts.binary_location = '/usr/bin/firefox-esr'
-                        
-                        # 1. Configuración de seguridad para root
-                        os.environ["MOZ_DISABLE_CONTENT_SANDBOX"] = "1"
-                        os.environ["HOME"] = "/tmp"
-                        
-                        # 2. LA CURA AL ERROR: Borramos el rastro del entorno gráfico del usuario kali
-                        os.environ.pop("XAUTHORITY", None)
-                        os.environ.pop("DISPLAY", None)
-                        
-                        # 3. Servicio usando el Geckodriver que descargamos
-                        servicio = Service(executable_path='/usr/local/bin/geckodriver', log_path='/tmp/geckodriver.log')
-                        
-                        shared_driver = webdriver.Firefox(service=servicio, options=opts)
-                        print(f"[Scan {scan_id}] 🚀 Driver de Firefox compartido iniciado.")
-                    except Exception as e:
-                        print(f"[Scan {scan_id}] ⚠️ No se pudo iniciar el driver compartido de Firefox: {e}")
-                        if "geckodriver" in str(e).lower():
-                            print(f"[Scan {scan_id}] 💡 Sugerencia: Instala geckodriver (sudo apt install firefox-geckodriver)")
-
+                # 2. Ejecutar EyeWitness en lote
                 try:
-                    # 2.5 Cachear enriquecimientos existentes para evitar duplicados entre escaneos
-                    # Buscamos qué (ip, port, tipo) ya tienen enriquecimiento registrado en la BD para esta organización
-                    existing_enrichments = set()
-                    try:
-                        conn = sqlite3.connect(str(storage.db_path))
-                        cursor = conn.cursor()
-                        # Solo consideramos enriquecimientos exitosos (que tengan file_path o data) en esta organización
-                        cursor.execute("""
-                            SELECT h.ip_address, sr.port, e.enrichment_type
-                            FROM enrichments e
-                            JOIN scan_results sr ON e.scan_result_id = sr.id
-                            JOIN hosts h ON sr.host_id = h.id
-                            JOIN scans s ON sr.scan_id = s.id
-                            WHERE s.organization_name = ?
-                        """, (config.organization.upper(),))
-                        for row in cursor.fetchall():
-                            existing_enrichments.add((row[0], row[1], row[2]))
-                        conn.close()
-                    except Exception as e:
-                        print(f"[Scan {scan_id}] ⚠️ Error consultando enriquecimientos previos: {e}")
+                    ew_results = run_eyewitness_batch(unique_eyewitness_targets, str(img_dir), str(source_dir))
+                    
+                    # 3. Guardar resultados en la BD
+                    for (ip, port), data in ew_results.items():
+                        # Encontrar el target original para obtener metadata (service_name, etc.)
+                        target_info = next((t for t in unique_eyewitness_targets if t['ip_address'] == ip and t['port'] == port), {})
+                        proto = target_info.get('protocol', 'tcp')
+                        svc_data = {'name': target_info.get('service_name', ''), 'product': target_info.get('product', '')}
 
-                    for svc in unique_targets:
-                        host_ip = svc['ip_address']
-                        port_num = svc['port']
-                        proto = svc['protocol']
-                        
-                        # 3. Obtener Código Fuente
-                        source_obtained = False
-                        if config.source_code and get_source:
-                            # Check duplicado cross-scan
-                            if (host_ip, port_num, 'Websource') in existing_enrichments:
-                                print(f"[Scan {scan_id}] ⏩ Código fuente ya capturado en otro escaneo para {host_ip}:{port_num}, saltando.")
-                                source_obtained = True 
-                            else:
-                                try:
-                                    source = get_source(host_ip, port_num, str(source_dir))
-                                    if source:
-                                        source_obtained = True
-                                        # Registrar en el escaneo actual para que la UI lo vea
-                                        storage.save_host_result(scan_id=scan_id, host_ip=host_ip, port=port_num, protocol=proto, state='open', service_data={'name': svc.get('service_name', ''), 'product': svc.get('product', '')}, discovery_method='enrichment')
-                                        storage.save_enrichment(
-                                            scan_id=scan_id,
-                                            host_ip=host_ip,
-                                            port=port_num,
-                                            protocol=proto,
-                                            enrichment_type='Websource',
-                                            data=source,
-                                            file_path=str(source_dir / f"{host_ip}_{port_num}.txt")
-                                        )
-                                except Exception as e:
-                                    print(f"[Scan {scan_id}] ⚠️ Error obteniendo código de {host_ip}:{port_num}: {e}")
-                        
-                        # 4. Capturar Pantalla
-                        if config.screenshots and take_screenshot:
-                            # Check duplicado cross-scan
-                            if (host_ip, port_num, 'Screenshot') in existing_enrichments:
-                                print(f"[Scan {scan_id}] ⏩ Captura ya realizada en otro escaneo para {host_ip}:{port_num}, saltando.")
-                                continue
+                        # Guardar Screenshot si existe
+                        if data.get("screenshot"):
+                            storage.save_host_result(scan_id=scan_id, host_ip=ip, port=port, protocol=proto, state='open', service_data=svc_data, discovery_method='enrichment')
+                            storage.save_enrichment(
+                                scan_id=scan_id,
+                                host_ip=ip,
+                                port=port,
+                                protocol=proto,
+                                enrichment_type='Screenshot',
+                                data=data["screenshot"],
+                                file_path=str(img_dir / f"{ip}_{port}.png")
+                            )
 
-                            if is_scan_cancelled(): 
-                                print(f"[Scan {scan_id}] 🛑 Cancelando fase de enriquecimiento...")
-                                break
-                            
-                            # Si source_code falló COMPLETAMENTE (ni siquiera status), saltamos
-                            # Pero si get_source devolvió algo (aunque no sea 200), tiramos captura
-                            if config.source_code and not source_obtained:
-                                # Hacemos un último intento rápido de ver si el puerto responde a NADA 
-                                # para no lanzar Firefox en balde
-                                try:
-                                    import socket
-                                    with socket.create_connection((host_ip, port_num), timeout=1):
-                                        pass
-                                except:
-                                    continue # Puerto cerrado o no responde
-
-                            try:
-                                screenshot = take_screenshot(host_ip, port_num, str(img_dir), driver=shared_driver)
-                                if screenshot:
-                                    # Registrar en el escaneo actual
-                                    storage.save_host_result(scan_id=scan_id, host_ip=host_ip, port=port_num, protocol=proto, state='open', service_data={'name': svc.get('service_name', ''), 'product': svc.get('product', '')}, discovery_method='enrichment')
-                                    storage.save_enrichment(
-                                        scan_id=scan_id,
-                                        host_ip=host_ip,
-                                        port=port_num,
-                                        protocol=proto,
-                                        enrichment_type='Screenshot',
-                                        data=screenshot,
-                                        file_path=str(img_dir / f"{host_ip}_{port_num}.png")
-                                    )
-                            except Exception as e:
-                                print(f"[Scan {scan_id}] ⚠️ Error capturando imagen de {host_ip}:{port_num}: {e}")
-                finally:
-                    if shared_driver:
-                        try:
-                            shared_driver.quit()
-                            print(f"[Scan {scan_id}] 🛑 Driver de Firefox compartido cerrado.")
-                        except:
-                            pass
+                        # Guardar Código Fuente si existe
+                        if data.get("source"):
+                            storage.save_host_result(scan_id=scan_id, host_ip=ip, port=port, protocol=proto, state='open', service_data=svc_data, discovery_method='enrichment')
+                            storage.save_enrichment(
+                                scan_id=scan_id,
+                                host_ip=ip,
+                                port=port,
+                                protocol=proto,
+                                enrichment_type='Websource',
+                                data=data["source"],
+                                file_path=str(source_dir / f"{ip}_{port}.txt")
+                            )
+                    
+                    print(f"[Scan {scan_id}] ✅ Fase de EyeWitness completada.")
+                except Exception as e:
+                    print(f"[Scan {scan_id}] ⚠️  Error en fase EyeWitness: {e}")
             else:
                 if not config.nmap and not config.host_discovery:
                     msg = f"No se han encontrado activos o servicios web en el rango {config.target_range} para procesar. Se recomienda ejecutar acompañado de un escaneo Nmap o descubrimiento de hosts."
@@ -1547,7 +1463,7 @@ def run_ioxid_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     # Guardar host en la base de datos si no existe
                     storage.save_discovered_host(scan_id, ip, discovery_method='ioxid')
                     
-                    storage.add_host_interfaces(ip, interfaces)
+                    storage.add_host_interfaces(ip, interfaces, scan_id=scan_id)
                     interfaces_found += len(interfaces)
                     
                     hosts_discovered += 1

@@ -637,6 +637,15 @@ class ScanStorage:
         """, (host_ip, hostname, mac_address, vendor, subnet, is_private, discovered_at, discovered_at))
 
         host_id = cursor.lastrowid
+        if not host_id:
+            cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (host_ip,))
+            row = cursor.fetchone()
+            if row:
+                host_id = row[0]
+            else:
+                print(f"⚠️  No se pudo obtener el host_id para {host_ip} en save_discovered_host")
+                conn.close()
+                return False
 
         try:
             existing = cursor.execute("""
@@ -767,6 +776,15 @@ class ScanStorage:
               os_info_json, host_scripts_json, discovered_at, discovered_at))
         
         host_id = cursor.lastrowid
+        if not host_id:
+            cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (host_ip,))
+            row = cursor.fetchone()
+            if row:
+                host_id = row[0]
+            else:
+                print(f"⚠️  No se pudo obtener el host_id para {host_ip}")
+                conn.close()
+                return False
 
         # Preparar scripts JSON
         scripts_json = None
@@ -918,7 +936,13 @@ class ScanStorage:
                       os_info_json, host_scripts_json, discovered_at, discovered_at))
                 
                 host_id = cursor.lastrowid
-                if not host_id: continue
+                if not host_id:
+                    cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (host_ip,))
+                    row = cursor.fetchone()
+                    if row:
+                        host_id = row[0]
+                    else:
+                        continue
                 
                 scripts_json = None
                 if 'scripts' in service_data and service_data['scripts']:
@@ -1657,18 +1681,34 @@ class ScanStorage:
                     ips.add(ip)
         return ips
 
-    def add_host_interfaces(self, ip_address: str, interfaces: List[str]):
+    def add_host_interfaces(self, ip_address: str, interfaces: List[str], scan_id: int = None):
         """Agrega o actualiza la lista de interfaces de red adicionales para un host."""
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
             interfaces_json = json.dumps(interfaces)
             
+            # Actualizar tabla maestra de hosts
             cursor.execute("""
                 UPDATE hosts 
                 SET interfaces_json = ?, last_seen = CURRENT_TIMESTAMP
                 WHERE ip_address = ?
             """, (interfaces_json, ip_address))
+            
+            # Si se proporciona scan_id, actualizar también los metadatos aislados del escaneo
+            if scan_id:
+                # Primero asegurar que existe el registro de metadata
+                cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (ip_address,))
+                host_row = cursor.fetchone()
+                if host_row:
+                    host_id = host_row[0]
+                    cursor.execute("""
+                        INSERT INTO host_scan_metadata (scan_id, host_id, interfaces_json, last_seen)
+                        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                        ON CONFLICT(scan_id, host_id) DO UPDATE SET
+                            interfaces_json = excluded.interfaces_json,
+                            last_seen = excluded.last_seen
+                    """, (scan_id, host_id, interfaces_json))
             
             conn.commit()
         finally:

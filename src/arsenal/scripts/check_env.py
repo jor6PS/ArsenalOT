@@ -124,6 +124,7 @@ class DependencyChecker:
             "eyewitness",
             "/usr/bin/eyewitness",
             "/usr/local/bin/eyewitness",
+            "/opt/EyeWitness/Python/EyeWitness.py",
             "/opt/eyewitness/Python/EyeWitness.py",
             "/usr/share/eyewitness/EyeWitness.py",
         ]

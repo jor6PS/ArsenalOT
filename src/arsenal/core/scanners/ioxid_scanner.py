@@ -43,7 +43,7 @@ class IOXIDResolverScanner:
             for binding in bindings:
                 # Cada binding es un objeto que contiene información de red
                 # Extraemos la dirección de red
-                network_address = binding['aNetworkAddr']
+                network_address = binding['aNetworkAddr'].strip('\x00')
                 if network_address and network_address not in discovered_ips:
                     # Filtramos direcciones que no parezcan IPs válidas o sean solo el target original
                     if self._is_valid_discovery(network_address):
