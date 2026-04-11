@@ -73,7 +73,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 from arsenal.web.core.models import ScanConfig, Neo4jConfig, NetworkCreateRequest
 from arsenal.web.core.websockets import ConnectionManager, manager
 
-from arsenal.web.core.deps import storage, running_scans, running_processes
+from arsenal.web.core.deps import storage, running_scans, running_processes, running_scans_lock
 from arsenal.web.routes.api import router as api_router
 from arsenal.web.routes import scans as scans_module
 from arsenal.web.routes.scans import router as scans_router
@@ -107,9 +107,11 @@ async def cleanup_zombie_scans_endpoint(max_hours: float = 2.0):
         scan_id_str = str(scan_id)
 
         # Terminar proceso/hilo si aún está vivo
-        if scan_id_str in running_processes:
+        with running_scans_lock:
+            proc = running_processes.pop(scan_id_str, None)
+            running_scans.pop(scan_id_str, None)
+        if proc:
             try:
-                proc = running_processes[scan_id_str]
                 if proc.poll() is None:
                     proc.terminate()
                     try:
@@ -118,10 +120,6 @@ async def cleanup_zombie_scans_endpoint(max_hours: float = 2.0):
                         proc.kill()
             except Exception:
                 pass
-            del running_processes[scan_id_str]
-
-        if scan_id_str in running_scans:
-            del running_scans[scan_id_str]
 
         hosts_count = cursor.execute("""
             SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
@@ -322,7 +320,8 @@ async def start_scan(config: ScanConfig):
         daemon=True
     )
     scan_thread.start()
-    running_scans[str(scan_id)] = scan_thread
+    with running_scans_lock:
+        running_scans[str(scan_id)] = scan_thread
     
     return {"scan_id": scan_id, "status": "started", "mode": config.scan_mode}
 
@@ -344,9 +343,11 @@ async def stop_scan(scan_id: int):
         raise HTTPException(status_code=400, detail=f"El escaneo no está en ejecución (estado: {scan['status']})")
 
     try:
-        # Terminar subproceso si existe
-        if scan_id_str in running_processes:
-            process = running_processes[scan_id_str]
+        # Terminar subproceso si existe (thread-safe)
+        with running_scans_lock:
+            process = running_processes.pop(scan_id_str, None)
+            running_scans.pop(scan_id_str, None)
+        if process:
             try:
                 if process.poll() is None:
                     process.terminate()
@@ -356,11 +357,6 @@ async def stop_scan(scan_id: int):
                         process.kill()
             except Exception:
                 pass
-            del running_processes[scan_id_str]
-
-        # Limpiar hilo (el hilo detectará el cambio de estado en la BD y finalizará solo)
-        if scan_id_str in running_scans:
-            del running_scans[scan_id_str]
 
         # Marcar como detenido en la BD — el hilo detectará status != 'running' y parará
         storage.complete_scan(scan_id, error_message="Escaneo detenido por el usuario")
@@ -374,24 +370,19 @@ async def cancel_scan(scan_id: int):
     """Cancela un escaneo en ejecución y lo borra completamente."""
     scan_id_str = str(scan_id)
     
-    # Detener el proceso si está en ejecución
-    if scan_id_str in running_processes:
-        process = running_processes[scan_id_str]
+    # Detener el proceso si está en ejecución (thread-safe)
+    with running_scans_lock:
+        process = running_processes.pop(scan_id_str, None)
+        running_scans.pop(scan_id_str, None)
+    if process:
         try:
             process.terminate()
             try:
                 process.wait(timeout=5)
-            except:
+            except Exception:
                 process.kill()
-        except:
+        except Exception:
             pass
-        
-        # Limpiar de los diccionarios
-        if scan_id_str in running_processes:
-            del running_processes[scan_id_str]
-        
-    if scan_id_str in running_scans:
-        del running_scans[scan_id_str]
         
     try:
         # Borrar el escaneo completamente
@@ -1943,9 +1934,11 @@ async def run_post_intelligence(org_name: str):
 
         summary = []
         
-        # Conectar a Neo4j (local por defecto como definimos en el HTML)
-        # Usaremos credenciales por defecto neo4j/password o sin auth
-        graph = get_neo4j_graph("127.0.0.1", "neo4j", "neo4j1")
+        # Conectar a Neo4j usando variables de entorno (definidas en .env / docker-compose)
+        _neo4j_host = os.getenv("NEO4J_HOST", "127.0.0.1")
+        _neo4j_user = os.getenv("NEO4J_USERNAME", "neo4j")
+        _neo4j_pass = os.getenv("NEO4J_PASSWORD", "neo4j123")
+        graph = get_neo4j_graph(_neo4j_host, _neo4j_user, _neo4j_pass)
 
         networks_created = 0
         ips_linked_to_nets = 0

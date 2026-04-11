@@ -6,6 +6,9 @@ from typing import Dict
 # Instancia global de acceso a la base de datos
 storage = ScanStorage()
 
+# Lock para acceso thread-safe a los diccionarios de control de procesos
+running_scans_lock = threading.Lock()
+
 # Diccionarios globales para control de procesos asíncronos
 running_scans: Dict[str, threading.Thread] = {}
 running_processes: Dict[str, subprocess.Popen] = {}

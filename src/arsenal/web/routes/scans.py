@@ -22,7 +22,7 @@ from arsenal.core.scanners import (
     IOXIDResolverScanner
 )
 from arsenal.web.core.models import ScanConfig
-from arsenal.web.core.deps import storage, running_scans, running_processes
+from arsenal.web.core.deps import storage, running_scans, running_processes, running_scans_lock
 from arsenal.web.core.websockets import manager
 from arsenal.core.parsers.nmap_parser import NmapXMLParser
 from arsenal.core.parsers.vulnerability_parser import VulnerabilityParser
@@ -152,47 +152,45 @@ async def get_scans(
     
     if zombies:
         for zombie in zombies:
-            scan_id = zombie['id']
-            scan_id_str = str(scan_id)
-            
+            zombie_id = zombie['id']
+            zombie_id_str = str(zombie_id)
+
             # NO marcar como zombie si el thread está realmente en ejecución
-            if scan_id_str in running_scans:
-                thread = running_scans[scan_id_str]
-                # Verificar si el thread sigue vivo
-                if thread.is_alive():
-                    continue  # Saltar este escaneo, está realmente en ejecución
-            
+            with running_scans_lock:
+                thread = running_scans.get(zombie_id_str)
+            if thread and thread.is_alive():
+                continue  # Saltar este escaneo, está realmente en ejecución
+
             # NO marcar como zombie si el proceso está realmente en ejecución (para escaneos pasivos)
-            if scan_id_str in running_processes:
-                process = running_processes[scan_id_str]
-                # Verificar si el proceso sigue vivo
-                if process.poll() is None:  # None significa que el proceso sigue ejecutándose
-                    continue  # Saltar este escaneo, está realmente en ejecución
-            
+            with running_scans_lock:
+                process = running_processes.get(zombie_id_str)
+            if process and process.poll() is None:
+                continue  # Saltar este escaneo, está realmente en ejecución
+
             # Verificar si hay resultados
             hosts_count = cursor.execute("""
                 SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
-            """, (scan_id,)).fetchone()[0]
-            
+            """, (zombie_id,)).fetchone()[0]
+
             ports_count = cursor.execute("""
                 SELECT COUNT(*) FROM scan_results WHERE scan_id = ?
-            """, (scan_id,)).fetchone()[0]
-            
+            """, (zombie_id,)).fetchone()[0]
+
             # Si hay resultados, marcar como completado, si no, como fallido
             if hosts_count > 0 or ports_count > 0:
-                status = 'completed'
+                zombie_new_status = 'completed'
                 error_message = None
             else:
-                status = 'failed'
+                zombie_new_status = 'failed'
                 error_message = "Escaneo zombie detectado y limpiado automáticamente."
-            
+
             cursor.execute("""
                 UPDATE scans
                 SET status = ?, completed_at = ?, hosts_discovered = ?,
                     ports_found = ?, error_message = ?
                 WHERE id = ?
-            """, (status, datetime.now().isoformat(), hosts_count, ports_count, 
-                  error_message, scan_id))
+            """, (zombie_new_status, datetime.now().isoformat(), hosts_count, ports_count,
+                  error_message, zombie_id))
         
         conn.commit()
         print(f"🧹 Limpiados {len(zombies)} escaneo(s) zombie automáticamente")
@@ -301,7 +299,8 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         def register_process(proc):
             """Registra un subproceso para poder cancelarlo desde la API."""
             if proc:
-                running_processes[str(scan_id)] = proc
+                with running_scans_lock:
+                    running_processes[str(scan_id)] = proc
 
         discovered_ips = set()
 
@@ -771,11 +770,13 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
             print(f"[Scan {scan_id}] 📌 Iniciando escaneo IOXIDResolver...")
             try:
                 ioxid_scanner = IOXIDResolverScanner()
-                ioxid_targets = [row[0] for row in cursor.execute(
+                _ioxid_conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+                _ioxid_conn.execute("PRAGMA journal_mode=WAL")
+                ioxid_targets = [row[0] for row in _ioxid_conn.execute(
                     "SELECT DISTINCT ip_address FROM hosts h JOIN scan_results sr ON h.id = sr.host_id WHERE sr.scan_id = ?",
                     (scan_id,)
                 ).fetchall()]
-                conn.close()
+                _ioxid_conn.close()
                 
                 # Si no hay hosts en la BD aún, usar los objetivos directos
                 if not ioxid_targets:
@@ -1011,11 +1012,10 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         traceback.print_exc()
         storage.complete_scan(scan_id, error_message=error_msg[:1000])
     finally:
-        # Limpiar procesos de los diccionarios
-        if str(scan_id) in running_processes:
-            del running_processes[str(scan_id)]
-        if str(scan_id) in running_scans:
-            del running_scans[str(scan_id)]
+        # Limpiar procesos de los diccionarios (thread-safe)
+        with running_scans_lock:
+            running_processes.pop(str(scan_id), None)
+            running_scans.pop(str(scan_id), None)
 
 def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
     """Ejecuta un escaneo pasivo capturando tráfico usando PassiveCapture."""
@@ -1099,8 +1099,9 @@ def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
             duration=86400  # 24 horas máximo
         )
         
-        # Guardar proceso para poder cancelarlo
-        running_processes[str(scan_id)] = process
+        # Guardar proceso para poder cancelarlo (thread-safe)
+        with running_scans_lock:
+            running_processes[str(scan_id)] = process
         
         print(f"[Scan {scan_id}] ✅ Captura iniciada (PID: {process.pid})")
         
@@ -1122,7 +1123,7 @@ def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 # Procesar lo que quede en el pcap antes de salir
                 print(f"[Scan {scan_id}] 📦 Procesando datos finales antes de cerrar...")
                 try:
-                    scans_module.process_pcap_file(scan_id, str(pcap_file), organization, location)
+                    process_pcap_file(scan_id, str(pcap_file), organization, location)
                 except:
                     pass
                 break
@@ -1202,11 +1203,10 @@ def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         traceback.print_exc()
         storage.complete_scan(scan_id, error_message=error_msg[:1000])
     finally:
-        # Limpiar procesos de los diccionarios
-        if str(scan_id) in running_processes:
-            del running_processes[str(scan_id)]
-        if str(scan_id) in running_scans:
-            del running_scans[str(scan_id)]
+        # Limpiar procesos de los diccionarios (thread-safe)
+        with running_scans_lock:
+            running_processes.pop(str(scan_id), None)
+            running_scans.pop(str(scan_id), None)
 
 def process_pcap_file(scan_id: int, pcap_file: str, organization: str, location: str):
     """Procesa un archivo pcap usando PassiveCapture y guarda resultados en la BD."""
