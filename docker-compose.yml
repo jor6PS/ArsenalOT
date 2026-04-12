@@ -58,8 +58,9 @@ services:
 
   pwndoc-frontend:
     build:
-      context: https://github.com/pwndoc/pwndoc.git
-      target: frontend
+      # #main:frontend → clona el repo y usa frontend/ como contexto de build
+      # (el Dockerfile de producción está en frontend/Dockerfile)
+      context: "https://github.com/pwndoc/pwndoc.git#main:frontend"
     container_name: pwndoc-frontend
     restart: unless-stopped
     ports:
