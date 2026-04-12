@@ -30,6 +30,20 @@ services:
       - neo4j_logs:/logs
     restart: unless-stopped
 
+  # ── Neo4j Graph Viewer ───────────────────────────────────────
+  # BloodHound-style graph explorer: http://localhost:7777
+  neo4j-graph-viewer:
+    build: ./neo4j-graph-viewer
+    container_name: arsenalot-graph-viewer
+    ports:
+      - "7777:80"
+    environment:
+      # The browser JS connects to Neo4j directly via Bolt on the host
+      - NEO4J_BOLT_URL=bolt://localhost:7687
+      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+    restart: unless-stopped
+
   # ── PwnDoc ───────────────────────────────────────────────────
   # Acceso web: https://localhost:8443
   # Primera vez: docker-compose up -d --build  (tarda ~3-5 min compilando frontend)

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArsenalOT — Graph Viewer</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- vis-network -->
+    <link href="https://unpkg.com/vis-network@9.1.9/styles/vis-network.min.css" rel="stylesheet"/>
+    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+    <!-- Neo4j JS Driver (browser bundle) -->
+    <script src="https://unpkg.com/neo4j-driver@5/lib/browser/neo4j-web.min.js"></script>
+</head>
+<body>
+<div id="app">
+
+    <!-- ════════════════════ HEADER ════════════════════ -->
+    <header id="header">
+        <div class="header-brand">
+            <span class="brand-icon">⬡</span>
+            <span class="brand-name">ArsenalOT<span class="brand-sep"> / </span><span class="brand-sub">Graph Viewer</span></span>
+        </div>
+        <div class="header-status">
+            <span class="conn-dot disconnected" id="conn-dot"></span>
+            <span id="conn-label">Conectando...</span>
+            <button class="btn-sm" id="reconnect-btn" title="Reconectar a Neo4j">↺ Reconectar</button>
+        </div>
+    </header>
+
+    <!-- ════════════════════ BODY ════════════════════ -->
+    <div id="body">
+
+        <!-- ─────────── LEFT PANEL ─────────── -->
+        <aside id="left-panel">
+
+            <!-- Search -->
+            <div class="panel-sec">
+                <div class="sec-title">Buscar consulta</div>
+                <input type="text" id="query-search" placeholder="🔍 Filtrar consultas...">
+            </div>
+
+            <!-- Preset query list (scrollable) -->
+            <div id="query-list-wrap">
+                <!-- Populated by JS -->
+            </div>
+
+            <!-- Custom Cypher -->
+            <div class="custom-query-panel">
+                <div class="sec-title">Consulta Cypher</div>
+                <textarea id="custom-cypher"
+                    placeholder="MATCH (n)-[r]->(m) RETURN n, r, m LIMIT 50"
+                    spellcheck="false"></textarea>
+                <button class="btn-run" id="run-custom-btn">▶ Ejecutar &nbsp;<small style="font-weight:400;opacity:.7">Ctrl+↵</small></button>
+            </div>
+
+            <!-- View controls -->
+            <div class="view-panel">
+                <div class="sec-title">Vista</div>
+                <div class="view-row">
+                    <button class="btn-xs" id="fit-btn" title="Ajustar vista">⊡ Centrar</button>
+                    <button class="btn-xs-danger" id="clear-btn" title="Limpiar grafo">✕ Limpiar</button>
+                </div>
+                <label class="toggle-row">
+                    <input type="checkbox" id="physics-toggle" checked>
+                    Simulación de física
+                </label>
+            </div>
+
+            <!-- Legend -->
+            <div class="legend-panel">
+                <div class="sec-title">Leyenda</div>
+                <div id="legend-items">
+                    <div class="legend-row"><span class="legend-dot" style="background:#4ECDC4"></span>HOST</div>
+                    <div class="legend-row"><span class="legend-dot" style="background:#FFE66D"></span>SERVICE</div>
+                    <div class="legend-row"><span class="legend-dot" style="background:#FF6B6B"></span>ORIGEN</div>
+                    <div class="legend-row"><span class="legend-dot" style="background:#7c3aed"></span>ORGANIZACION</div>
+                    <div class="legend-row"><span class="legend-dot" style="background:#f97316"></span>VULNERABILITY</div>
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- ─────────── GRAPH CENTER ─────────── -->
+        <main id="graph-wrapper">
+
+            <!-- vis-network container -->
+            <div id="graph-container"></div>
+
+            <!-- Loading overlay -->
+            <div id="graph-overlay">
+                <div class="spinner"></div>
+                <div id="overlay-msg">Ejecutando consulta...</div>
+            </div>
+
+            <!-- Empty state -->
+            <div id="graph-empty">
+                <div class="empty-icon">◎</div>
+                <div class="empty-text">Selecciona una consulta o escribe Cypher para visualizar el grafo</div>
+            </div>
+
+            <!-- Stats footer -->
+            <div id="graph-stats">0 nodos · 0 relaciones</div>
+
+            <!-- Tabular results overlay -->
+            <div id="table-container" class="hidden">
+                <div class="table-topbar">
+                    <span id="table-label">Resultados tabulares</span>
+                    <button class="btn-sm" id="back-to-graph-btn">← Volver al grafo</button>
+                </div>
+                <div id="table-scroll"></div>
+            </div>
+
+        </main>
+
+        <!-- ─────────── RIGHT PANEL ─────────── -->
+        <aside id="right-panel" class="hidden">
+
+            <div class="rp-header">
+                <span class="type-pill node" id="rp-type-pill">Nodo</span>
+                <button class="btn-close" id="rp-close" title="Cerrar">✕</button>
+            </div>
+
+            <div id="rp-labels">
+                <!-- Label chips -->
+            </div>
+
+            <div id="rp-props">
+                <!-- Property rows -->
+            </div>
+
+            <div class="rp-neighbors">
+                <div class="sec-title">Contexto</div>
+                <div class="neighbor-count" id="rp-context-text"></div>
+            </div>
+
+        </aside>
+
+    </div><!-- /#body -->
+</div><!-- /#app -->
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
