@@ -8,129 +8,286 @@
 'use strict';
 
 // ──────────────────────────────────────────────────────────────────
-// PRESET QUERIES  (embedded from neo4j_queries.json)
+// PRESET QUERIES  — copia exacta de neo4j_queries.json
 // ──────────────────────────────────────────────────────────────────
 const PRESET_QUERIES = [
     {
-        title: "🗺️ 1. Mapa de Visibilidad",
-        description: "Árboles independientes por Origen. Muestra qué ve cada escáner.",
-        query: `MATCH (o:ORIGEN)-[]-(h:HOST)
+        title: "🗺️ 1. Mapa de Visibilidad (Árboles independientes por Origen)",
+        description: "Crea 'universos paralelos' para cada origen. Muestra qué redes, subredes, hosts y servicios ve cada escáner por separado.",
+        query: `// ==========================================
+// FASE 1: CREAR EL ÁRBOL INDEPENDIENTE POR ORIGEN (Origen -> Nombre -> Rango -> Host)
+// ==========================================
+MATCH (o:ORIGEN)-[]-(h:HOST)
 WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
-WITH COALESCE(o.LOCATION, 'Desconocido') AS loc,
-     h.NOMBRE_SUBRED AS nsub, h.SUBRED AS rsub, h.IP AS ip,
-     max(h.ORGANIZACION) AS p_org, max(h.MAC) AS p_mac,
-     max(h.SISTEMA) AS p_sistema, max(h.VENDOR) AS p_vendor,
-     max(h.OS) AS p_os, max(h.CRITICO) AS p_critico,
+
+WITH COALESCE(o.LOCATION, 'Ubicación Desconocida') AS loc,
+     h.NOMBRE_SUBRED AS nsub,
+     h.SUBRED AS rsub,
+     h.IP AS ip,
+     max(h.ORGANIZACION) AS p_org,
+     max(h.MAC) AS p_mac,
+     max(h.SISTEMA) AS p_sistema,
+     max(h.VENDOR) AS p_vendor,
+     max(h.OS) AS p_os,
+     max(h.CRITICO) AS p_critico,
      max(h.HOSTNAME) AS p_hostname
+
 MERGE (vo:visibilitytest_Origen {name: loc})
+
 MERGE (vnombre:visibilitytest_NombreSubred {id: loc + '_' + nsub})
 SET vnombre.name = nsub
-MERGE (vo)-[:VE_RED]->(vnombre)
+MERGE (vo)-[:visibilitytest_VE_RED]->(vnombre)
+
 MERGE (vrango:visibilitytest_RangoSubred {id: loc + '_' + rsub})
 SET vrango.rango = rsub
-MERGE (vnombre)-[:CONTIENE_RANGO]->(vrango)
+MERGE (vnombre)-[:visibilitytest_CONTIENE_RANGO]->(vrango)
+
 MERGE (vh:visibilitytest_Host {id: loc + '_' + ip})
-SET vh.IP = ip, vh.MAC = p_mac, vh.SISTEMA = p_sistema,
-    vh.VENDOR = p_vendor, vh.OS = p_os, vh.CRITICO = p_critico,
-    vh.HOSTNAME = p_hostname, vh.ORGANIZACION = p_org
-MERGE (vrango)-[:CONTIENE_HOST]->(vh)
-WITH count(vh) AS b1
+SET vh.IP = ip,
+    vh.MAC = p_mac,
+    vh.SISTEMA = p_sistema,
+    vh.VENDOR = p_vendor,
+    vh.OS = p_os,
+    vh.CRITICO = p_critico,
+    vh.HOSTNAME = p_hostname,
+    vh.ORGANIZACION = p_org
+MERGE (vrango)-[:visibilitytest_CONTIENE_HOST]->(vh)
+
+// ==========================================
+// FASE 2: UNIFICAR LOS SERVICIOS (EXCLUSIVOS POR ORIGEN Y HOST)
+// ==========================================
+WITH count(vh) AS barrera_1
+
+MATCH (o:ORIGEN)-[]-(h:HOST)-[]-(s:SERVICE)
+WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
+
+WITH COALESCE(o.LOCATION, 'Ubicación Desconocida') AS loc,
+     h.IP AS ip,
+     s.port AS port,
+     s.protocol AS protocol,
+     max(s.name) AS p_name,
+     max(s.product) AS p_product,
+     max(s.version) AS p_version,
+     max(s.vulnerabilities) AS p_vuln
+
+MATCH (vh:visibilitytest_Host {id: loc + '_' + ip})
+
+FOREACH (dummy IN CASE WHEN port IS NOT NULL THEN [1] ELSE [] END |
+    MERGE (vsrv:visibilitytest_Servicio {id: loc + '_' + ip + '_' + toString(port) + '_' + protocol})
+    SET vsrv.name = p_name,
+        vsrv.port = port,
+        vsrv.protocol = protocol,
+        vsrv.product = p_product,
+        vsrv.version = p_version,
+        vsrv.vulnerabilities = p_vuln,
+        vsrv.etiqueta_visual = toString(port) + '/' + protocol
+
+    MERGE (vh)-[:visibilitytest_EXPONE_PUERTO]->(vsrv)
+)
+
+// ==========================================
+// FASE 3: MOSTRAR SOLO LOS ORÍGENES EN PANTALLA
+// ==========================================
+WITH count(vh) AS barrera_2
 MATCH (vo:visibilitytest_Origen)
 RETURN DISTINCT vo`
     },
     {
-        title: "🌐 2. Mapa de Red Global",
-        description: "Topología completa: Organización → Subred → Rango → Host.",
+        title: "🌐 2. Mapeo de Red Global (La Topología Absoluta)",
+        description: "Unifica todos los datos en un único mapa maestro (Organización -> Nombre -> Rango -> Host).",
         query: `MATCH (h:HOST)
 WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
-WITH h.IP AS ip, max(h.ORGANIZACION) AS p_org,
-     max(h.NOMBRE_SUBRED) AS p_nsub, max(h.SUBRED) AS p_rsub,
-     max(h.MAC) AS p_mac, max(h.SISTEMA) AS p_sistema,
-     max(h.VENDOR) AS p_vendor, max(h.OS) AS p_os,
-     max(h.CRITICO) AS p_critico, max(h.HOSTNAME) AS p_hostname
+
+WITH h.IP AS ip,
+     max(h.ORGANIZACION) AS p_org,
+     max(h.NOMBRE_SUBRED) AS p_nsub,
+     max(h.SUBRED) AS p_rsub,
+     max(h.MAC) AS p_mac,
+     max(h.SISTEMA) AS p_sistema,
+     max(h.VENDOR) AS p_vendor,
+     max(h.OS) AS p_os,
+     max(h.CRITICO) AS p_critico,
+     max(h.HOSTNAME) AS p_hostname,
+     max(h.DISCOVERY_SOURCE) AS p_disc
+
 MERGE (org:networkmap_Organizacion {name: p_org})
 MERGE (nSub:networkmap_NombreSubred {name: p_nsub})
 MERGE (rSub:networkmap_RangoSubred {name: p_rsub})
+
 MERGE (uh:networkmap_HostUnificado {IP: ip})
-SET uh.MAC = p_mac, uh.SISTEMA = p_sistema, uh.VENDOR = p_vendor,
-    uh.OS = p_os, uh.CRITICO = p_critico, uh.HOSTNAME = p_hostname,
-    uh.ORGANIZACION = p_org, uh.NOMBRE_SUBRED = p_nsub, uh.SUBRED = p_rsub
-MERGE (org)-[r1:TIENE_SUBRED]->(nSub)
-MERGE (nSub)-[r2:CONTIENE_RANGO]->(rSub)
-MERGE (rSub)-[r3:TIENE_HOST]->(uh)
-RETURN DISTINCT org, nSub, rSub, uh, r1, r2, r3`
+SET uh.MAC = p_mac,
+    uh.SISTEMA = p_sistema,
+    uh.VENDOR = p_vendor,
+    uh.OS = p_os,
+    uh.CRITICO = p_critico,
+    uh.HOSTNAME = p_hostname,
+    uh.DISCOVERY_SOURCE = p_disc,
+    uh.ORGANIZACION = p_org,
+    uh.NOMBRE_SUBRED = p_nsub,
+    uh.SUBRED = p_rsub
+
+MERGE (org)-[relOrg:networkmap_TIENE_SUBRED]->(nSub)
+MERGE (nSub)-[relRango:networkmap_CONTIENE_RANGO]->(rSub)
+MERGE (rSub)-[relHost:networkmap_TIENE_HOST]->(uh)
+
+WITH org, nSub, rSub, uh, relOrg, relRango, relHost, ip
+
+OPTIONAL MATCH (h:HOST {IP: ip})-[]-(s:SERVICE)
+WHERE h.DISCOVERY_SOURCE STARTS WITH 'active' AND s IS NOT NULL
+
+WITH org, nSub, rSub, uh, relOrg, relRango, relHost, ip,
+     s.port AS port,
+     s.protocol AS protocol,
+     max(s.name) AS p_name,
+     max(s.product) AS p_product,
+     max(s.version) AS p_version,
+     max(s.vulnerabilities) AS p_vuln
+
+FOREACH (dummy IN CASE WHEN port IS NOT NULL THEN [1] ELSE [] END |
+    MERGE (usrv:networkmap_ServiceUnificado {id: ip + '_' + toString(port) + '_' + protocol})
+    SET usrv.name = p_name,
+        usrv.port = port,
+        usrv.protocol = protocol,
+        usrv.product = p_product,
+        usrv.version = p_version,
+        usrv.vulnerabilities = p_vuln,
+        usrv.etiqueta_visual = toString(port) + '/' + protocol
+
+    MERGE (uh)-[:networkmap_EXPONE_SERVICIO]->(usrv)
+)
+
+RETURN DISTINCT org, nSub, rSub, uh, relOrg, relRango, relHost`
     },
     {
         title: "🚨 3. Camino de Ataque / Mapa de Riesgo",
-        description: "Activos críticos y los orígenes que tienen alcance real sobre ellos.",
-        query: `MATCH (o:ORIGEN)-[]-(h:HOST)
+        description: "Se centra en activos críticos, mostrando flechas directas desde los Orígenes que tienen alcance real.",
+        query: `WITH 1 as dummy
+MATCH (o:ORIGEN)-[]-(h:HOST)
 WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
   AND trim(toUpper(h.CRITICO)) IN ['SI', 'SÍ']
-WITH DISTINCT COALESCE(o.LOCATION, 'Desconocido') AS loc, h.IP AS ip,
-     max(h.MAC) AS p_mac, max(h.ORGANIZACION) AS p_org,
-     max(h.SISTEMA) AS p_sistema, max(h.VENDOR) AS p_vendor,
-     max(h.OS) AS p_os, max(h.HOSTNAME) AS p_hostname
+
+WITH DISTINCT COALESCE(o.LOCATION, 'Ubicación Desconocida') AS loc,
+     h.IP AS ip,
+     max(h.MAC) AS p_mac,
+     max(h.ORGANIZACION) AS p_org,
+     max(h.SISTEMA) AS p_sistema,
+     max(h.VENDOR) AS p_vendor,
+     max(h.OS) AS p_os,
+     max(h.HOSTNAME) AS p_hostname
+
+// 1. Creamos el Host Crítico
 MERGE (vh:riskmap_HostCritico {IP: ip})
-SET vh.MAC = p_mac, vh.SISTEMA = p_sistema, vh.VENDOR = p_vendor,
-    vh.OS = p_os, vh.HOSTNAME = p_hostname, vh.ORGANIZACION = p_org,
+SET vh.MAC = p_mac,
+    vh.SISTEMA = p_sistema,
+    vh.VENDOR = p_vendor,
+    vh.OS = p_os,
+    vh.HOSTNAME = p_hostname,
+    vh.ORGANIZACION = p_org,
     vh.CRITICO = 'SI'
+
+// 2. Creamos el Origen exclusivo para no crear telarañas
 MERGE (vo:riskmap_Origen {id: ip + '_' + loc})
 SET vo.name = loc
-MERGE (vh)-[rel:ACCESIBLE_DESDE]->(vo)
+
+// 3. Trazamos la línea
+MERGE (vh)-[rel:riskmap_ACCESIBLE_DESDE]->(vo)
+
+// 4. Devolvemos los nodos y la relación
 RETURN vh, vo, rel`
     },
     {
-        title: "🔍 4. Buscador Dinámico (IP / CIDR)",
-        description: "Busca una IP o rango CIDR, consolida duplicados y muestra orígenes y servicios.",
-        query: `// Cambia la IP o rango CIDR aquí:
-WITH '10.0.0.0/24' AS busqueda
+        title: "🔍 4. El Buscador Dinámico Unificado",
+        description: "Busca una IP o rango CIDR, consolida duplicados y muestra un grafo limpio con orígenes y servicios.",
+        query: `// 1. Escribe tu IP o tu Rango a buscar
+WITH '10.239.148.209' AS busqueda
+
+// 2. Extraemos la IP base y la máscara
 WITH busqueda,
      split(busqueda, '/')[0] AS ip_base,
      toInteger(split(busqueda, '/')[1]) AS mascara
 WITH busqueda, mascara, split(ip_base, '.') AS octetos
+
+// 3. Calculamos el prefijo
 WITH busqueda,
      CASE
        WHEN NOT busqueda CONTAINS '/' THEN busqueda
-       WHEN mascara <= 8  THEN octetos[0] + '.'
+       WHEN mascara <= 8 THEN octetos[0] + '.'
        WHEN mascara <= 16 THEN octetos[0] + '.' + octetos[1] + '.'
        WHEN mascara <= 24 THEN octetos[0] + '.' + octetos[1] + '.' + octetos[2] + '.'
        ELSE octetos[0] + '.' + octetos[1] + '.' + octetos[2] + '.' + octetos[3]
      END AS filtro_ip
+
+// ==========================================
+// FASE 1: HOST CENTRAL
+// ==========================================
 MATCH (h:HOST)
 WHERE (busqueda CONTAINS '/' AND h.IP STARTS WITH filtro_ip)
    OR (NOT busqueda CONTAINS '/' AND h.IP = filtro_ip)
-WITH h.IP AS ip, max(h.MAC) AS p_mac, max(h.ORGANIZACION) AS p_org,
-     max(h.SISTEMA) AS p_sistema, max(h.VENDOR) AS p_vendor,
-     max(h.OS) AS p_os, max(h.CRITICO) AS p_critico, max(h.HOSTNAME) AS p_hostname
+
+WITH h.IP AS ip,
+     max(h.MAC) AS p_mac,
+     max(h.ORGANIZACION) AS p_org,
+     max(h.SISTEMA) AS p_sistema,
+     max(h.VENDOR) AS p_vendor,
+     max(h.OS) AS p_os,
+     max(h.CRITICO) AS p_critico,
+     max(h.HOSTNAME) AS p_hostname
+
 MERGE (sh:search_Host {IP: ip})
-SET sh.MAC = p_mac, sh.ORGANIZACION = p_org, sh.SISTEMA = p_sistema,
-    sh.VENDOR = p_vendor, sh.OS = p_os, sh.CRITICO = p_critico, sh.HOSTNAME = p_hostname
+SET sh.MAC = p_mac,
+    sh.ORGANIZACION = p_org,
+    sh.SISTEMA = p_sistema,
+    sh.VENDOR = p_vendor,
+    sh.OS = p_os,
+    sh.CRITICO = p_critico,
+    sh.HOSTNAME = p_hostname
+
+// ==========================================
+// FASE 2: ORÍGENES REALES
+// ==========================================
 WITH sh, ip
 OPTIONAL MATCH (o:ORIGEN)-[]-(h:HOST {IP: ip})
 WITH sh, ip, collect(DISTINCT o.LOCATION) AS locs
+
 FOREACH (loc IN [x IN locs WHERE x IS NOT NULL] |
     MERGE (so:search_Origen {name: loc})
-    MERGE (so)-[:LLEGA_A]->(sh)
+    MERGE (so)-[:search_LLEGA_A]->(sh)
 )
+
+// ==========================================
+// FASE 3: SERVICIOS CONSOLIDADOS
+// ==========================================
 WITH sh, ip
 OPTIONAL MATCH (h:HOST {IP: ip})-[]-(s:SERVICE)
-WITH sh, ip, s.port AS port, s.protocol AS protocol,
-     max(s.name) AS p_name, max(s.vulnerabilities) AS p_vuln
+WITH sh, ip,
+     s.port AS port,
+     s.protocol AS protocol,
+     max(s.name) AS p_name,
+     max(s.vulnerabilities) AS p_vuln
+
 FOREACH (dummy IN CASE WHEN port IS NOT NULL THEN [1] ELSE [] END |
     MERGE (ss:search_Servicio {id: ip + '_' + toString(port) + '_' + protocol})
-    SET ss.name = p_name, ss.port = port, ss.protocol = protocol,
+    SET ss.name = p_name,
+        ss.port = port,
+        ss.protocol = protocol,
         ss.vulnerabilities = p_vuln,
         ss.etiqueta_visual = toString(port) + '/' + protocol
-    MERGE (sh)-[:EXPONE_PUERTO]->(ss)
+
+    MERGE (sh)-[:search_EXPONE_PUERTO]->(ss)
 )
+
+// ==========================================
+// FASE 4: DIBUJAR PANTALLA
+// ==========================================
 WITH DISTINCT sh
-OPTIONAL MATCH rel_o = (so:search_Origen)-[:LLEGA_A]->(sh)
-OPTIONAL MATCH rel_s = (sh)-[:EXPONE_PUERTO]->(ss:search_Servicio)
+OPTIONAL MATCH rel_o = (so:search_Origen)-[:search_LLEGA_A]->(sh)
+OPTIONAL MATCH rel_s = (sh)-[:search_EXPONE_PUERTO]->(ss:search_Servicio)
+
 RETURN sh, so, ss, rel_o, rel_s`
     },
     {
-        title: "🧹 5. Limpiar Vistas Temporales",
-        description: "Elimina todos los nodos de vistas generadas (search_, riskmap_, visibilitytest_, networkmap_).",
+        title: "🧹 5. El Limpiador Definitivo (Borrar vistas personalizadas)",
+        description: "Elimina de forma segura cualquier nodo temporal o vista generada, dejando la DB original intacta.",
         query: `MATCH (n)
 WHERE ANY(label IN labels(n) WHERE
     label STARTS WITH 'search_' OR
@@ -138,29 +295,27 @@ WHERE ANY(label IN labels(n) WHERE
     label STARTS WITH 'visibilitytest_' OR
     label STARTS WITH 'networkmap_'
 )
-DETACH DELETE n`
+DETACH DELETE n;`
     },
     {
-        title: "🛡️ 6. Activos Críticos con CVEs",
-        description: "Hosts críticos que tienen servicios con vulnerabilidades conocidas.",
+        title: "🛡️ 6. Intersección de Criticidad y Vulnerabilidad",
+        description: "Muestra los activos críticos que tienen servicios con vulnerabilidades conocidas (CVEs).",
         query: `MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE)
-WHERE (trim(toUpper(h.CRITICO)) IN ['SI', 'SÍ']) AND s.vulnerabilities <> ''
-RETURN h.IP AS Host, h.HOSTNAME AS Nombre, h.SISTEMA AS OS,
-       s.port AS Puerto, s.name AS Servicio, s.vulnerabilities AS CVEs
+WHERE (trim(toUpper(h.CRITICO)) IN ['SI', 'SÍ']) AND s.vulnerabilities <> ""
+RETURN h.IP AS Host, h.HOSTNAME AS Nombre, h.SISTEMA AS OS, s.port AS Puerto, s.name AS Servicio, s.vulnerabilities AS CVEs
 ORDER BY h.IP`
     },
     {
-        title: "🔌 7. Servicios de Gestión Expuestos",
-        description: "SSH, RDP, Telnet, VNC, HTTP/S — vectores de acceso remoto.",
+        title: "🔌 7. Puertas Traseras y Gestión Expuesta",
+        description: "Detecta servicios de administración remota (SSH, RDP, Telnet, VNC, HTTP/S) que podrían ser vectores de ataque.",
         query: `MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE)
 WHERE s.port IN [21, 22, 23, 3389, 5900, 5901, 80, 443, 8080, 8443]
-RETURN h.IP AS IP, s.port AS Puerto, s.name AS Protocolo,
-       s.product AS Producto, h.CRITICO AS Es_Critico
+RETURN h.IP AS IP, s.port AS Puerto, s.name AS Protocolo, s.product AS Producto, h.CRITICO AS Es_Critico
 ORDER BY s.port ASC`
     },
     {
-        title: "🏭 8. Protocolos Industriales OT",
-        description: "Modbus, S7, EtherNet/IP, BACnet, MQTT, OPC-UA y otros.",
+        title: "🏭 8. Detección de Protocolos Industriales (OT Deep Dive)",
+        description: "Identifica protocolos ICS/SCADA específicos (Modbus, S7, Ethernet/IP, Bacnet, MQTT, OPC UA, etc.).",
         query: `MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE)
 WHERE s.port IN [102, 502, 2222, 44818, 47808, 1911, 20000, 1883, 8883, 4840]
    OR s.name CONTAINS 'modbus'
@@ -168,46 +323,17 @@ WHERE s.port IN [102, 502, 2222, 44818, 47808, 1911, 20000, 1883, 8883, 4840]
    OR s.name CONTAINS 'enip'
    OR s.name CONTAINS 'mqtt'
    OR s.name CONTAINS 'opc'
-RETURN h.IP AS IP, s.port AS Puerto, s.name AS Servicio,
-       s.product AS Producto, s.version AS Version
+RETURN h.IP AS IP, s.port AS Puerto, s.name AS Servicio, s.product AS Producto, s.version AS Version
 ORDER BY IP`
     },
     {
         title: "📊 9. Concentración de Riesgo por Subred",
-        description: "Conteo de vulnerabilidades acumuladas por segmento de red.",
+        description: "Calcula el número de vulnerabilidades acumuladas en cada segmento de red para priorizar el parcheo.",
         query: `MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE)
-WHERE s.vulnerabilities <> ''
-WITH h.SUBRED AS Subred, h.NOMBRE_SUBRED AS Nombre,
-     count(s) AS Total_Vulns, collect(DISTINCT s.vulnerabilities) AS CVE_List
+WHERE s.vulnerabilities <> ""
+WITH h.SUBRED AS Subred, h.NOMBRE_SUBRED AS Nombre, count(s) AS Total_Vulns, collect(DISTINCT s.vulnerabilities) AS CVE_List
 RETURN Subred, Nombre, Total_Vulns, CVE_List
 ORDER BY Total_Vulns DESC`
-    },
-    {
-        title: "🔎 10. Ver todos los nodos (límite 100)",
-        description: "Muestra todos los nodos y sus relaciones. Útil como vista general.",
-        query: `MATCH (n)-[r]->(m)
-RETURN n, r, m
-LIMIT 100`
-    },
-    {
-        title: "📋 11. Todos los Hosts activos",
-        description: "Lista completa de hosts descubiertos por escaneo activo.",
-        query: `MATCH (h:HOST)
-WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
-RETURN h.IP AS IP, h.HOSTNAME AS Hostname, h.MAC AS MAC,
-       h.VENDOR AS Vendor, h.OS AS OS, h.CRITICO AS Critico,
-       h.ORGANIZACION AS Org, h.NOMBRE_SUBRED AS Subred
-ORDER BY h.IP`
-    },
-    {
-        title: "🔗 12. Hosts con más servicios",
-        description: "Hosts ordenados por número de servicios expuestos.",
-        query: `MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE)
-WITH h, count(s) AS total_services
-RETURN h.IP AS IP, h.HOSTNAME AS Hostname,
-       h.CRITICO AS Critico, total_services AS Servicios
-ORDER BY Servicios DESC
-LIMIT 30`
     }
 ];
 
