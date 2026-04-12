@@ -55,10 +55,10 @@ MERGE (uh:networkmap_HostUnificado {IP: ip})
 SET uh.MAC = p_mac, uh.SISTEMA = p_sistema, uh.VENDOR = p_vendor,
     uh.OS = p_os, uh.CRITICO = p_critico, uh.HOSTNAME = p_hostname,
     uh.ORGANIZACION = p_org, uh.NOMBRE_SUBRED = p_nsub, uh.SUBRED = p_rsub
-MERGE (org)-[:TIENE_SUBRED]->(nSub)
-MERGE (nSub)-[:CONTIENE_RANGO]->(rSub)
-MERGE (rSub)-[:TIENE_HOST]->(uh)
-RETURN DISTINCT org, nSub, rSub, uh`
+MERGE (org)-[r1:TIENE_SUBRED]->(nSub)
+MERGE (nSub)-[r2:CONTIENE_RANGO]->(rSub)
+MERGE (rSub)-[r3:TIENE_HOST]->(uh)
+RETURN DISTINCT org, nSub, rSub, uh, r1, r2, r3`
     },
     {
         title: "🚨 3. Camino de Ataque / Mapa de Riesgo",
@@ -248,12 +248,14 @@ function labelToColor(label) {
 // ──────────────────────────────────────────────────────────────────
 // STATE
 // ──────────────────────────────────────────────────────────────────
-let neoDriver      = null;
-let visNetwork     = null;
-let nodesDS        = null;
-let edgesDS        = null;
-let isConnected    = false;
-let activeQueryIdx = -1;
+let neoDriver        = null;
+let visNetwork       = null;
+let nodesDS          = null;
+let edgesDS          = null;
+let isConnected      = false;
+let activeQueryIdx   = -1;
+let nodeTooltipData  = new Map();  // nodeId → { labels, props }
+let edgeTooltipData  = new Map();  // edgeId → { type, props }
 
 // ──────────────────────────────────────────────────────────────────
 // BOOTSTRAP
@@ -324,7 +326,7 @@ function initVisNetwork() {
         },
         interaction: {
             hover: true,
-            tooltipDelay: 400,
+            tooltipDelay: 99999,   // disable built-in tooltip; we use custom one
             navigationButtons: false,
             keyboard: { enabled: true, bindToWindow: false },
             zoomView: true,
@@ -339,12 +341,22 @@ function initVisNetwork() {
     visNetwork.on('click',       onGraphClick);
     visNetwork.on('doubleClick', onGraphDoubleClick);
 
-    visNetwork.on('stabilizationProgress', function(params) {
-        // Optional: could show progress
-    });
     visNetwork.on('stabilizationIterationsDone', function() {
         visNetwork.setOptions({ physics: { enabled: true } });
     });
+
+    // Custom tooltips
+    visNetwork.on('hoverNode', function(params) {
+        const data = nodeTooltipData.get(params.node);
+        if (data) showCustomTooltip(data.labels, data.props, params.event);
+    });
+    visNetwork.on('blurNode',  function() { hideCustomTooltip(); });
+
+    visNetwork.on('hoverEdge', function(params) {
+        const data = edgeTooltipData.get(params.edge);
+        if (data) showCustomTooltip([data.type], data.props, params.event);
+    });
+    visNetwork.on('blurEdge',  function() { hideCustomTooltip(); });
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -475,12 +487,13 @@ function collectNode(map, node) {
     const primaryLabel = getPrimaryLabel(node.labels);
     const color        = labelToColor(primaryLabel);
     const label        = getNodeDisplayLabel(node.labels, node.properties);
-    const title        = buildTooltipHtml(node.labels, node.properties);
+
+    // Store tooltip data separately (not in DataSet — avoids vis rendering HTML as text)
+    nodeTooltipData.set(id, { labels: node.labels, props: node.properties });
 
     map.set(id, {
         id,
         label,
-        title,
         color: {
             background: color,
             border:     darken(color, 40),
@@ -495,12 +508,12 @@ function collectNode(map, node) {
 function collectEdge(map, rel) {
     const id = rel.identity;
     if (map.has(id)) return;
+    edgeTooltipData.set(id, { type: rel.type, props: rel.properties });
     map.set(id, {
         id,
         from:   rel.start,
         to:     rel.end,
         label:  rel.type,
-        title:  buildRelTooltip(rel.type, rel.properties),
         _type:  rel.type,
         _props: rel.properties,
     });
@@ -520,6 +533,8 @@ function updateGraph(nodeMap, edgeMap, clearFirst) {
     if (clearFirst) {
         nodesDS.clear();
         edgesDS.clear();
+        nodeTooltipData.clear();
+        edgeTooltipData.clear();
         labelColorMap = {};
         colorIndex    = 0;
     }
@@ -544,6 +559,8 @@ function updateGraph(nodeMap, edgeMap, clearFirst) {
 
     if (nodesDS.length > 0) {
         visNetwork.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+        // Auto-fetch relationships between all visible nodes (mirrors Neo4j Browser behavior)
+        fetchEdgesBetweenNodes();
     }
 }
 
@@ -585,35 +602,85 @@ function getNodeDisplayLabel(labels, props) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-// TOOLTIP HTML
+// CUSTOM TOOLTIP (replaces vis built-in to avoid rendering HTML as text)
 // ──────────────────────────────────────────────────────────────────
-function buildTooltipHtml(labels, props) {
-    let h = `<div style="font-family:Segoe UI,system-ui,sans-serif;padding:8px 10px;
-                max-width:300px;min-width:160px;
-                background:#161f30;border:1px solid rgba(78,205,196,0.3);
-                border-radius:6px;color:#dde5f0;font-size:12px;">`;
-    h += `<div style="color:#4ECDC4;font-weight:700;font-size:11px;
-                margin-bottom:6px;letter-spacing:.04em;">${labels.join(', ')}</div>`;
-    for (const [k, v] of Object.entries(props)) {
-        if (v === null || v === undefined) continue;
-        const disp = String(v).length > 80 ? String(v).substring(0, 78) + '…' : String(v);
-        h += `<div style="margin-bottom:3px;">
-                <span style="color:#5a7090;">${k}:</span>
-                <span style="font-family:Consolas,monospace;margin-left:4px;">${disp}</span>
-              </div>`;
+function showCustomTooltip(labels, props, event) {
+    const tt = document.getElementById('custom-tooltip');
+    const MAX_PROPS = 10;
+    const entries = Object.entries(props)
+        .filter(([, v]) => v !== null && v !== undefined)
+        .slice(0, MAX_PROPS);
+
+    let html = `<div class="tt-label">${escHtml(labels.join(', '))}</div>`;
+    for (const [k, v] of entries) {
+        const disp = String(v).length > 70 ? String(v).substring(0, 68) + '…' : String(v);
+        html += `<div class="tt-row">
+                    <span class="tt-key">${escHtml(k)}</span>
+                    <span class="tt-val">${escHtml(disp)}</span>
+                 </div>`;
     }
-    h += '</div>';
-    return h;
+    const total = Object.keys(props).length;
+    if (total > MAX_PROPS) {
+        html += `<div class="tt-more">+${total - MAX_PROPS} más...</div>`;
+    }
+
+    tt.innerHTML = html;
+    tt.classList.remove('hidden');
+    positionTooltip(tt, event);
 }
 
-function buildRelTooltip(type, props) {
-    if (!props || Object.keys(props).length === 0) {
-        return `<div style="font-family:Segoe UI,system-ui;padding:6px 10px;
-            background:#161f30;border:1px solid rgba(124,58,237,0.3);
-            border-radius:6px;color:#a78bfa;font-size:12px;font-weight:700;">
-            ${type}</div>`;
+function hideCustomTooltip() {
+    document.getElementById('custom-tooltip').classList.add('hidden');
+}
+
+function positionTooltip(tt, event) {
+    if (!event) return;
+    const x  = event.clientX !== undefined ? event.clientX : (event.pageX || 0);
+    const y  = event.clientY !== undefined ? event.clientY : (event.pageY || 0);
+    const mx = 14;
+
+    tt.style.left = (x + mx) + 'px';
+    tt.style.top  = (y - mx) + 'px';
+
+    // Keep inside viewport
+    requestAnimationFrame(() => {
+        const r = tt.getBoundingClientRect();
+        if (r.right  > window.innerWidth  - 8) tt.style.left = (x - r.width  - mx) + 'px';
+        if (r.bottom > window.innerHeight - 8) tt.style.top  = (y - r.height - mx) + 'px';
+    });
+}
+
+// ──────────────────────────────────────────────────────────────────
+// AUTO-FETCH EDGES BETWEEN VISIBLE NODES  (mirrors Neo4j Browser)
+// ──────────────────────────────────────────────────────────────────
+async function fetchEdgesBetweenNodes() {
+    const ids = nodesDS.getIds();
+    if (!neoDriver || !isConnected || ids.length < 2) return;
+
+    const session = neoDriver.session();
+    try {
+        const result = await session.run(
+            'MATCH (a)-[r]->(b) WHERE id(a) IN $ids AND id(b) IN $ids RETURN r',
+            { ids }
+        );
+        const edgeMap = new Map();
+        for (const rec of result.records) {
+            const rel = rec.get('r');
+            if (neo4j.isRelationship(rel)) collectEdge(edgeMap, rel);
+        }
+        const newEdges = [];
+        for (const [id, edge] of edgeMap) {
+            if (!edgesDS.get(id)) newEdges.push(edge);
+        }
+        if (newEdges.length > 0) {
+            edgesDS.add(newEdges);
+            updateStats(nodesDS.length, edgesDS.length, null);
+        }
+    } catch (e) {
+        console.warn('[Graph Viewer] fetchEdgesBetweenNodes:', e.message);
+    } finally {
+        await session.close();
     }
-    return buildTooltipHtml([type], props);
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -633,14 +700,12 @@ function onGraphClick(params) {
 
 function onGraphDoubleClick(params) {
     if (params.nodes.length > 0) {
-        // Expand neighbourhood of the double-clicked node
-        const node = nodesDS.get(params.nodes[0]);
-        if (!node) return;
-        const ip = node._props && node._props.IP;
-        if (ip) {
-            const cypher = `MATCH (h {IP:"${ip}"})-[r]-(m) RETURN h, r, m LIMIT 50`;
-            execQuery(cypher, false);   // append, don't clear
-        }
+        const nodeId = params.nodes[0];
+        // Use Neo4j internal id — works for every node regardless of its properties
+        execQuery(
+            `MATCH (n)-[r]-(m) WHERE id(n) = ${nodeId} RETURN n, r, m LIMIT 100`,
+            false   // append to current graph, don't clear
+        );
     }
 }
 
@@ -834,12 +899,21 @@ function bindEvents() {
     document.getElementById('clear-btn').addEventListener('click', () => {
         nodesDS.clear();
         edgesDS.clear();
+        nodeTooltipData.clear();
+        edgeTooltipData.clear();
         labelColorMap = {};
         colorIndex    = 0;
         updateLegend();
         updateStats(0, 0, null);
         setEmptyState(true);
         hideRightPanel();
+        hideCustomTooltip();
+    });
+
+    // Track mouse position to keep custom tooltip under cursor
+    document.addEventListener('mousemove', e => {
+        const tt = document.getElementById('custom-tooltip');
+        if (!tt.classList.contains('hidden')) positionTooltip(tt, e);
     });
 
     // Fit graph
