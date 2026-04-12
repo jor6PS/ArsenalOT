@@ -321,29 +321,25 @@ function initVisNetwork() {
                 avoidOverlap: 0.35,
                 damping: 0.35,
             },
-            stabilization: { enabled: true, iterations: 250, fit: true, onlyDynamicEdges: false },
+            // CRITICAL: disabled = no hidden freeze phase; graph is ALWAYS interactive
+            stabilization: { enabled: false },
             minVelocity: 0.5,
         },
         interaction: {
             hover: true,
-            tooltipDelay: 99999,   // disable built-in tooltip; we use custom one
+            tooltipDelay: 99999,   // safety — built-in tooltip disabled via no `title` on nodes
             navigationButtons: false,
             keyboard: { enabled: true, bindToWindow: false },
             zoomView: true,
             dragView: true,
             multiselect: false,
         },
-        layout: { improvedLayout: true },
     };
 
     visNetwork = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, options);
 
     visNetwork.on('click',       onGraphClick);
     visNetwork.on('doubleClick', onGraphDoubleClick);
-
-    visNetwork.on('stabilizationIterationsDone', function() {
-        visNetwork.setOptions({ physics: { enabled: true } });
-    });
 
     // Custom tooltips
     visNetwork.on('hoverNode', function(params) {
@@ -558,9 +554,16 @@ function updateGraph(nodeMap, edgeMap, clearFirst) {
     setEmptyState(nodesDS.length === 0);
 
     if (nodesDS.length > 0) {
-        visNetwork.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
-        // Auto-fetch relationships between all visible nodes (mirrors Neo4j Browser behavior)
-        fetchEdgesBetweenNodes();
+        // Initial rough fit so nodes are visible while physics runs
+        visNetwork.fit({ animation: false });
+
+        // Fetch edges between visible nodes (Neo4j Browser behavior), then re-fit
+        fetchEdgesBetweenNodes().then(() => {
+            // Wait for physics to spread nodes before fitting cleanly
+            setTimeout(() => {
+                visNetwork.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+            }, 600);
+        });
     }
 }
 
