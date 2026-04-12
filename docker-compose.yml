@@ -1,4 +1,6 @@
 services:
+
+  # ── ArsenalOT ───────────────────────────────────────────────
   arsenalot:
     build: .
     container_name: arsenalot-app
@@ -13,12 +15,13 @@ services:
     depends_on:
       - neo4j
 
+  # ── Neo4j ────────────────────────────────────────────────────
   neo4j:
     image: neo4j:ubi9
     container_name: arsenalot-neo4j
     ports:
-      - "7474:7474" # Browser UI
-      - "7687:7687" # Bolt protocol
+      - "7474:7474"   # Browser UI
+      - "7687:7687"   # Bolt protocol
     environment:
       - NEO4J_AUTH=${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD}
       - NEO4J_PLUGINS=["apoc"]
@@ -27,6 +30,50 @@ services:
       - neo4j_logs:/logs
     restart: unless-stopped
 
+  # ── PwnDoc ───────────────────────────────────────────────────
+  # Acceso web: https://localhost:8443
+  # Primera vez: docker-compose up -d --build  (tarda ~3-5 min compilando frontend)
+  pwndoc-mongo:
+    image: mongo:4.2.15
+    container_name: pwndoc-mongo
+    restart: unless-stopped
+    volumes:
+      - pwndoc_mongo_data:/data/db
+    networks:
+      - pwndoc-net
+    # Limitar caché WiredTiger en entornos con poca RAM
+    command: --wiredTigerCacheSizeGB 0.5
+
+  pwndoc-backend:
+    image: ghcr.io/pwndoc/pwndoc-backend:latest
+    container_name: pwndoc-backend
+    restart: unless-stopped
+    depends_on:
+      - pwndoc-mongo
+    environment:
+      - DB_SERVER=pwndoc-mongo
+      - DB_NAME=pwndoc
+    networks:
+      - pwndoc-net
+
+  pwndoc-frontend:
+    build:
+      context: https://github.com/pwndoc/pwndoc.git
+      target: frontend
+    container_name: pwndoc-frontend
+    restart: unless-stopped
+    ports:
+      - "8443:8443"   # UI: https://localhost:8443
+    depends_on:
+      - pwndoc-backend
+    networks:
+      - pwndoc-net
+
+networks:
+  pwndoc-net:
+    driver: bridge
+
 volumes:
   neo4j_data:
   neo4j_logs:
+  pwndoc_mongo_data:
