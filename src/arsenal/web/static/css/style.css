@@ -780,6 +780,24 @@ tr:last-child td {
     filter: none;
 }
 
+/* Tab activo: Explotación */
+.phase-tab--active.phase-tab--exploit {
+    border-bottom-color: #f97316;
+    color: #fdba74;
+}
+.phase-tab--active.phase-tab--exploit .phase-tab-icon {
+    filter: none;
+}
+
+/* Tab activo: Bitácora */
+.phase-tab--active.phase-tab--bitacora {
+    border-bottom-color: #a78bfa;
+    color: #c4b5fd;
+}
+.phase-tab--active.phase-tab--bitacora .phase-tab-icon {
+    filter: none;
+}
+
 /* Tab desactivado */
 .phase-tab--disabled {
     opacity: 0.38;

@@ -428,7 +428,7 @@ class ScanStorage:
         conn.close()
     
     def create_organization(self, name: str, description: str = ""):
-        """Crea o actualiza una organización."""
+        """Crea o actualiza una organización y su bitácora Obsidian."""
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
         cursor = conn.cursor()
@@ -438,6 +438,14 @@ class ScanStorage:
         """, (name.upper(), description))
         conn.commit()
         conn.close()
+
+        # Inicializar estructura de bitácora para la org (idempotente)
+        try:
+            from arsenal.core.bitacora_manager import BitacoraManager
+            mgr = BitacoraManager(self.results_root)
+            mgr.create_org_bitacora(name.upper())
+        except Exception:
+            pass  # No bloquear el flujo si falla la bitácora
     
     def start_scan(self, organization: str, location: str, scan_type: str,
                    target_range: str, interface: str = None, myip: str = None,

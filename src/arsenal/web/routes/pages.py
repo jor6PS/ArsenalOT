@@ -38,3 +38,13 @@ async def recon_results_page(request: Request, org_name: str):
 async def recon_neo4j_page(request: Request, org_name: str):
     """Página para exportar a Neo4j."""
     return templates.TemplateResponse(request, "neo4j.html", {"org_name": org_name})
+
+@router.get("/pentest/{org_name}/exploitation", response_class=HTMLResponse)
+async def exploitation_ot_page(request: Request, org_name: str):
+    """Página de explotación OT."""
+    return templates.TemplateResponse(request, "exploitation_ot.html", {"org_name": org_name})
+
+@router.get("/pentest/{org_name}/bitacora", response_class=HTMLResponse)
+async def bitacora_page(request: Request, org_name: str):
+    """Página de bitácora Obsidian integrada."""
+    return templates.TemplateResponse(request, "bitacora.html", {"org_name": org_name})
