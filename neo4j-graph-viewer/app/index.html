@@ -31,7 +31,16 @@
     <div id="body">
 
         <!-- ─────────── LEFT PANEL ─────────── -->
-        <aside id="left-panel">
+        <aside id="left-panel" class="no-org">
+
+            <!-- Organization selector — required first step -->
+            <div class="panel-sec org-panel">
+                <div class="sec-title">Organización activa</div>
+                <select id="org-select" class="org-select" disabled>
+                    <option value="">Conectando...</option>
+                </select>
+                <div id="org-hint" class="org-hint">Selecciona una organización para continuar</div>
+            </div>
 
             <!-- Search -->
             <div class="panel-sec">

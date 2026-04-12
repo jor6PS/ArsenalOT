@@ -130,6 +130,53 @@ body {
     margin-bottom: 0.5rem;
 }
 
+/* Org selector */
+.org-panel {
+    background: rgba(78,205,196,0.05);
+    border-bottom: 1px solid rgba(78,205,196,0.2) !important;
+}
+
+.org-select {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 0.42rem 0.6rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    appearance: auto;
+}
+.org-select:disabled { opacity: 0.5; cursor: default; }
+.org-select:focus    { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+.org-select option   { background: var(--bg); color: var(--text); }
+
+.org-hint {
+    font-size: 0.72rem;
+    color: var(--accent);
+    margin-top: 0.35rem;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+/* Cuando no hay org seleccionada: bloquear el resto del panel */
+#left-panel.no-org #query-list-wrap,
+#left-panel.no-org .custom-query-panel,
+#left-panel.no-org .view-panel,
+#left-panel.no-org .legend-panel,
+#left-panel.no-org .panel-sec:not(.org-panel) {
+    opacity: 0.3;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Cuando hay org: ocultar la pista */
+#left-panel:not(.no-org) .org-hint {
+    display: none;
+}
+
 /* Search */
 #query-search {
     width: 100%;

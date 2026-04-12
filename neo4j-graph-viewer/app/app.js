@@ -380,6 +380,7 @@ let nodesDS          = null;
 let edgesDS          = null;
 let isConnected      = false;
 let activeQueryIdx   = -1;
+let selectedOrg      = null;       // organización activa elegida por el usuario
 let nodeTooltipData  = new Map();  // nodeId → { labels, props }
 let edgeTooltipData  = new Map();  // edgeId → { type, props }
 
@@ -508,8 +509,8 @@ async function connectToNeo4j(url, username, password) {
         isConnected = true;
         setConnState('connected', 'Conectado a ' + url.replace('bolt://', ''));
 
-        // Run default view on first connect
-        await execQuery('MATCH (n)-[r]->(m) RETURN n, r, m LIMIT 80', false);
+        // Cargar organizaciones disponibles (el usuario debe elegir una antes de ver datos)
+        await fetchOrganizations();
 
     } catch (err) {
         isConnected = false;
@@ -527,9 +528,90 @@ function setConnState(state, label) {
 }
 
 // ──────────────────────────────────────────────────────────────────
+// ORGANIZATION SELECTOR
+// ──────────────────────────────────────────────────────────────────
+async function fetchOrganizations() {
+    const sel = document.getElementById('org-select');
+    sel.innerHTML = '<option value="">Cargando organizaciones...</option>';
+    sel.disabled = true;
+
+    const session = neoDriver.session();
+    try {
+        const result = await session.run(
+            'MATCH (h:HOST) WHERE h.ORGANIZACION IS NOT NULL ' +
+            'RETURN DISTINCT h.ORGANIZACION AS org ORDER BY org'
+        );
+        const orgs = result.records.map(r => r.get('org')).filter(Boolean);
+        populateOrgSelector(orgs);
+    } catch (e) {
+        sel.innerHTML = '<option value="">Error cargando orgs</option>';
+        console.warn('[Graph Viewer] fetchOrganizations:', e.message);
+    } finally {
+        await session.close();
+    }
+}
+
+function populateOrgSelector(orgs) {
+    const sel = document.getElementById('org-select');
+    sel.disabled = false;
+
+    if (orgs.length === 0) {
+        sel.innerHTML = '<option value="">Sin organizaciones en la DB</option>';
+        setLeftPanelState(false);
+        return;
+    }
+
+    sel.innerHTML = '<option value="">— Selecciona una organización —</option>' +
+        orgs.map(o => `<option value="${escHtml(o)}">${escHtml(o)}</option>`).join('');
+
+    // Si solo hay una, la seleccionamos automáticamente
+    if (orgs.length === 1) {
+        sel.value = orgs[0];
+        onOrgSelected(orgs[0]);
+    } else {
+        setLeftPanelState(false);  // bloquear panel hasta que elijan
+    }
+}
+
+function onOrgSelected(org) {
+    selectedOrg = org || null;
+    setLeftPanelState(!!org);
+
+    // Limpiar grafo actual
+    nodesDS.clear();
+    edgesDS.clear();
+    nodeTooltipData.clear();
+    edgeTooltipData.clear();
+    labelColorMap = {};
+    colorIndex    = 0;
+    updateLegend();
+    updateStats(0, 0, null);
+    setEmptyState(true);
+    hideRightPanel();
+    hideCustomTooltip();
+
+    if (!org) return;
+
+    // Vista inicial filtrada por org
+    execQuery(
+        'MATCH (n)-[r]->(m) WHERE n.ORGANIZACION = $org OR m.ORGANIZACION = $org ' +
+        'RETURN n, r, m LIMIT 120',
+        true,
+        { org }
+    );
+}
+
+// Habilita/deshabilita el panel izquierdo según si hay org seleccionada
+function setLeftPanelState(enabled) {
+    const panel = document.getElementById('left-panel');
+    if (enabled) panel.classList.remove('no-org');
+    else         panel.classList.add('no-org');
+}
+
+// ──────────────────────────────────────────────────────────────────
 // QUERY EXECUTION
 // ──────────────────────────────────────────────────────────────────
-async function execQuery(cypher, clearFirst = true) {
+async function execQuery(cypher, clearFirst = true, params = {}) {
     if (!neoDriver || !isConnected) {
         alert('No hay conexión activa con Neo4j.\nUsa el botón "↺ Reconectar".');
         return;
@@ -542,7 +624,7 @@ async function execQuery(cypher, clearFirst = true) {
 
     const session = neoDriver.session();
     try {
-        const result = await session.run(trimmed);
+        const result = await session.run(trimmed, params);
         processRecords(result.records, clearFirst);
     } catch (err) {
         console.error('[Graph Viewer] Query error:', err);
@@ -602,9 +684,25 @@ function processRecords(records, clearFirst) {
     }
 }
 
+// Devuelve true si el nodo pertenece a la organización activa (o no tiene info de org)
+function nodePassesOrgFilter(props, labels) {
+    if (!selectedOrg) return true;
+    // Nodos con propiedad ORGANIZACION explícita
+    if (props.ORGANIZACION != null) return props.ORGANIZACION === selectedOrg;
+    // Nodo tipo *_Organizacion cuya propiedad `name` es la org
+    if (props.name != null && labels.some(l => /organizaci[oó]n/i.test(l))) {
+        return props.name === selectedOrg;
+    }
+    // Resto (ORIGEN, SERVICE, nodos estructurales sin prop de org) → mostrar siempre
+    return true;
+}
+
 function collectNode(map, node) {
     const id = node.identity;
     if (map.has(id)) return;
+
+    // Filtrar por organización activa
+    if (!nodePassesOrgFilter(node.properties, node.labels)) return;
 
     const primaryLabel = getPrimaryLabel(node.labels);
     const color        = labelToColor(primaryLabel);
@@ -1006,6 +1104,11 @@ function updateStats(nodes, edges, rows) {
 // EVENT BINDINGS
 // ──────────────────────────────────────────────────────────────────
 function bindEvents() {
+    // Org selector
+    document.getElementById('org-select').addEventListener('change', e => {
+        onOrgSelected(e.target.value);
+    });
+
     // Reconnect
     document.getElementById('reconnect-btn').addEventListener('click', autoConnect);
 
