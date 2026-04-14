@@ -1166,7 +1166,7 @@ class ScanStorage:
             self._auto_bitacora_note(scan_id)
 
     def _auto_bitacora_note(self, scan_id: int):
-        """Crea silenciosamente una nota de bitácora para el escaneo completado."""
+        """Crea y rellena silenciosamente la nota de bitácora para el escaneo completado."""
         try:
             conn = sqlite3.connect(str(self.db_path), timeout=10.0)
             conn.row_factory = sqlite3.Row
@@ -1182,6 +1182,9 @@ class ScanStorage:
             mgr.create_origen_note(
                 row['organization_name'], scan_id,
                 row['scan_mode'] or 'active', row['target_range'], row['started_at']
+            )
+            mgr.update_origen_visibility(
+                row['organization_name'], scan_id, self.db_path
             )
         except Exception:
             pass  # Nunca bloquear el flujo del escaneo

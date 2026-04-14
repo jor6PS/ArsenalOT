@@ -33,6 +33,10 @@ ORG_TEMPLATE_SUBDIRS = ["PENTEST IT OT", "EV. DISPOSITIVOS"]
 # Archivos/dirs del template que van a la raíz del vault (solo primera vez)
 VAULT_ROOT_ITEMS = [".obsidian", "imagenes"]
 
+# Marcadores del bloque de visibilidad gestionado por ArsenalOT
+VISIBILIDAD_START = '<!-- ARSENAL:VISIBILIDAD -->'
+VISIBILIDAD_END   = '<!-- /ARSENAL:VISIBILIDAD -->'
+
 
 def _safe_path(base: Path, user_path: str) -> Path:
     """Resuelve un path relativo y verifica que no salga del base (path traversal)."""
@@ -260,6 +264,254 @@ class BitacoraManager:
         return str(self.vault_root.resolve())
 
     # ─────────────────────────────────────────────────────────
+    # Visibilidad de redes por escaneo (bloque auto-gestionado)
+    # ─────────────────────────────────────────────────────────
+
+    def _find_origen_note_path(self, org_name: str, scan_id: int) -> Optional[Path]:
+        """Localiza el .md de un origen en Bitacoras/ (activo o pasivo)."""
+        bitacoras = self.get_org_dir(org_name) / "PENTEST IT OT" / "Bitacoras"
+        if not bitacoras.exists():
+            return None
+        for pat in (f"*VE - Escaneo {scan_id}.md",
+                    f"*VE - ESCANEO PASIVO {scan_id}.md"):
+            hits = list(bitacoras.glob(pat))
+            if hits:
+                return hits[0]
+        return None
+
+    def _build_visibility_block(self, scan_id: int, db_path) -> str:
+        """Construye el bloque Markdown de visibilidad para un escaneo."""
+        import sqlite3 as _sq
+        import ipaddress as _ipa
+        from datetime import datetime as _dt
+
+        conn = _sq.connect(str(db_path), timeout=10.0)
+        conn.row_factory = _sq.Row
+        try:
+            scan = conn.execute(
+                """SELECT id, organization_name, location, scan_mode, target_range,
+                          interface, myip, started_at, completed_at,
+                          hosts_discovered, ports_found
+                   FROM scans WHERE id = ?""",
+                (scan_id,)
+            ).fetchone()
+            if not scan:
+                return ''
+
+            org = scan['organization_name']
+
+            # Redes registradas para la organización
+            net_rows = conn.execute(
+                """SELECT system_name, network_name, network_range
+                   FROM networks
+                   WHERE UPPER(organization_name) = UPPER(?)
+                   ORDER BY system_name, network_name""",
+                (org,)
+            ).fetchall()
+
+            known_nets = []
+            for n in net_rows:
+                try:
+                    known_nets.append({
+                        'obj':    _ipa.ip_network(n['network_range'], strict=False),
+                        'name':   n['network_name'] or '—',
+                        'system': n['system_name'] or '—',
+                        'range':  n['network_range'],
+                    })
+                except ValueError:
+                    pass
+
+            is_passive = (scan['scan_mode'] or 'active') == 'passive'
+
+            if is_passive:
+                ip_rows = conn.execute(
+                    """SELECT DISTINCT src_ip AS ip FROM passive_conversations WHERE scan_id = ?
+                       UNION
+                       SELECT DISTINCT dst_ip AS ip FROM passive_conversations WHERE scan_id = ?""",
+                    (scan_id, scan_id)
+                ).fetchall()
+                hosts = [{'ip_address': r['ip'], 'hostname': None,
+                          'mac_address': None, 'vendor': None}
+                         for r in ip_rows]
+                port_map: Dict = {}
+                for pr in conn.execute(
+                    """SELECT DISTINCT dst_ip, dst_port, protocol
+                       FROM passive_conversations
+                       WHERE scan_id = ? AND dst_port IS NOT NULL
+                       ORDER BY dst_ip, dst_port""",
+                    (scan_id,)
+                ).fetchall():
+                    port_map.setdefault(pr['dst_ip'], []).append(
+                        f"{pr['dst_port']}/{pr['protocol'] or 'tcp'}"
+                    )
+            else:
+                hosts = [dict(r) for r in conn.execute(
+                    """SELECT DISTINCT h.ip_address, h.hostname,
+                              h.mac_address, h.vendor
+                       FROM scan_results sr
+                       JOIN hosts h ON h.id = sr.host_id
+                       WHERE sr.scan_id = ?
+                       ORDER BY h.ip_address""",
+                    (scan_id,)
+                ).fetchall()]
+                port_map = {}
+                for pr in conn.execute(
+                    """SELECT h.ip_address, sr.port, sr.protocol, sr.service_name
+                       FROM scan_results sr
+                       JOIN hosts h ON h.id = sr.host_id
+                       WHERE sr.scan_id = ?
+                         AND sr.port IS NOT NULL AND sr.state = 'open'
+                       ORDER BY h.ip_address, sr.port""",
+                    (scan_id,)
+                ).fetchall():
+                    svc = pr['service_name'] or str(pr['port'])
+                    port_map.setdefault(pr['ip_address'], []).append(
+                        f"{pr['port']}/{svc}"
+                    )
+        finally:
+            conn.close()
+
+        # Clasificar hosts: redes conocidas vs desconocidas
+        net_count: Dict = {}   # range → {name, system, hosts[], known}
+        unknown:   Dict = {}   # /24   → [ips]
+
+        for h in hosts:
+            ip_str = h['ip_address']
+            try:
+                host_ip = _ipa.ip_address(ip_str)
+            except ValueError:
+                continue
+            matched = False
+            for n in known_nets:
+                if host_ip in n['obj']:
+                    net_count.setdefault(n['range'], {
+                        'name': n['name'], 'system': n['system'],
+                        'hosts': [], 'known': True,
+                    })['hosts'].append(ip_str)
+                    matched = True
+                    break
+            if not matched:
+                parts = ip_str.rsplit('.', 1)
+                subnet = f"{parts[0]}.0/24" if len(parts) == 2 else '0.0.0.0/0'
+                unknown.setdefault(subnet, []).append(ip_str)
+
+        # Calcular duración del escaneo
+        duration_str = ''
+        try:
+            if scan['started_at'] and scan['completed_at']:
+                s = _dt.fromisoformat(str(scan['started_at'])[:19])
+                e = _dt.fromisoformat(str(scan['completed_at'])[:19])
+                mins = max(0, int((e - s).total_seconds() / 60))
+                duration_str = f" · **Duración:** {mins} min"
+        except Exception:
+            pass
+
+        mode_lbl   = 'Pasivo' if is_passive else 'Activo'
+        origin_lbl = (f"ESCANEO PASIVO {scan_id}" if is_passive
+                      else f"Escaneo {scan_id}")
+        total_hosts = len(hosts) or (scan['hosts_discovered'] or 0)
+        total_ports = sum(len(v) for v in port_map.values()) or (scan['ports_found'] or 0)
+
+        lines = [
+            VISIBILIDAD_START,
+            '#### 🔍 Visibilidad de Redes — ArsenalOT',
+            '',
+            (f"**Origen:** `{origin_lbl}` · **Modo:** {mode_lbl}"
+             f" · **Objetivo:** `{scan['target_range'] or '—'}`  "),
+            (f"**Localización:** {scan['location'] or '—'}"
+             f" · **Inicio:** {str(scan['started_at'] or '')[:10]}"
+             f"{duration_str}"
+             f" · **Hosts activos:** {total_hosts}"
+             f" · **Puertos/servicios:** {total_ports}"),
+            '',
+        ]
+
+        # Tabla de redes
+        all_nets = (
+            [{'range': r, **v} for r, v in net_count.items()] +
+            [{'range': r, 'name': '—', 'system': '—', 'hosts': ips, 'known': False}
+             for r, ips in unknown.items()]
+        )
+        if all_nets:
+            all_nets.sort(key=lambda x: (not x['known'], x['range']))
+            lines += [
+                '##### Redes con Visibilidad',
+                '',
+                '| Red | Nombre | Sistema | Tipo | Hosts |',
+                '|:---|:---|:---|:---|---:|',
+            ]
+            for n in all_nets:
+                tipo = '✅ Conocida' if n['known'] else '⚠️ Desconocida'
+                lines.append(
+                    f"| `{n['range']}` | {n['name']} | {n['system']}"
+                    f" | {tipo} | {len(n['hosts'])} |"
+                )
+            lines.append('')
+
+        # Tabla de hosts
+        if hosts:
+            lines += [
+                '##### Hosts Descubiertos',
+                '',
+                '| IP | Hostname | MAC / Vendor | Servicios detectados |',
+                '|:---|:---|:---|:---|',
+            ]
+            for h in hosts:
+                ip     = h['ip_address']
+                hn     = h.get('hostname') or '—'
+                mac    = h.get('mac_address') or ''
+                vendor = h.get('vendor') or ''
+                if mac and vendor:
+                    mac_str = f"{mac} / {vendor}"
+                elif mac:
+                    mac_str = mac
+                elif vendor:
+                    mac_str = vendor
+                else:
+                    mac_str = '—'
+                ports    = port_map.get(ip, [])
+                svc_str  = ', '.join(ports[:8]) or '—'
+                if len(ports) > 8:
+                    svc_str += ', …'
+                lines.append(
+                    f"| `{ip}` | `{hn}` | {mac_str} | {svc_str} |"
+                )
+            lines.append('')
+
+        lines.append(VISIBILIDAD_END)
+        return '\n'.join(lines)
+
+    def _inject_or_replace_visibility(self, content: str, block: str) -> str:
+        """Reemplaza el bloque existente o lo inyecta antes de la sección 1.2."""
+        if VISIBILIDAD_START in content and VISIBILIDAD_END in content:
+            s = content.index(VISIBILIDAD_START)
+            e = content.index(VISIBILIDAD_END) + len(VISIBILIDAD_END)
+            return content[:s] + block + content[e:]
+        # Inyectar antes de la sección 1.2 (o 2 como fallback)
+        for anchor in ('\n### 1.2.', '\n## 2. FASE:', '\n---\n\n## 2.'):
+            if anchor in content:
+                return content.replace(anchor, f'\n\n{block}\n{anchor}', 1)
+        return content.rstrip() + f'\n\n{block}\n'
+
+    def update_origen_visibility(self, org_name: str, scan_id: int, db_path) -> bool:
+        """
+        Actualiza el bloque ARSENAL:VISIBILIDAD de la nota del origen.
+        Solo reemplaza ese bloque; el resto del documento no se toca.
+        Devuelve True si actualizó, False si la nota no existe.
+        """
+        note_path = self._find_origen_note_path(org_name, scan_id)
+        if note_path is None:
+            return False
+        block = self._build_visibility_block(scan_id, db_path)
+        if not block:
+            return False
+        content     = note_path.read_text(encoding='utf-8')
+        new_content = self._inject_or_replace_visibility(content, block)
+        if new_content != content:
+            note_path.write_text(new_content, encoding='utf-8')
+        return True
+
+    # ─────────────────────────────────────────────────────────
     # Creación automática desde escaneos ORIGEN
     # ─────────────────────────────────────────────────────────
 
@@ -356,6 +608,8 @@ class BitacoraManager:
                     created += 1
                 else:
                     skipped += 1
+                # Actualizar visibilidad tanto en notas nuevas como existentes
+                self.update_origen_visibility(org_name, row['id'], db_path)
             except Exception as e:
                 errors.append(f"Scan {row['id']}: {str(e)}")
 
