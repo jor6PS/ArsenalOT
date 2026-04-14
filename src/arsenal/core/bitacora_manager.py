@@ -46,6 +46,27 @@ def _safe_path(base: Path, user_path: str) -> Path:
     return resolved
 
 
+def _open_permissions(path: Path):
+    """
+    Hace que un archivo o directorio sea legible/escribible por cualquier usuario.
+    Archivos → 0o666, Directorios → 0o777.
+    Si path es un directorio, aplica recursivamente a todo su contenido.
+    Silencia errores (p.ej. si el proceso no es el propietario).
+    """
+    try:
+        if path.is_dir():
+            os.chmod(path, 0o777)
+            for child in path.rglob("*"):
+                try:
+                    os.chmod(child, 0o777 if child.is_dir() else 0o666)
+                except OSError:
+                    pass
+        else:
+            os.chmod(path, 0o666)
+    except OSError:
+        pass
+
+
 class BitacoraManager:
     """Gestiona la bitácora Obsidian integrada."""
 
@@ -62,7 +83,9 @@ class BitacoraManager:
     def _init_vault(self):
         """Crea el vault raíz la primera vez (config Obsidian + imágenes compartidas)."""
         self.vault_root.mkdir(parents=True, exist_ok=True)
+        _open_permissions(self.vault_root)
         self.orgs_root.mkdir(parents=True, exist_ok=True)
+        _open_permissions(self.orgs_root)
 
         if not TEMPLATE_DIR.exists():
             return  # template no disponible (entorno de test sin repo)
@@ -75,6 +98,7 @@ class BitacoraManager:
                     shutil.copytree(src, dst)
                 else:
                     shutil.copy2(src, dst)
+                _open_permissions(dst)
 
     # ─────────────────────────────────────────────────────────
     # Creación de bitácora para una organización
@@ -88,12 +112,17 @@ class BitacoraManager:
         """
         org_dir = self.orgs_root / org_name
         org_dir.mkdir(parents=True, exist_ok=True)
+        _open_permissions(org_dir)
 
         if not TEMPLATE_DIR.exists():
             # Crear estructura mínima si no hay template
-            (org_dir / "PENTEST IT OT" / "Bitacoras").mkdir(parents=True, exist_ok=True)
-            (org_dir / "PENTEST IT OT" / "Plantillas").mkdir(parents=True, exist_ok=True)
-            (org_dir / "EV. DISPOSITIVOS" / "62443" / "Bitacoras").mkdir(parents=True, exist_ok=True)
+            for _d in [
+                org_dir / "PENTEST IT OT" / "Bitacoras",
+                org_dir / "PENTEST IT OT" / "Plantillas",
+                org_dir / "EV. DISPOSITIVOS" / "62443" / "Bitacoras",
+            ]:
+                _d.mkdir(parents=True, exist_ok=True)
+                _open_permissions(_d)
             return org_dir
 
         for subdir_name in ORG_TEMPLATE_SUBDIRS:
@@ -101,6 +130,7 @@ class BitacoraManager:
             dst = org_dir / subdir_name
             if src.exists() and not dst.exists():
                 shutil.copytree(src, dst)
+                _open_permissions(dst)
 
         # Crear README de la org si no existe
         readme = org_dir / "README.md"
@@ -116,6 +146,7 @@ class BitacoraManager:
                 f"Los cambios se sincronizan en tiempo real con ArsenalOT.\n",
                 encoding="utf-8"
             )
+            _open_permissions(readme)
 
         return org_dir
 
@@ -212,7 +243,9 @@ class BitacoraManager:
 
         # Crear directorios intermedios si hace falta
         fpath.parent.mkdir(parents=True, exist_ok=True)
+        _open_permissions(fpath.parent)
         fpath.write_text(content, encoding="utf-8")
+        _open_permissions(fpath)
         new_mtime = fpath.stat().st_mtime
         return True, None, new_mtime
 
@@ -223,7 +256,9 @@ class BitacoraManager:
         if fpath.exists():
             raise FileExistsError(f"El archivo ya existe: {rel_path}")
         fpath.parent.mkdir(parents=True, exist_ok=True)
+        _open_permissions(fpath.parent)
         fpath.write_text(initial_content, encoding="utf-8")
+        _open_permissions(fpath)
         return fpath.stat().st_mtime
 
     def delete_file(self, org_name: str, rel_path: str):
@@ -242,6 +277,7 @@ class BitacoraManager:
         org_dir = self.get_org_dir(org_name)
         fpath = _safe_path(org_dir, rel_path)
         fpath.mkdir(parents=True, exist_ok=True)
+        _open_permissions(fpath)
 
     def rename(self, org_name: str, old_path: str, new_path: str):
         """Renombra/mueve un archivo o carpeta."""
@@ -748,6 +784,7 @@ class BitacoraManager:
         new_content = self._inject_or_replace_visibility(content, block)
         if new_content != content:
             note_path.write_text(new_content, encoding='utf-8')
+            _open_permissions(note_path)
         return True
 
     # ─────────────────────────────────────────────────────────
