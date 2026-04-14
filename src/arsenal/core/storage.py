@@ -1166,26 +1166,23 @@ class ScanStorage:
             self._auto_bitacora_note(scan_id)
 
     def _auto_bitacora_note(self, scan_id: int):
-        """Crea y rellena silenciosamente la nota de bitácora para el escaneo completado."""
+        """Crea/actualiza silenciosamente la nota de bitácora del vector de acceso."""
         try:
             conn = sqlite3.connect(str(self.db_path), timeout=10.0)
             conn.row_factory = sqlite3.Row
             row = conn.execute(
-                "SELECT organization_name, scan_mode, target_range, started_at FROM scans WHERE id = ?",
+                "SELECT organization_name, location, started_at FROM scans WHERE id = ?",
                 (scan_id,)
             ).fetchone()
             conn.close()
             if not row:
                 return
             from arsenal.core.bitacora_manager import BitacoraManager
-            mgr = BitacoraManager(self.results_root)
-            mgr.create_origen_note(
-                row['organization_name'], scan_id,
-                row['scan_mode'] or 'active', row['target_range'], row['started_at']
-            )
-            mgr.update_origen_visibility(
-                row['organization_name'], scan_id, self.db_path
-            )
+            mgr        = BitacoraManager(self.results_root)
+            first_date = str(row['started_at'] or '')[:10]
+            mgr.create_location_note(row['organization_name'], row['location'], first_date)
+            mgr.update_location_visibility(row['organization_name'], row['location'],
+                                           self.db_path)
         except Exception:
             pass  # Nunca bloquear el flujo del escaneo
 
