@@ -1160,7 +1160,32 @@ class ScanStorage:
         finally:
             if conn:
                 conn.close()
-    
+
+        # Auto-crear nota de bitácora para escaneos completados con éxito
+        if not error_message:
+            self._auto_bitacora_note(scan_id)
+
+    def _auto_bitacora_note(self, scan_id: int):
+        """Crea silenciosamente una nota de bitácora para el escaneo completado."""
+        try:
+            conn = sqlite3.connect(str(self.db_path), timeout=10.0)
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT organization_name, scan_mode, target_range, started_at FROM scans WHERE id = ?",
+                (scan_id,)
+            ).fetchone()
+            conn.close()
+            if not row:
+                return
+            from arsenal.core.bitacora_manager import BitacoraManager
+            mgr = BitacoraManager(self.results_root)
+            mgr.create_origen_note(
+                row['organization_name'], scan_id,
+                row['scan_mode'] or 'active', row['target_range'], row['started_at']
+            )
+        except Exception:
+            pass  # Nunca bloquear el flujo del escaneo
+
     def delete_scan(self, scan_id: int) -> bool:
         """
         Elimina un escaneo y todos sus resultados.

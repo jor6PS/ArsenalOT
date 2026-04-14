@@ -374,6 +374,7 @@
       <div class="tree-actions">
         <button class="tree-btn" onclick="openNewItemModal(false)">+ Archivo</button>
         <button class="tree-btn" onclick="openNewItemModal(true)">+ Carpeta</button>
+        <button class="tree-btn" id="fillBtn" onclick="fillFromScans()" title="Genera notas desde la plantilla para todos los escaneos sin bitácora">⚡ Rellenar</button>
       </div>
       <div id="fileTree">
         <div style="padding:.75rem 1rem;font-size:.8rem;color:var(--text-secondary);">Cargando…</div>
@@ -805,6 +806,41 @@ async function confirmNewItem() {
       alert('Error: ' + (d.detail || 'No se pudo crear'));
     }
   } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ── Rellenar desde escaneos ───────────────────────────────────
+async function fillFromScans() {
+  const btn = document.getElementById('fillBtn');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Procesando...';
+  try {
+    const r = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/fill-from-scans`, { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.statusText);
+    let msg = `Creadas: ${d.created} · Existentes: ${d.skipped}`;
+    if (d.errors && d.errors.length) msg += ` · Errores: ${d.errors.length}`;
+    showFillToast(msg, d.created > 0 ? '#68d391' : '#90cdf4');
+    if (d.created > 0) await refreshTree();
+  } catch(e) {
+    showFillToast('Error: ' + e.message, '#fc8149');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+function showFillToast(msg, color) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  Object.assign(t.style, {
+    position: 'fixed', bottom: '1.5rem', right: '1.5rem', zIndex: 9999,
+    background: '#1a2535', color: color, border: `1px solid ${color}`,
+    borderRadius: '.5rem', padding: '.6rem 1.1rem', fontSize: '.85rem',
+    boxShadow: '0 4px 16px rgba(0,0,0,.4)', transition: 'opacity .4s',
+  });
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 3500);
 }
 
 // ── Utilities ────────────────────────────────────────────────

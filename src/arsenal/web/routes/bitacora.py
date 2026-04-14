@@ -149,6 +149,20 @@ async def delete_file(org_name: str, path: str = Query(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/{org_name}/fill-from-scans")
+async def fill_bitacora_from_scans(org_name: str):
+    """
+    Crea notas de bitácora para todos los escaneos completados que aún no tienen nota.
+    No sobreescribe notas existentes.
+    """
+    try:
+        mgr = _get_manager()
+        result = mgr.fill_from_scans(org_name, storage.db_path)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/{org_name}/rename")
 async def rename_item(org_name: str, body: RenameRequest):
     """Renombra o mueve un archivo/carpeta."""

@@ -258,3 +258,105 @@ class BitacoraManager:
     def get_vault_path(self) -> str:
         """Devuelve la ruta absoluta del vault para mostrarla al usuario."""
         return str(self.vault_root.resolve())
+
+    # ─────────────────────────────────────────────────────────
+    # Creación automática desde escaneos ORIGEN
+    # ─────────────────────────────────────────────────────────
+
+    def create_origen_note(self, org_name: str, scan_id: int, scan_mode: str,
+                            target_range: str, started_at) -> bool:
+        """
+        Crea una nota de bitácora desde la plantilla CHECKLIST-PENTEST para un escaneo.
+        Nombre del archivo: YYYY-MM-DD - VE - Escaneo {id}.md  (o ESCANEO PASIVO {id})
+        Devuelve True si la creó, False si ya existía.
+        """
+        from datetime import datetime as _dt
+
+        mode = (scan_mode or 'active').lower()
+        if mode == 'passive':
+            origin_name = f"ESCANEO PASIVO {scan_id}"
+        else:
+            origin_name = f"Escaneo {scan_id}"
+
+        # Fecha del escaneo
+        if started_at:
+            if isinstance(started_at, str):
+                date_str = started_at[:10]  # YYYY-MM-DD
+            elif hasattr(started_at, 'strftime'):
+                date_str = started_at.strftime('%Y-%m-%d')
+            else:
+                date_str = _dt.now().strftime('%Y-%m-%d')
+        else:
+            date_str = _dt.now().strftime('%Y-%m-%d')
+
+        file_title = f"{date_str} - VE - {origin_name}"
+        rel_path = f"PENTEST IT OT/Bitacoras/{file_title}.md"
+
+        # Comprobar si ya existe (silencio)
+        org_dir = self.get_org_dir(org_name)
+        if (org_dir / rel_path).exists():
+            return False
+
+        # Leer plantilla (desde la copia de la org o desde el template fuente)
+        template_path = org_dir / "PENTEST IT OT/Plantillas/CHECKLIST-PENTEST.md"
+        if not template_path.exists():
+            template_path = TEMPLATE_DIR / "PENTEST IT OT/Plantillas/CHECKLIST-PENTEST.md"
+
+        if template_path.exists():
+            content = template_path.read_text(encoding='utf-8')
+        else:
+            content = f"# {file_title}\n\n"
+
+        # Sustituir variables de Templater por valores reales
+        content = content.replace('<% tp.file.title %>', file_title)
+        # Primera ocurrencia de la fecha en la tabla de metadatos
+        content = content.replace('`YYYY-MM-DD`', f'`{date_str}`', 1)
+        # Objetivo/target si es significativo
+        _skip_targets = {'imported_from_xml', 'imported_pcap', '0.0.0.0/0', 'N/A', ''}
+        if target_range and target_range not in _skip_targets:
+            content = content.replace(
+                '| **Cliente / Objetivo** | `...` |',
+                f'| **Cliente / Objetivo** | `{target_range}` |',
+            )
+
+        self.create_file(org_name, rel_path, content)
+        return True
+
+    def fill_from_scans(self, org_name: str, db_path) -> dict:
+        """
+        Crea notas de bitácora para todos los escaneos completados sin nota existente.
+        Devuelve {created, skipped, errors}.
+        """
+        import sqlite3 as _sqlite3
+
+        created = 0
+        skipped = 0
+        errors = []
+
+        conn = _sqlite3.connect(str(db_path), timeout=10.0)
+        conn.row_factory = _sqlite3.Row
+        try:
+            rows = conn.execute(
+                """SELECT id, scan_mode, target_range, started_at
+                   FROM scans
+                   WHERE UPPER(organization_name) = UPPER(?) AND status = 'completed'
+                   ORDER BY id""",
+                (org_name,)
+            ).fetchall()
+        finally:
+            conn.close()
+
+        for row in rows:
+            try:
+                was_created = self.create_origen_note(
+                    org_name, row['id'], row['scan_mode'] or 'active',
+                    row['target_range'], row['started_at']
+                )
+                if was_created:
+                    created += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                errors.append(f"Scan {row['id']}: {str(e)}")
+
+        return {'created': created, 'skipped': skipped, 'errors': errors}
