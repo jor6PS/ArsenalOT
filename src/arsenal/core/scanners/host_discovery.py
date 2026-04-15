@@ -129,49 +129,51 @@ class HostDiscovery:
     
     def icmp_ping_scan(self, target_range: str) -> Set[str]:
         """
-        Escaneo ICMP usando ping (echo request/reply).
-        
-        Técnica clásica pero efectiva. Algunos hosts filtran ICMP echo,
-        por lo que se complementa con otras técnicas.
-        
+        Escaneo ICMP usando nmap -sn (ping scan).
+
+        Usa nmap en lugar de ping para evitar dependencia del binario ping
+        (no siempre disponible en contenedores).
+
         Args:
             target_range: Rango de IPs a escanear
-            
+
         Returns:
             Set de direcciones IP descubiertas
         """
         discovered = set()
-        
+
         try:
             network = ipaddress.IPv4Network(target_range, strict=False)
         except ValueError:
             return discovered
-        
-        def ping_host(ip: ipaddress.IPv4Address) -> Optional[str]:
-            """Ejecuta ping a una IP específica."""
-            try:
-                # Usar timeout más corto para mayor velocidad
-                result = subprocess.run(
-                    ['ping', '-c', '1', '-W', str(self.timeout * 1000), str(ip)],
-                    capture_output=True,
-                    text=True,
-                    timeout=self.timeout + 1
-                )
-                
-                # Buscar indicadores de respuesta exitosa
-                if result.returncode == 0:
-                    # Verificar que realmente recibió respuesta
-                    if "1 received" in result.stdout or "0% packet loss" in result.stdout:
-                        return str(ip)
-            except Exception:
-                pass
-            return None
-        
-        # Ejecutar ping concurrente
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            results = executor.map(ping_host, network.hosts())
-            discovered = {ip for ip in results if ip is not None}
-        
+
+        try:
+            host_count = sum(1 for _ in network.hosts())
+            # Timeout total: al menos 30s, o timeout por host * nº hosts
+            total_timeout = max(self.timeout * host_count + 30, 60)
+
+            cmd = [
+                'nmap', '-sn', '-T4',
+                '--host-timeout', f'{self.timeout + 1}s',
+                '-oG', '-',  # salida grepable por stdout
+                target_range,
+            ]
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=total_timeout,
+            )
+
+            # Formato grepable: "Host: 1.2.3.4 (hostname)\tStatus: Up"
+            for line in result.stdout.splitlines():
+                if 'Status: Up' in line:
+                    m = re.search(r'Host:\s+(\d+\.\d+\.\d+\.\d+)', line)
+                    if m and self._is_valid_ip(m.group(1)):
+                        discovered.add(m.group(1))
+        except Exception as e:
+            print(f"⚠️  Error en ICMP ping scan: {e}")
+
         return discovered
     
     def icmp_alternative_scan(self, target_range: str) -> Set[str]:

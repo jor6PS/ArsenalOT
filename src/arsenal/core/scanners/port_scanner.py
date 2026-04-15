@@ -247,8 +247,8 @@ class PortScanner:
         if output_file:
             cmd.extend(['-oX', output_file])
         
-        # Target
-        cmd.append(target_range)
+        # Target(s) — may be a space-separated list of IPs built by the caller
+        cmd.extend(target_range.split())
         
         return cmd
     def scan(self, target_range: str, speed: str = 'normal', 
