@@ -96,45 +96,41 @@ RETURN vh,vo,rel`
 ];
 
 // ──────────────────────────────────────────────────────────────────
-// NODE STYLE MAP — shape + color per label type
+// NODE STYLE MAP — emoji icon + color per label type
+// All nodes render as circles (circularImage) with the emoji inside.
 // ──────────────────────────────────────────────────────────────────
 const NODE_STYLES = {
     // Raw Neo4j labels
-    'HOST':           { shape: 'dot',          color: '#4ECDC4', size: 18, legend: '● Host' },
-    'SERVICE':        { shape: 'square',        color: '#FFE66D', size: 13, legend: '■ Servicio' },
-    'ORIGEN':         { shape: 'diamond',       color: '#FF6B6B', size: 22, legend: '◆ Origen / Vector' },
-    'ORGANIZACION':   { shape: 'star',          color: '#a78bfa', size: 24, legend: '★ Organización' },
-    'VULNERABILITY':  { shape: 'hexagon',       color: '#f97316', size: 16, legend: '⬡ Vulnerabilidad' },
-    'NETWORK':        { shape: 'triangleDown',  color: '#22c55e', size: 16, legend: '▼ Red' },
+    'HOST':             { emoji: '🖥️',  color: '#4ECDC4', size: 22 },
+    'SERVICE':          { emoji: '⚙️',  color: '#FFE66D', size: 16 },
+    'ORIGEN':           { emoji: '📡',  color: '#FF6B6B', size: 26 },
+    'ORGANIZACION':     { emoji: '🏢',  color: '#a78bfa', size: 28 },
+    'VULNERABILITY':    { emoji: '🐛',  color: '#f97316', size: 20 },
+    'NETWORK':          { emoji: '🌐',  color: '#22c55e', size: 20 },
     // Structural labels from complex queries (matched by suffix after stripping prefix)
-    'host':           { shape: 'dot',           color: '#4ECDC4', size: 18, legend: null },
-    'hostunificado':  { shape: 'dot',           color: '#4ECDC4', size: 18, legend: null },
-    'hostcritico':    { shape: 'dot',           color: '#ef4444', size: 20, legend: null },
-    'servicio':       { shape: 'square',        color: '#FFE66D', size: 13, legend: null },
-    'serviceunificado':{ shape: 'square',       color: '#FFE66D', size: 13, legend: null },
-    'origen':         { shape: 'diamond',       color: '#FF6B6B', size: 22, legend: null },
-    'organizacion':   { shape: 'star',          color: '#a78bfa', size: 24, legend: null },
-    'nombredsubred':  { shape: 'triangleDown',  color: '#22c55e', size: 16, legend: null },
-    'nombresubred':   { shape: 'triangleDown',  color: '#22c55e', size: 16, legend: null },
-    'rangosubred':    { shape: 'triangle',      color: '#16a34a', size: 14, legend: null },
+    'host':             { emoji: '🖥️',  color: '#4ECDC4', size: 22 },
+    'hostunificado':    { emoji: '🖥️',  color: '#4ECDC4', size: 22 },
+    'hostcritico':      { emoji: '⚠️',  color: '#ef4444', size: 24 },
+    'servicio':         { emoji: '⚙️',  color: '#FFE66D', size: 16 },
+    'serviceunificado': { emoji: '⚙️',  color: '#FFE66D', size: 16 },
+    'origen':           { emoji: '📡',  color: '#FF6B6B', size: 26 },
+    'organizacion':     { emoji: '🏢',  color: '#a78bfa', size: 28 },
+    'nombredsubred':    { emoji: '🔗',  color: '#22c55e', size: 18 },
+    'nombresubred':     { emoji: '🔗',  color: '#22c55e', size: 18 },
+    'rangosubred':      { emoji: '📍',  color: '#16a34a', size: 16 },
 };
 
 const LEGEND_ITEMS = [
-    { style: NODE_STYLES['HOST'],         label: 'Host' },
-    { style: NODE_STYLES['SERVICE'],      label: 'Servicio / Puerto' },
-    { style: NODE_STYLES['ORIGEN'],       label: 'Origen / Vector' },
-    { style: NODE_STYLES['ORGANIZACION'], label: 'Organización' },
-    { style: NODE_STYLES['VULNERABILITY'],label: 'Vulnerabilidad' },
-    { style: NODE_STYLES['NETWORK'],      label: 'Subred / Red' },
-    { style: NODE_STYLES['hostcritico'],  label: 'Host Crítico', color: '#ef4444' },
+    { emoji: '🖥️', color: '#4ECDC4', label: 'Host' },
+    { emoji: '⚙️', color: '#FFE66D', label: 'Servicio / Puerto' },
+    { emoji: '📡', color: '#FF6B6B', label: 'Origen / Vector de escaneo' },
+    { emoji: '🏢', color: '#a78bfa', label: 'Organización' },
+    { emoji: '🐛', color: '#f97316', label: 'Vulnerabilidad' },
+    { emoji: '🌐', color: '#22c55e', label: 'Subred / Red' },
+    { emoji: '⚠️', color: '#ef4444', label: 'Host Crítico' },
+    { emoji: '🔗', color: '#22c55e', label: 'Nombre de subred' },
+    { emoji: '📍', color: '#16a34a', label: 'Rango de subred' },
 ];
-
-// Shape → SVG symbol used in the legend
-const SHAPE_SYMBOL = {
-    dot:          '●', square: '■', diamond: '◆',
-    star:         '★', hexagon: '⬡', triangle: '▲',
-    triangleDown: '▼',
-};
 
 // ──────────────────────────────────────────────────────────────────
 // STATE
@@ -504,7 +500,7 @@ function getNodeStyle(labels) {
         const base = lbl.replace(/^[a-z]+_/i, '').toLowerCase();
         if (NODE_STYLES[base]) return NODE_STYLES[base];
     }
-    return { shape: 'dot', color: '#607080', size: 14, legend: null };
+    return { emoji: '❓', color: '#607080', size: 18 };
 }
 
 function collectNode(map, node) {
@@ -518,16 +514,22 @@ function collectNode(map, node) {
 
     nodeTooltipData.set(id, { labels: node.labels, props: node.properties });
 
+    const border   = darken(style.color, 45);
+    const hlBorder = lighten(style.color, 20);
+
     map.set(id, {
         id,
         label,
-        shape: style.shape,
-        size:  style.size,
+        shape:       'circularImage',
+        image:       makeIconDataUri(style.emoji, style.color),
+        size:        style.size,
+        borderWidth: 2,
+        borderWidthSelected: 3,
         color: {
+            border,
             background: style.color,
-            border:     darken(style.color, 45),
-            highlight:  { background: lighten(style.color, 28), border: style.color },
-            hover:      { background: lighten(style.color, 16), border: style.color },
+            highlight:  { border: hlBorder, background: style.color },
+            hover:      { border: hlBorder, background: style.color },
         },
         _labels: node.labels,
         _props:  node.properties,
@@ -613,14 +615,12 @@ function getNodeDisplayLabel(labels, props) {
 // ──────────────────────────────────────────────────────────────────
 function buildLegend() {
     const div = document.getElementById('legend-items');
-    div.innerHTML = LEGEND_ITEMS.map(item => {
-        const sym   = SHAPE_SYMBOL[item.style.shape] || '●';
-        const color = item.color || item.style.color;
-        return `<div class="legend-row">
-            <span class="legend-shape" style="color:${color};font-size:1rem">${sym}</span>
+    div.innerHTML = LEGEND_ITEMS.map(item =>
+        `<div class="legend-row">
+            <span class="legend-icon" style="background:${item.color}">${item.emoji}</span>
             <span>${escHtml(item.label)}</span>
-        </div>`;
-    }).join('');
+        </div>`
+    ).join('');
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -863,6 +863,20 @@ function formatCellValue(v) {
     if (v === null || v === undefined) return '';
     if (typeof v === 'object') return JSON.stringify(v);
     return String(v);
+}
+
+// Generates a square SVG data URI with a colored background and emoji centred.
+// vis-network clips it to a circle via shape:'circularImage'.
+function makeIconDataUri(emoji, bgColor) {
+    const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">' +
+        `<rect width="64" height="64" fill="${bgColor}"/>` +
+        '<text x="32" y="32" font-size="34" text-anchor="middle" dominant-baseline="central" ' +
+        'font-family="Apple Color Emoji,Segoe UI Emoji,Noto Color Emoji,sans-serif">' +
+        emoji +
+        '</text>' +
+        '</svg>';
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
 
 function darken(hex, amount) {

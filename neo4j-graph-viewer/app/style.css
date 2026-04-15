@@ -262,7 +262,9 @@ body {
 
 #legend-items   { display: flex; flex-direction: column; gap: .3rem; }
 .legend-row     { display: flex; align-items: center; gap: .5rem; font-size: .73rem; color: var(--text-muted); }
-.legend-shape   { width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.legend-icon    { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+                  display: flex; align-items: center; justify-content: center;
+                  font-size: .85rem; line-height: 1; }
 
 /* ── Graph Center ────────────────────────────────────────── */
 #graph-wrapper {
