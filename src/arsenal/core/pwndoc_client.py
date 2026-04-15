@@ -2,26 +2,22 @@
 Cliente para la API REST de PwnDoc.
 
 Variables de entorno:
-  PWNDOC_URL      → URL base del backend de PwnDoc (por defecto http://localhost:4242)
+  PWNDOC_URL      → URL base del backend de PwnDoc (por defecto https://localhost:4242)
   PWNDOC_USER     → Usuario admin (por defecto 'admin')
   PWNDOC_PASSWORD → Contraseña admin (por defecto 'changeme')
 """
 
 import os
-import json
-import urllib.request
-import urllib.error
-import ssl
+import requests
+import urllib3
 from typing import Optional, List, Dict
 
-PWNDOC_URL      = os.environ.get("PWNDOC_URL",      "http://localhost:4242")
+# Suprimir warnings de certificados autofirmados
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+PWNDOC_URL      = os.environ.get("PWNDOC_URL",      "https://localhost:4242")
 PWNDOC_USER     = os.environ.get("PWNDOC_USER",     "admin")
 PWNDOC_PASSWORD = os.environ.get("PWNDOC_PASSWORD", "changeme")
-
-# Contexto SSL permisivo para certificados autofirmados
-_ssl_ctx = ssl.create_default_context()
-_ssl_ctx.check_hostname = False
-_ssl_ctx.verify_mode = ssl.CERT_NONE
 
 
 class PwnDocClient:
@@ -33,27 +29,40 @@ class PwnDocClient:
         self.password = password or PWNDOC_PASSWORD
         self._token: Optional[str] = None
 
+        # Sesión persistente: misma conexión para auth + llamadas posteriores,
+        # SSL permisivo para certificados autofirmados.
+        self._session = requests.Session()
+        self._session.verify = False
+
     # ─── HTTP helper ───────────────────────────────────────────
 
     def _request(self, method: str, path: str,
                  body: dict = None, auth: bool = True) -> dict:
         full_url = f"{self.url}{path}"
-        data     = json.dumps(body).encode() if body is not None else None
         headers  = {"Content-Type": "application/json"}
         if auth and self._token:
             headers["Authorization"] = f"Bearer {self._token}"
 
-        req = urllib.request.Request(
-            full_url, data=data, headers=headers, method=method
-        )
         try:
-            with urllib.request.urlopen(req, context=_ssl_ctx, timeout=10) as resp:
-                return json.loads(resp.read().decode())
-        except urllib.error.HTTPError as exc:
-            body_text = exc.read().decode(errors="replace")
+            resp = self._session.request(
+                method, full_url,
+                json=body,
+                headers=headers,
+                timeout=10,
+                allow_redirects=False,   # evitar que redirects eliminen el header Authorization
+            )
+        except requests.exceptions.RequestException as exc:
+            raise RuntimeError(f"PwnDoc {method} {path} → conexión fallida: {exc}") from exc
+
+        if not resp.ok:
             raise RuntimeError(
-                f"PwnDoc {method} {path} → HTTP {exc.code}: {body_text}"
-            ) from exc
+                f"PwnDoc {method} {path} → HTTP {resp.status_code}: {resp.text}"
+            )
+
+        try:
+            return resp.json()
+        except ValueError:
+            return {}
 
     # ─── Auth ──────────────────────────────────────────────────
 
@@ -185,6 +194,5 @@ class PwnDocClient:
         """Lista los hallazgos de una auditoría."""
         self._ensure_auth()
         result = self._request("GET", f"/api/audits/{audit_id}")
-        # El audit completo incluye findings en result.datas.findings
         audit_data = result.get("datas", {})
         return audit_data.get("findings", [])
