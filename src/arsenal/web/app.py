@@ -80,6 +80,7 @@ from arsenal.web.routes.scans import router as scans_router
 from arsenal.web.routes.export_import import router as export_import_router
 from arsenal.web.routes.exploitation import router as exploitation_router
 from arsenal.web.routes.bitacora import router as bitacora_router
+from arsenal.web.routes.pwndoc import router as pwndoc_router
 
 # Registrar Routers
 app.include_router(pages_router)
@@ -88,6 +89,7 @@ app.include_router(scans_router)
 app.include_router(export_import_router)
 app.include_router(exploitation_router)
 app.include_router(bitacora_router)
+app.include_router(pwndoc_router)
 
 @app.post("/api/scans/cleanup-zombies")
 async def cleanup_zombie_scans_endpoint(max_hours: float = 2.0):

@@ -73,6 +73,10 @@ Variables esperadas:
       class="section-tab {% if active_section == 'neo4j' %}section-tab--active{% endif %}">
       <span>🕸️</span> Neo4j
     </a>
+    <a href="/pentest/{{ org_name | urlencode }}/recon/findings"
+      class="section-tab {% if active_section == 'findings' %}section-tab--active{% endif %}">
+      <span>🐛</span> Findings
+    </a>
   </nav>
   {% endif %}
 </div>

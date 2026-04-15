@@ -67,6 +67,8 @@ services:
     environment:
       - DB_SERVER=pwndoc-mongo
       - DB_NAME=pwndoc
+    ports:
+      - "127.0.0.1:4242:4242"   # API accesible desde arsenalot (network_mode: host)
     networks:
       - pwndoc-net
 

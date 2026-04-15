@@ -863,3 +863,86 @@ class BitacoraManager:
                 errors.append(f"{location}: {str(e)}")
 
         return {'created': created, 'skipped': skipped, 'errors': errors}
+
+    # ─────────────────────────────────────────────────────────
+    # Hallazgos (findings) — bloque gestionado en VULNERABILIDADES.md
+    # ─────────────────────────────────────────────────────────
+
+    FINDINGS_START = '<!-- ARSENAL:FINDINGS -->'
+    FINDINGS_END   = '<!-- /ARSENAL:FINDINGS -->'
+
+    def _get_vuln_note_path(self, org_name: str) -> Path:
+        """Ruta de VULNERABILIDADES.md dentro de la org (la crea si no existe)."""
+        org_dir   = self.get_org_dir(org_name)
+        note_path = org_dir / "PENTEST IT OT" / "Bitacoras" / "NOTAS" / "VULNERABILIDADES.md"
+        note_path.parent.mkdir(parents=True, exist_ok=True)
+        _open_permissions(note_path.parent)
+        if not note_path.exists():
+            note_path.write_text(
+                "# Vulnerabilidades\n\n"
+                "> Notas sobre vulnerabilidades encontradas durante la evaluación.\n\n",
+                encoding="utf-8"
+            )
+            _open_permissions(note_path)
+        return note_path
+
+    def add_finding_to_note(
+        self,
+        org_name: str,
+        title: str,
+        description: str = "",
+        observation: str = "",
+        remediation: str = "",
+    ):
+        """
+        Añade un hallazgo al bloque ARSENAL:FINDINGS de VULNERABILIDADES.md.
+        Si el bloque no existe, lo crea al final del archivo.
+        Si ya existe un hallazgo con ese título, no lo duplica.
+        """
+        from datetime import datetime as _dt
+
+        note_path = self._get_vuln_note_path(org_name)
+        content   = note_path.read_text(encoding="utf-8")
+
+        # Extraer bloque existente si hay uno
+        if self.FINDINGS_START in content and self.FINDINGS_END in content:
+            pre, rest  = content.split(self.FINDINGS_START, 1)
+            block_body, post = rest.split(self.FINDINGS_END, 1)
+        else:
+            pre        = content.rstrip("\n") + "\n\n"
+            block_body = ""
+            post       = ""
+
+        # Evitar duplicados (mismo título)
+        if f"### {title}" in block_body:
+            return
+
+        # Construir entrada del hallazgo
+        entry_lines = [f"### {title}", ""]
+        if description:
+            entry_lines += [f"**Descripción:** {description}", ""]
+        if observation:
+            entry_lines += [f"**Observación:** {observation}", ""]
+        if remediation:
+            entry_lines += [f"**Remediación:** {remediation}", ""]
+        entry_lines.append("---")
+        entry_lines.append("")
+        entry = "\n".join(entry_lines)
+
+        # Reconstruir bloque
+        ts         = _dt.now().strftime("%Y-%m-%d %H:%M")
+        new_block  = (
+            f"\n## Hallazgos registrados (ArsenalOT)\n\n"
+            + block_body.lstrip("\n")
+            + entry
+            + f"\n_Última actualización: {ts}_\n"
+        )
+        new_content = (
+            pre
+            + self.FINDINGS_START
+            + new_block
+            + self.FINDINGS_END
+            + post
+        )
+        note_path.write_text(new_content, encoding="utf-8")
+        _open_permissions(note_path)

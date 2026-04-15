@@ -39,6 +39,11 @@ async def recon_neo4j_page(request: Request, org_name: str):
     """Página para exportar a Neo4j."""
     return templates.TemplateResponse(request, "neo4j.html", {"org_name": org_name})
 
+@router.get("/pentest/{org_name}/recon/findings", response_class=HTMLResponse)
+async def recon_findings_page(request: Request, org_name: str):
+    """Página de findings (vulnerabilidades) integrada con PwnDoc."""
+    return templates.TemplateResponse(request, "findings.html", {"org_name": org_name})
+
 @router.get("/pentest/{org_name}/exploitation", response_class=HTMLResponse)
 async def exploitation_ot_page(request: Request, org_name: str):
     """Página de explotación OT."""

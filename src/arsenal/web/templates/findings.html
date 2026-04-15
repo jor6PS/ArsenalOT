@@ -1,0 +1,520 @@
+{% extends "base.html" %}
+
+{% block title %}Findings — {{ org_name }} | ArsenalOT{% endblock %}
+
+{% block extra_css %}
+<style>
+.findings-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .findings-layout { grid-template-columns: 1fr; }
+}
+
+/* ── Library panel ── */
+.lib-panel {
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 200px);
+}
+.lib-header {
+  padding: .85rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+.lib-header h3 { margin: 0; font-size: .95rem; color: var(--accent-yellow); }
+.lib-search {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  padding: .45rem .75rem;
+  color: var(--text-primary);
+  font-size: .85rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+.lib-search:focus { outline: none; border-color: var(--accent-blue); }
+.lib-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: .4rem 0;
+}
+.lib-item {
+  padding: .55rem 1rem;
+  cursor: pointer;
+  font-size: .85rem;
+  color: var(--text-secondary);
+  border-left: 3px solid transparent;
+  transition: background .12s, color .12s, border-color .12s;
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+.lib-item:hover { background: rgba(255,255,255,.05); color: var(--text-primary); }
+.lib-item.selected {
+  background: rgba(99,179,237,.1);
+  border-left-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+.lib-item-title { font-weight: 500; }
+.lib-item-cat {
+  font-size: .75rem;
+  color: var(--text-muted, #666);
+  opacity: .8;
+}
+.lib-footer {
+  padding: .65rem 1rem;
+  border-top: 1px solid rgba(255,255,255,.07);
+}
+.btn-new-vuln {
+  width: 100%;
+  background: rgba(99,179,237,.15);
+  border: 1px solid rgba(99,179,237,.3);
+  border-radius: 8px;
+  color: var(--accent-blue);
+  padding: .5rem;
+  font-size: .85rem;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-new-vuln:hover { background: rgba(99,179,237,.25); }
+
+/* ── Detail panel ── */
+.detail-panel {
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+.detail-panel h3 { margin-top: 0; font-size: 1rem; color: var(--accent-yellow); }
+.detail-empty {
+  color: var(--text-muted, #666);
+  font-size: .9rem;
+  text-align: center;
+  padding: 3rem 1rem;
+}
+.form-row { margin-bottom: 1.1rem; }
+.form-row label {
+  display: block;
+  font-size: .82rem;
+  color: var(--text-secondary);
+  margin-bottom: .35rem;
+  font-weight: 500;
+}
+.form-row input,
+.form-row textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  padding: .55rem .75rem;
+  color: var(--text-primary);
+  font-size: .88rem;
+  font-family: inherit;
+  resize: vertical;
+}
+.form-row input:focus,
+.form-row textarea:focus { outline: none; border-color: var(--accent-blue); }
+.form-row textarea { min-height: 80px; }
+.btn-add-finding {
+  background: linear-gradient(135deg, #48bb78, #38a169);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  padding: .6rem 1.4rem;
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.btn-add-finding:disabled { opacity: .5; cursor: not-allowed; }
+.btn-add-finding:not(:disabled):hover { opacity: .88; }
+
+/* ── Status bar ── */
+.pwndoc-status {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .8rem;
+  color: var(--text-secondary);
+  margin-bottom: .75rem;
+}
+.status-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+}
+.status-dot.ok { background: #48bb78; box-shadow: 0 0 6px rgba(72,187,120,.5); }
+
+/* ── New-vuln modal ── */
+.modal-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+.modal-backdrop.open { display: flex; }
+.modal-box {
+  background: #1a2535;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+  padding: 1.75rem;
+  width: 520px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-box h3 { margin-top: 0; color: var(--accent-yellow); }
+.modal-actions { display: flex; gap: .75rem; justify-content: flex-end; margin-top: 1.25rem; }
+.btn-cancel {
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  padding: .5rem 1rem;
+  cursor: pointer;
+  font-size: .88rem;
+}
+.btn-save {
+  background: var(--accent-blue);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  padding: .5rem 1.2rem;
+  cursor: pointer;
+  font-size: .88rem;
+  font-weight: 600;
+}
+
+/* ── Toast ── */
+#toast {
+  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999;
+  background: #1a2535;
+  border-radius: .5rem;
+  padding: .6rem 1.1rem;
+  font-size: .85rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  transition: opacity .4s;
+  pointer-events: none;
+  opacity: 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% set active_phase   = 'recon' %}
+{% set active_section = 'findings' %}
+{% include "org_tabs.html" %}
+
+<script>const ORG = {{ org_name | tojson }};</script>
+
+<!-- PwnDoc status -->
+<div class="pwndoc-status" id="pdStatus">
+  <span class="status-dot" id="pdDot"></span>
+  <span id="pdStatusText">Comprobando PwnDoc…</span>
+</div>
+
+<div class="findings-layout">
+
+  <!-- ── Biblioteca de vulnerabilidades ── -->
+  <div class="lib-panel">
+    <div class="lib-header">
+      <h3>📚 Biblioteca PwnDoc</h3>
+      <input class="lib-search" id="libSearch" type="search"
+             placeholder="Buscar vulnerabilidad…" oninput="filterLib()">
+    </div>
+    <div class="lib-list" id="libList">
+      <div style="padding:1.5rem; text-align:center; color:#666; font-size:.85rem;">
+        Cargando…
+      </div>
+    </div>
+    <div class="lib-footer">
+      <button class="btn-new-vuln" onclick="openNewVulnModal()">
+        ＋ Nueva vulnerabilidad en biblioteca
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Panel de detalle / formulario ── -->
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-empty" id="detailEmpty">
+      Selecciona una vulnerabilidad de la biblioteca para añadirla como finding.
+    </div>
+    <div id="detailForm" style="display:none;">
+      <h3 id="formTitle"></h3>
+
+      <div class="form-row">
+        <label>Descripción <span style="color:#ef4444">*</span></label>
+        <textarea id="fDesc" rows="4" placeholder="Descripción del hallazgo en este entorno…"></textarea>
+      </div>
+      <div class="form-row">
+        <label>Observación</label>
+        <textarea id="fObs" rows="3" placeholder="Evidencias, contexto adicional…"></textarea>
+      </div>
+      <div class="form-row">
+        <label>Remediación</label>
+        <textarea id="fRem" rows="3" placeholder="Recomendaciones de corrección…"></textarea>
+      </div>
+      <div class="form-row">
+        <label>CVSSv3 <span style="color:#999; font-weight:400">(opcional)</span></label>
+        <input type="text" id="fCvss" placeholder="p. ej. CVSS:3.1/AV:N/AC:L/…">
+      </div>
+
+      <button class="btn-add-finding" id="btnAddFinding" onclick="submitFinding()">
+        ✅ Añadir finding al proyecto
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Modal nueva vulnerabilidad ── -->
+<div class="modal-backdrop" id="newVulnModal">
+  <div class="modal-box">
+    <h3>Nueva vulnerabilidad en biblioteca PwnDoc</h3>
+
+    <div class="form-row">
+      <label>Título <span style="color:#ef4444">*</span></label>
+      <input type="text" id="nvTitle" placeholder="Nombre de la vulnerabilidad">
+    </div>
+    <div class="form-row">
+      <label>Categoría</label>
+      <input type="text" id="nvCategory" placeholder="p. ej. Web, Red, OT…">
+    </div>
+    <div class="form-row">
+      <label>Descripción</label>
+      <textarea id="nvDesc" rows="3" placeholder="Descripción técnica…"></textarea>
+    </div>
+    <div class="form-row">
+      <label>Observación</label>
+      <textarea id="nvObs" rows="2" placeholder="Notas de contexto…"></textarea>
+    </div>
+    <div class="form-row">
+      <label>Remediación</label>
+      <textarea id="nvRem" rows="2" placeholder="Cómo mitigar…"></textarea>
+    </div>
+    <div class="form-row">
+      <label>CVSSv3</label>
+      <input type="text" id="nvCvss" placeholder="CVSS:3.1/AV:…">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeNewVulnModal()">Cancelar</button>
+      <button class="btn-save" id="btnSaveVuln" onclick="saveNewVuln()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+/* ─── State ─────────────────────────────────────────────── */
+let allVulns    = [];
+let selectedVuln = null;
+
+/* ─── Init ──────────────────────────────────────────────── */
+(async function init() {
+  await checkStatus();
+  await loadLibrary();
+})();
+
+/* ─── PwnDoc status ─────────────────────────────────────── */
+async function checkStatus() {
+  try {
+    const r = await fetch('/api/pwndoc/status');
+    const d = await r.json();
+    const dot  = document.getElementById('pdDot');
+    const txt  = document.getElementById('pdStatusText');
+    if (d.ok) {
+      dot.classList.add('ok');
+      txt.textContent = `PwnDoc conectado (${d.url})`;
+    } else {
+      txt.textContent = `PwnDoc no disponible — ${d.error || ''}`;
+    }
+  } catch {
+    document.getElementById('pdStatusText').textContent = 'PwnDoc no alcanzable';
+  }
+}
+
+/* ─── Library ───────────────────────────────────────────── */
+async function loadLibrary() {
+  const list = document.getElementById('libList');
+  try {
+    const r = await fetch('/api/pwndoc/vulntypes');
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const d = await r.json();
+    allVulns = d.vulntypes || [];
+    renderLib(allVulns);
+  } catch(e) {
+    list.innerHTML = `<div style="padding:1rem;color:#ef4444;font-size:.85rem;">
+      Error cargando biblioteca: ${e.message}</div>`;
+  }
+}
+
+function renderLib(items) {
+  const list = document.getElementById('libList');
+  if (!items.length) {
+    list.innerHTML = '<div style="padding:1rem;text-align:center;color:#666;font-size:.85rem;">Sin vulnerabilidades en la biblioteca.</div>';
+    return;
+  }
+  list.innerHTML = items.map(v => `
+    <div class="lib-item" data-id="${v.id}" onclick="selectVuln('${v.id}')">
+      <span class="lib-item-title">${escHtml(v.title)}</span>
+      ${v.category ? `<span class="lib-item-cat">${escHtml(v.category)}</span>` : ''}
+    </div>
+  `).join('');
+}
+
+function filterLib() {
+  const q = document.getElementById('libSearch').value.toLowerCase();
+  renderLib(q ? allVulns.filter(v =>
+    v.title.toLowerCase().includes(q) || (v.category||'').toLowerCase().includes(q)
+  ) : allVulns);
+  // Re-mark selected
+  if (selectedVuln) {
+    const el = document.querySelector(`.lib-item[data-id="${selectedVuln.id}"]`);
+    if (el) el.classList.add('selected');
+  }
+}
+
+function selectVuln(id) {
+  selectedVuln = allVulns.find(v => v.id === id) || null;
+  document.querySelectorAll('.lib-item').forEach(el => el.classList.remove('selected'));
+  const el = document.querySelector(`.lib-item[data-id="${id}"]`);
+  if (el) el.classList.add('selected');
+  showDetail();
+}
+
+function showDetail() {
+  const empty  = document.getElementById('detailEmpty');
+  const form   = document.getElementById('detailForm');
+  const title  = document.getElementById('formTitle');
+  if (!selectedVuln) { empty.style.display=''; form.style.display='none'; return; }
+  empty.style.display = 'none';
+  form.style.display  = '';
+  title.textContent   = selectedVuln.title;
+  document.getElementById('fDesc').value = selectedVuln.description || '';
+  document.getElementById('fObs').value  = selectedVuln.observation || '';
+  document.getElementById('fRem').value  = selectedVuln.remediation || '';
+  document.getElementById('fCvss').value = selectedVuln.cvssv3 || '';
+}
+
+/* ─── Add finding ───────────────────────────────────────── */
+async function submitFinding() {
+  if (!selectedVuln) return;
+  const btn  = document.getElementById('btnAddFinding');
+  const desc = document.getElementById('fDesc').value.trim();
+  if (!desc) { showToast('La descripción es obligatoria.', '#ef4444'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Guardando…';
+  try {
+    const r = await fetch(`/api/pwndoc/${encodeURIComponent(ORG)}/findings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title:        selectedVuln.title,
+        description:  desc,
+        observation:  document.getElementById('fObs').value.trim(),
+        remediation:  document.getElementById('fRem').value.trim(),
+        cvssv3:       document.getElementById('fCvss').value.trim(),
+        vuln_type_id: selectedVuln.id || null,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.statusText);
+    showToast(`Finding añadido: ${selectedVuln.title}`, '#68d391');
+    // Reset form
+    document.getElementById('fDesc').value = '';
+    document.getElementById('fObs').value  = '';
+    document.getElementById('fRem').value  = '';
+  } catch(e) {
+    showToast(`Error: ${e.message}`, '#fc8181');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✅ Añadir finding al proyecto';
+  }
+}
+
+/* ─── New vuln modal ────────────────────────────────────── */
+function openNewVulnModal() {
+  document.getElementById('newVulnModal').classList.add('open');
+  document.getElementById('nvTitle').focus();
+}
+function closeNewVulnModal() {
+  document.getElementById('newVulnModal').classList.remove('open');
+}
+
+async function saveNewVuln() {
+  const title = document.getElementById('nvTitle').value.trim();
+  if (!title) { showToast('El título es obligatorio.', '#ef4444'); return; }
+
+  const btn = document.getElementById('btnSaveVuln');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+  try {
+    const r = await fetch('/api/pwndoc/vulntypes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        description: document.getElementById('nvDesc').value.trim(),
+        observation: document.getElementById('nvObs').value.trim(),
+        remediation: document.getElementById('nvRem').value.trim(),
+        category:    document.getElementById('nvCategory').value.trim(),
+        cvssv3:      document.getElementById('nvCvss').value.trim(),
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.statusText);
+    showToast(`Vulnerabilidad creada: ${title}`, '#68d391');
+    closeNewVulnModal();
+    // Clear form
+    ['nvTitle','nvCategory','nvDesc','nvObs','nvRem','nvCvss']
+      .forEach(id => document.getElementById(id).value = '');
+    await loadLibrary();
+  } catch(e) {
+    showToast(`Error: ${e.message}`, '#fc8181');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
+  }
+}
+
+/* ─── Helpers ───────────────────────────────────────────── */
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+let _toastTimer;
+function showToast(msg, color = '#68d391') {
+  const t = document.getElementById('toast');
+  t.textContent  = msg;
+  t.style.color  = color;
+  t.style.border = `1px solid ${color}`;
+  t.style.opacity = '1';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 3500);
+}
+
+// Close modal on backdrop click
+document.getElementById('newVulnModal').addEventListener('click', function(e) {
+  if (e.target === this) closeNewVulnModal();
+});
+</script>
+{% endblock %}

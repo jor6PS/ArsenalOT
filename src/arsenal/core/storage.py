@@ -420,10 +420,18 @@ class ScanStorage:
         """)
         
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_passive_conv_ips 
+            CREATE INDEX IF NOT EXISTS idx_passive_conv_ips
             ON passive_conversations(src_ip, dst_ip)
         """)
-        
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pwndoc_audits (
+                org_name   TEXT PRIMARY KEY,
+                audit_id   TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         conn.commit()
         conn.close()
     
@@ -446,6 +454,53 @@ class ScanStorage:
             mgr.create_org_bitacora(name.upper())
         except Exception:
             pass  # No bloquear el flujo si falla la bitácora
+
+        # Crear auditoría en PwnDoc de forma silenciosa en hilo aparte
+        import threading as _threading
+        _threading.Thread(
+            target=self._ensure_pwndoc_audit,
+            args=(name.upper(),),
+            daemon=True,
+        ).start()
+
+    def _ensure_pwndoc_audit(self, org_name: str):
+        """Crea la auditoría PwnDoc para la org si no existe (silencioso)."""
+        try:
+            if self.get_pwndoc_audit_id(org_name):
+                return  # ya existe
+            from arsenal.core.pwndoc_client import PwnDocClient
+            audit_id = PwnDocClient().ensure_audit(org_name)
+            self.save_pwndoc_audit_id(org_name, audit_id)
+        except Exception:
+            pass  # PwnDoc puede no estar disponible
+
+    def get_pwndoc_audit_id(self, org_name: str):
+        """Devuelve el audit_id de PwnDoc para la org, o None si no existe."""
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute(
+                "SELECT audit_id FROM pwndoc_audits WHERE UPPER(org_name) = UPPER(?)",
+                (org_name,)
+            ).fetchone()
+            return row["audit_id"] if row else None
+        finally:
+            conn.close()
+
+    def save_pwndoc_audit_id(self, org_name: str, audit_id: str):
+        """Guarda o actualiza el audit_id de PwnDoc para la org."""
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        try:
+            conn.execute(
+                """INSERT INTO pwndoc_audits (org_name, audit_id)
+                   VALUES (UPPER(?), ?)
+                   ON CONFLICT(org_name) DO UPDATE SET audit_id = excluded.audit_id""",
+                (org_name, audit_id)
+            )
+            conn.commit()
+        finally:
+            conn.close()
     
     def start_scan(self, organization: str, location: str, scan_type: str,
                    target_range: str, interface: str = None, myip: str = None,

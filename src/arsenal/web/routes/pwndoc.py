@@ -1,0 +1,172 @@
+"""
+Rutas API para la integración PwnDoc ↔ ArsenalOT.
+
+Prefijo: /api/pwndoc
+"""
+
+from typing import Optional
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from arsenal.core.pwndoc_client import PwnDocClient
+from arsenal.web.core.deps import storage
+
+router = APIRouter(prefix="/api/pwndoc", tags=["pwndoc"])
+
+
+def _client() -> PwnDocClient:
+    return PwnDocClient()
+
+
+# ── Pydantic models ────────────────────────────────────────────
+
+class NewVulnRequest(BaseModel):
+    title: str
+    description: str = ""
+    observation: str = ""
+    remediation: str = ""
+    category: str = ""
+    cvssv3: str = ""
+    locale: str = "es"
+
+
+class AddFindingRequest(BaseModel):
+    title: str
+    description: str = ""
+    observation: str = ""
+    remediation: str = ""
+    cvssv3: str = ""
+    vuln_type_id: Optional[str] = None   # ID en la biblioteca PwnDoc (opcional)
+
+
+# ── Endpoints generales ────────────────────────────────────────
+
+@router.get("/status")
+async def pwndoc_status():
+    """Comprueba si PwnDoc está accesible y las credenciales son válidas."""
+    c = _client()
+    try:
+        c.authenticate()
+        return {"ok": True, "url": c.url}
+    except Exception as e:
+        return {"ok": False, "url": c.url, "error": str(e)}
+
+
+@router.get("/vulntypes")
+async def list_vulntypes():
+    """Lista la biblioteca de tipos de vulnerabilidades de PwnDoc."""
+    try:
+        vulns = _client().list_vulnerabilities()
+        # Normaliza para simplificar el consumo en el frontend
+        items = []
+        for v in vulns:
+            vuln_id = str(v.get("_id") or v.get("id", ""))
+            details = v.get("details", [])
+            # Preferir español, luego el primero disponible
+            detail = next((d for d in details if d.get("locale") == "es"), None) \
+                     or (details[0] if details else {})
+            items.append({
+                "id":          vuln_id,
+                "title":       detail.get("title", "(sin título)"),
+                "description": detail.get("description", ""),
+                "observation": detail.get("observation", ""),
+                "remediation": detail.get("remediation", ""),
+                "category":    v.get("category", ""),
+                "cvssv3":      v.get("cvssv3", ""),
+            })
+        return {"ok": True, "vulntypes": items}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error PwnDoc: {e}")
+
+
+@router.post("/vulntypes")
+async def create_vulntype(body: NewVulnRequest):
+    """Crea un nuevo tipo de vulnerabilidad en la biblioteca de PwnDoc."""
+    try:
+        result = _client().create_vulnerability(
+            title=body.title,
+            description=body.description,
+            observation=body.observation,
+            remediation=body.remediation,
+            locale=body.locale,
+            category=body.category,
+            cvssv3=body.cvssv3,
+        )
+        vuln_id = str(result.get("_id") or result.get("id", ""))
+        return {"ok": True, "id": vuln_id}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error PwnDoc: {e}")
+
+
+# ── Endpoints por organización ─────────────────────────────────
+
+@router.post("/{org_name}/ensure-audit")
+async def ensure_audit(org_name: str):
+    """Crea la auditoría en PwnDoc para esta org si no existe aún."""
+    try:
+        c = _client()
+        audit_id = c.ensure_audit(org_name)
+        storage.save_pwndoc_audit_id(org_name, audit_id)
+        return {"ok": True, "audit_id": audit_id}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error PwnDoc: {e}")
+
+
+@router.get("/{org_name}/findings")
+async def list_findings(org_name: str):
+    """Lista los hallazgos de la auditoría PwnDoc para esta org."""
+    audit_id = storage.get_pwndoc_audit_id(org_name)
+    if not audit_id:
+        return {"ok": True, "findings": [], "audit_id": None}
+    try:
+        findings = _client().get_findings(audit_id)
+        return {"ok": True, "findings": findings, "audit_id": audit_id}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error PwnDoc: {e}")
+
+
+@router.post("/{org_name}/findings")
+async def add_finding(org_name: str, body: AddFindingRequest):
+    """
+    Añade un hallazgo a la auditoría PwnDoc de la org
+    y actualiza la nota VULNERABILIDADES.md de la bitácora.
+    """
+    # 1. Asegurar que existe auditoría en PwnDoc
+    try:
+        c = _client()
+        audit_id = storage.get_pwndoc_audit_id(org_name)
+        if not audit_id:
+            audit_id = c.ensure_audit(org_name)
+            storage.save_pwndoc_audit_id(org_name, audit_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error conectando PwnDoc: {e}")
+
+    # 2. Añadir hallazgo a la auditoría
+    try:
+        c.add_finding(
+            audit_id    = audit_id,
+            title       = body.title,
+            description = body.description,
+            observation = body.observation,
+            remediation = body.remediation,
+            cvssv3      = body.cvssv3,
+            vuln_type_id= body.vuln_type_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error añadiendo finding en PwnDoc: {e}")
+
+    # 3. Actualizar VULNERABILIDADES.md en la bitácora
+    try:
+        from arsenal.core.bitacora_manager import BitacoraManager
+        mgr = BitacoraManager(storage.results_root)
+        mgr.add_finding_to_note(
+            org_name    = org_name,
+            title       = body.title,
+            description = body.description,
+            observation = body.observation,
+            remediation = body.remediation,
+        )
+    except Exception:
+        pass  # No bloquear si falla la bitácora
+
+    return {"ok": True, "audit_id": audit_id}
