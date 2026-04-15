@@ -37,6 +37,10 @@ class RenameRequest(BaseModel):
     new_path: str
 
 
+class NewVectorRequest(BaseModel):
+    name: str
+
+
 # ── Endpoints ────────────────────────────────────────────────
 
 @router.get("/{org_name}/info")
@@ -159,6 +163,46 @@ async def fill_bitacora_from_scans(org_name: str):
         mgr = _get_manager()
         result = mgr.fill_from_scans(org_name, storage.db_path)
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{org_name}/new-vector")
+async def new_vector(org_name: str, body: NewVectorRequest):
+    """
+    Crea una nueva nota de vector de acceso a partir de la plantilla CHECKLIST-PENTEST.md.
+    Mismo comportamiento que el botón 'Nuevo Vector de Acceso' en Obsidian.
+    """
+    from datetime import date
+    from arsenal.core.bitacora_manager import TEMPLATE_DIR
+
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="El nombre no puede estar vacío.")
+
+    mgr = _get_manager()
+    today = date.today().strftime("%Y-%m-%d")
+    title = f"{today} - VE - {name}"
+    dest_path = f"PENTEST IT OT/Bitacoras/{title}.md"
+
+    # Leer la plantilla desde la carpeta de la org (ya copiada al crear la org)
+    template_rel = "PENTEST IT OT/Plantillas/CHECKLIST-PENTEST.md"
+    try:
+        content, _ = mgr.read_file(org_name, template_rel)
+    except FileNotFoundError:
+        # Fallback: plantilla fuente del repo
+        src = TEMPLATE_DIR / "PENTEST IT OT" / "Plantillas" / "CHECKLIST-PENTEST.md"
+        content = src.read_text(encoding="utf-8") if src.exists() else f"# {title}\n\n"
+
+    # Sustituir la variable de Templater por el título real
+    content = content.replace("<% tp.file.title %>", title)
+    content = content.replace("<%tp.file.title%>", title)
+
+    try:
+        mtime = mgr.create_file(org_name, dest_path, content)
+        return {"ok": True, "path": dest_path, "title": title, "mtime": mtime}
+    except FileExistsError:
+        raise HTTPException(status_code=409, detail=f"Ya existe un vector con ese nombre: {title}.md")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
