@@ -87,9 +87,10 @@ def run_eyewitness_batch(targets, img_folder, source_folder):
         targets_file = os.path.join(tmpdir, "targets.txt")
         with open(targets_file, "w") as f:
             for t in targets:
-                # Si es un puerto estándar, pasamos solo la IP para que --prepend-https pruebe ambos protocolos
-                if t['port'] in [80, 443]:
-                    f.write(f"{t['ip_address']}\n")
+                if t['port'] == 443:
+                    f.write(f"https://{t['ip_address']}\n")
+                elif t['port'] == 80:
+                    f.write(f"http://{t['ip_address']}\n")
                 else:
                     f.write(f"http://{t['ip_address']}:{t['port']}\n")
         
@@ -98,7 +99,7 @@ def run_eyewitness_batch(targets, img_folder, source_folder):
         # Ejecutar EyeWitness
         # Utilizamos Xvfb para asegurar que haya un entorno gráfico disponible para el navegador
         # Añadimos --prepend-https para que pruebe HTTP y HTTPS en targets sin protocolo
-        cmd = ["xvfb-run", "-a", "eyewitness", "--web", "-f", targets_file, "-d", output_dir, "--no-prompt", "--timeout", "15", "--prepend-https"]
+        cmd = ["xvfb-run", "-a", "eyewitness", "--web", "-f", targets_file, "-d", output_dir, "--no-prompt", "--timeout", "15"]
         
         try:
             print(f"🚀 Ejecutando EyeWitness para {len(targets)} objetivos...")
