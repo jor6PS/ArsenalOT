@@ -389,7 +389,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     print(f"[Scan {scan_id}] 📡 Fase 2: Ejecutando comando personalizado: {custom_cmd}")
                     cmd_str = custom_cmd
                     if '-oX' not in cmd_str:
-                        cmd_str += f" -oX {ping_xml_path}"
+                        cmd_str += f" -oX {shlex.quote(str(ping_xml_path))}"
                     
                     cmd_args = shlex.split(cmd_str)
                     process = subprocess.Popen(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -468,7 +468,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     print(f"[Scan {scan_id}] 📡 Fase 3: Ejecutando comando personalizado: {custom_cmd}")
                     cmd_str = custom_cmd
                     if '-oX' not in cmd_str:
-                        cmd_str += f" -oX {nmap_xml_path}"
+                        cmd_str += f" -oX {shlex.quote(str(nmap_xml_path))}"
                     
                     cmd_args = shlex.split(cmd_str)
                     process = subprocess.Popen(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
