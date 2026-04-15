@@ -8,6 +8,7 @@ import json
 import zipfile
 import shutil
 import tempfile
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, List
@@ -988,24 +989,23 @@ class ScanStorage:
                         hostnames_json = COALESCE(excluded.hostnames_json, hostnames_json),
                         mac_address = COALESCE(excluded.mac_address, mac_address),
                         vendor = COALESCE(excluded.vendor, vendor),
-                        subnet = CASE 
-                            WHEN subnet IS NULL OR subnet IN ('10.0.0.0/8', '192.168.0.0/16', '172.16.0.0/12', 'Unknown') 
-                            THEN excluded.subnet 
-                            ELSE subnet 
+                        subnet = CASE
+                            WHEN subnet IS NULL OR subnet IN ('10.0.0.0/8', '192.168.0.0/16', '172.16.0.0/12', 'Unknown')
+                            THEN excluded.subnet
+                            ELSE subnet
                         END,
                         os_info_json = COALESCE(excluded.os_info_json, os_info_json),
                         host_scripts_json = COALESCE(excluded.host_scripts_json, host_scripts_json)
                 """, (host_ip, hostname, hostnames_json, mac_address, vendor, subnet, is_private,
                       os_info_json, host_scripts_json, discovered_at, discovered_at))
-                
-                host_id = cursor.lastrowid
-                if not host_id:
-                    cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (host_ip,))
-                    row = cursor.fetchone()
-                    if row:
-                        host_id = row[0]
-                    else:
-                        continue
+
+                # Always resolve host_id via SELECT — cursor.lastrowid is unreliable for
+                # the UPDATE branch of an UPSERT in some Python/SQLite combinations.
+                cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (host_ip,))
+                row = cursor.fetchone()
+                if not row:
+                    continue
+                host_id = row[0]
                 
                 scripts_json = None
                 if 'scripts' in service_data and service_data['scripts']:
@@ -1055,6 +1055,7 @@ class ScanStorage:
             return True
         except Exception as e:
             print(f"❌ Error en guardado por lotes: {e}")
+            print(traceback.format_exc())
             conn.rollback()
             return False
         finally:
