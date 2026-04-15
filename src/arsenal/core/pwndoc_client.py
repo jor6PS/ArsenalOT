@@ -146,21 +146,45 @@ class PwnDocClient:
 
     # ─── Auditorías ────────────────────────────────────────────
 
+    def list_audit_types(self) -> List[Dict]:
+        """Lista los tipos de auditoría disponibles en PwnDoc."""
+        self._ensure_auth()
+        result = self._request("GET", "/api/data/audit-types")
+        return result.get("datas", [])
+
+    def _first_audit_type(self) -> str:
+        """Devuelve el nombre del primer audit type disponible, o lanza excepción si no hay ninguno."""
+        types = self.list_audit_types()
+        if not types:
+            raise RuntimeError(
+                "PwnDoc no tiene ningún auditType configurado. "
+                "Crea al menos uno desde la interfaz de PwnDoc antes de usar esta función."
+            )
+        return types[0]["name"]
+
     def list_audits(self) -> List[Dict]:
         self._ensure_auth()
         result = self._request("GET", "/api/audits")
         return result.get("datas", [])
 
-    def create_audit(self, name: str, language: str = "es") -> Dict:
-        """Crea una nueva auditoría en PwnDoc."""
+    def create_audit(self, name: str, language: str = "es",
+                     audit_type: str = None) -> Dict:
+        """Crea una nueva auditoría en PwnDoc.
+
+        Si audit_type no se especifica, usa el primer auditType disponible.
+        """
         self._ensure_auth()
+        if audit_type is None:
+            audit_type = self._first_audit_type()
         result = self._request("POST", "/api/audits", {
             "name": name,
-            "auditType": "default",
+            "auditType": audit_type,
             "language": language,
             "scope": [],
         })
-        return result.get("datas", {})
+        datas = result.get("datas", {})
+        # Response: {"message": "...", "audit": {_id, name, ...}}
+        return datas.get("audit") or datas
 
     def get_audit_by_name(self, name: str) -> Optional[Dict]:
         """Devuelve la primera auditoría cuyo nombre coincida (insensible a mayúsculas)."""
