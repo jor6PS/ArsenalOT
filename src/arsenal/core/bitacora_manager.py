@@ -132,6 +132,23 @@ class BitacoraManager:
                 shutil.copytree(src, dst)
                 _open_permissions(dst)
 
+        # Copiar .obsidian al directorio de la org para que funcione como vault
+        # independiente con todos los plugins ya configurados.
+        # Fuente preferida: .obsidian del vault raíz (tiene los plugins instalados por el
+        # usuario); fallback: .obsidian del template del repo.
+        org_obsidian = org_dir / ".obsidian"
+        if not org_obsidian.exists():
+            live_obsidian = self.vault_root / ".obsidian"
+            obsidian_src = live_obsidian if live_obsidian.exists() else TEMPLATE_DIR / ".obsidian"
+            if obsidian_src.exists():
+                shutil.copytree(obsidian_src, org_obsidian)
+                # workspace.json específico de cada vault — borrarlo para que
+                # Obsidian genere uno limpio al abrir la carpeta
+                ws = org_obsidian / "workspace.json"
+                if ws.exists():
+                    ws.unlink()
+                _open_permissions(org_obsidian)
+
         # Crear README de la org si no existe
         readme = org_dir / "README.md"
         if not readme.exists():
@@ -151,10 +168,23 @@ class BitacoraManager:
         return org_dir
 
     def get_org_dir(self, org_name: str) -> Path:
-        """Devuelve la ruta del directorio de la org (creándola si no existe)."""
+        """Devuelve la ruta del directorio de la org (creándola si no existe).
+        También garantiza que tenga .obsidian/ por si fue creada antes de este fix."""
         org_dir = self.orgs_root / org_name
         if not org_dir.exists():
             self.create_org_bitacora(org_name)
+        else:
+            # Backfill: orgs creadas antes del fix no tienen .obsidian/
+            org_obsidian = org_dir / ".obsidian"
+            if not org_obsidian.exists():
+                live_obsidian = self.vault_root / ".obsidian"
+                obsidian_src = live_obsidian if live_obsidian.exists() else TEMPLATE_DIR / ".obsidian"
+                if obsidian_src.exists():
+                    shutil.copytree(obsidian_src, org_obsidian)
+                    ws = org_obsidian / "workspace.json"
+                    if ws.exists():
+                        ws.unlink()
+                    _open_permissions(org_obsidian)
         return org_dir
 
     # ─────────────────────────────────────────────────────────
