@@ -1,5 +1,6 @@
 /* ================================================================
    ArsenalOT Graph Viewer — app.js
+   Neo4j transport: HTTP REST API (port 7474) via fetch()
    ================================================================ */
 'use strict';
 
@@ -138,7 +139,7 @@ const SHAPE_SYMBOL = {
 // ──────────────────────────────────────────────────────────────────
 // STATE
 // ──────────────────────────────────────────────────────────────────
-let neoDriver       = null;
+let neoConfig       = null;   // { httpUrl, auth }
 let visNetwork      = null;
 let nodesDS         = null;
 let edgesDS         = null;
@@ -239,50 +240,74 @@ function initVisNetwork() {
 }
 
 // ──────────────────────────────────────────────────────────────────
+// NEO4J HTTP API
+// ──────────────────────────────────────────────────────────────────
+async function runCypher(cypher, params = {}) {
+    if (!neoConfig) throw new Error('No hay configuración de Neo4j');
+
+    const resp = await fetch(`${neoConfig.httpUrl}/db/neo4j/tx/commit`, {
+        method: 'POST',
+        headers: {
+            'Authorization': neoConfig.auth,
+            'Content-Type':  'application/json',
+            'Accept':        'application/json',
+            'X-Stream':      'true',
+        },
+        body: JSON.stringify({
+            statements: [{
+                statement:          cypher,
+                parameters:         params,
+                resultDataContents: ['row', 'graph'],
+            }]
+        }),
+        signal: AbortSignal.timeout(20000),
+    });
+
+    if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(`HTTP ${resp.status} ${resp.statusText}: ${txt.substring(0, 200)}`);
+    }
+
+    const data = await resp.json();
+    if (data.errors && data.errors.length > 0) {
+        throw new Error(data.errors[0].message || JSON.stringify(data.errors[0]));
+    }
+    return data.results[0] || { columns: [], data: [] };
+}
+
+// ──────────────────────────────────────────────────────────────────
 // NEO4J CONNECTION
 // ──────────────────────────────────────────────────────────────────
 async function autoConnect() {
-    const cfg  = window.NEO4J_CONFIG || {};
-    await connectToNeo4j(
-        cfg.boltUrl  || 'bolt://localhost:7687',
-        cfg.username || 'neo4j',
-        cfg.password || 'neo4j123'
-    );
+    const cfg = window.NEO4J_CONFIG || {};
+    const httpUrl  = cfg.httpUrl  || 'http://localhost:7474';
+    const username = cfg.username || 'neo4j';
+    const password = cfg.password || 'neo4j123';
+    await connectToNeo4j(httpUrl, username, password);
 }
 
-async function connectToNeo4j(url, username, password) {
+async function connectToNeo4j(httpUrl, username, password) {
     setConnState('connecting', 'Conectando…');
     try {
-        if (neoDriver) { try { await neoDriver.close(); } catch(_) {} neoDriver = null; }
-        neoDriver = neo4j.driver(url, neo4j.auth.basic(username, password), {
-            maxConnectionPoolSize: 5,
-            connectionAcquisitionTimeout: 10000,
-            connectionTimeout: 10000,
-            disableLosslessIntegers: true,
-        });
-
-        // verifyConnectivity has no built-in UI timeout — enforce one manually
-        const timeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout: Neo4j no respondió en 12 s')), 12000)
-        );
-        await Promise.race([
-            neoDriver.verifyConnectivity(),
-            timeout,
-        ]);
-
+        neoConfig = {
+            httpUrl,
+            auth: 'Basic ' + btoa(username + ':' + password),
+        };
+        await runCypher('RETURN 1 AS ok');
         isConnected = true;
-        setConnState('connected', url.replace(/^(bolt|neo4j):\/\//, ''));
+        setConnState('connected', httpUrl.replace(/^https?:\/\//, ''));
         await fetchOrganizations();
     } catch (err) {
         isConnected = false;
-        const msg = (err.message || String(err)).substring(0, 120);
+        neoConfig = null;
+        const msg = (err.message || String(err)).substring(0, 150);
         setConnState('disconnected', msg);
         console.error('[Graph] Connection error:', err);
     }
 }
 
 function setConnState(state, label) {
-    document.getElementById('conn-dot').className   = 'conn-dot ' + state;
+    document.getElementById('conn-dot').className    = 'conn-dot ' + state;
     document.getElementById('conn-label').textContent = label;
 }
 
@@ -294,13 +319,15 @@ async function fetchOrganizations() {
     sel.innerHTML = '<option value="">Cargando…</option>';
     sel.disabled  = true;
 
-    const session = neoDriver.session();
     try {
-        const res = await session.run(
+        const result = await runCypher(
             'MATCH (h:HOST) WHERE h.ORGANIZACION IS NOT NULL ' +
             'RETURN DISTINCT h.ORGANIZACION AS org ORDER BY org'
         );
-        const orgs = res.records.map(r => r.get('org')).filter(Boolean);
+        const orgs = result.data
+            .map(d => d.row[0])
+            .filter(Boolean);
+
         sel.disabled = false;
 
         if (!orgs.length) {
@@ -317,8 +344,7 @@ async function fetchOrganizations() {
 
     } catch(e) {
         sel.innerHTML = '<option value="">Error</option>';
-    } finally {
-        await session.close();
+        console.error('[Graph] fetchOrganizations:', e);
     }
 }
 
@@ -328,7 +354,6 @@ function onOrgSelected(org) {
     clearGraph();
     if (!org) return;
 
-    // Show overview on org select
     execQuery(
         'MATCH (n)-[r]->(m) WHERE n.ORGANIZACION = $org OR m.ORGANIZACION = $org ' +
         'RETURN n,r,m LIMIT 120',
@@ -353,9 +378,9 @@ function searchNodes(term) {
     const lower   = term.toLowerCase();
     const matches = nodesDS.get().filter(n => {
         const p = n._props || {};
-        return (p.IP   && p.IP.toLowerCase().includes(lower))   ||
+        return (p.IP       && p.IP.toLowerCase().includes(lower))   ||
                (p.HOSTNAME && p.HOSTNAME.toLowerCase().includes(lower)) ||
-               (p.name && p.name.toLowerCase().includes(lower));
+               (p.name     && p.name.toLowerCase().includes(lower));
     });
 
     if (matches.length > 0) {
@@ -392,51 +417,62 @@ function setSearchHint(msg) {
 // QUERY EXECUTION
 // ──────────────────────────────────────────────────────────────────
 async function execQuery(cypher, clearFirst = true, params = {}) {
-    if (!neoDriver || !isConnected) { return Promise.resolve(); }
+    if (!isConnected) return Promise.resolve();
     const trimmed = cypher.trim();
     if (!trimmed) return Promise.resolve();
 
     showOverlay(true, 'Ejecutando…');
-    const session = neoDriver.session();
     try {
-        const result = await session.run(trimmed, params);
-        processRecords(result.records, clearFirst);
+        const result = await runCypher(trimmed, params);
+        processResult(result, clearFirst);
     } catch(err) {
         console.error('[Graph] Query error:', err);
         showOverlay(false);
         alert('Error en la consulta:\n' + (err.message || String(err)));
     } finally {
-        await session.close();
         showOverlay(false);
     }
 }
 
 // ──────────────────────────────────────────────────────────────────
-// RESULT PROCESSING
+// RESULT PROCESSING  (HTTP API graph format)
 // ──────────────────────────────────────────────────────────────────
-function processRecords(records, clearFirst) {
-    const nodeMap = new Map();
-    const edgeMap = new Map();
-    let hasGraph  = false;
-    const tabKeys = [], tabRows = [];
+function processResult(result, clearFirst) {
+    const nodeMap  = new Map();
+    const edgeMap  = new Map();
+    let   hasGraph = false;
+    const columns  = result.columns || [];
+    const tabKeys  = [];
+    const tabRows  = [];
 
-    for (const rec of records) {
-        const tabRow = {};
-        let rowHasScalar = false;
-
-        for (const key of rec.keys) {
-            const val = rec.get(key);
-            if (val === null || val === undefined) { tabRow[key] = ''; rowHasScalar = true; continue; }
-            if      (neo4j.isNode(val))         { hasGraph = true; collectNode(nodeMap, val); }
-            else if (neo4j.isRelationship(val)) { hasGraph = true; collectEdge(edgeMap, val); }
-            else if (neo4j.isPath(val))         { hasGraph = true; collectPath(nodeMap, edgeMap, val); }
-            else {
-                rowHasScalar = true;
-                tabRow[key] = formatCellValue(val);
-                if (!tabKeys.includes(key)) tabKeys.push(key);
+    for (const item of (result.data || [])) {
+        // Graph nodes + relationships
+        if (item.graph) {
+            if (item.graph.nodes.length > 0 || item.graph.relationships.length > 0) {
+                hasGraph = true;
+            }
+            for (const node of item.graph.nodes) {
+                collectNode(nodeMap, node);
+            }
+            for (const rel of item.graph.relationships) {
+                collectEdge(edgeMap, rel);
             }
         }
-        if (rowHasScalar) tabRows.push(tabRow);
+
+        // Scalar / tabular rows
+        if (!hasGraph && item.row) {
+            const row = {};
+            let hasScalar = false;
+            for (let i = 0; i < columns.length; i++) {
+                const val = item.row[i];
+                if (val !== null && val !== undefined && typeof val !== 'object') {
+                    row[columns[i]] = String(val);
+                    hasScalar = true;
+                    if (!tabKeys.includes(columns[i])) tabKeys.push(columns[i]);
+                }
+            }
+            if (hasScalar) tabRows.push(row);
+        }
     }
 
     if (hasGraph) {
@@ -458,24 +494,22 @@ function nodePassesOrgFilter(props, labels) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-// NODE / EDGE COLLECTION
+// NODE / EDGE COLLECTION  (HTTP API format)
 // ──────────────────────────────────────────────────────────────────
 function getNodeStyle(labels) {
-    // 1. Exact match on known labels
     for (const lbl of labels) {
         if (NODE_STYLES[lbl]) return NODE_STYLES[lbl];
     }
-    // 2. Strip prefix (e.g. "networkmap_HostUnificado" → "hostunificado")
     for (const lbl of labels) {
         const base = lbl.replace(/^[a-z]+_/i, '').toLowerCase();
         if (NODE_STYLES[base]) return NODE_STYLES[base];
     }
-    // Default
     return { shape: 'dot', color: '#607080', size: 14, legend: null };
 }
 
 function collectNode(map, node) {
-    const id = node.identity;
+    // node = { id: "5", labels: [...], properties: {...} }
+    const id = parseInt(node.id, 10);
     if (map.has(id)) return;
     if (!nodePassesOrgFilter(node.properties, node.labels)) return;
 
@@ -501,27 +535,20 @@ function collectNode(map, node) {
 }
 
 function collectEdge(map, rel) {
-    const id = rel.identity;
+    // rel = { id: "3", type: "...", startNode: "5", endNode: "6", properties: {...} }
+    const id   = parseInt(rel.id, 10);
+    const from = parseInt(rel.startNode, 10);
+    const to   = parseInt(rel.endNode,   10);
     if (map.has(id)) return;
-    edgeTooltipData.set(id, { type: rel.type, props: rel.properties });
+    edgeTooltipData.set(id, { type: rel.type, props: rel.properties || {} });
     map.set(id, {
         id,
-        from:   rel.start,
-        to:     rel.end,
+        from,
+        to,
         label:  rel.type,
         _type:  rel.type,
-        _props: rel.properties,
+        _props: rel.properties || {},
     });
-}
-
-function collectPath(nodeMap, edgeMap, path) {
-    if (path.start) collectNode(nodeMap, path.start);
-    if (path.end)   collectNode(nodeMap, path.end);
-    for (const seg of (path.segments || [])) {
-        collectNode(nodeMap, seg.start);
-        collectNode(nodeMap, seg.end);
-        collectEdge(edgeMap, seg.relationship);
-    }
 }
 
 function updateGraph(nodeMap, edgeMap, clearFirst) {
@@ -642,16 +669,17 @@ function positionTooltip(tt, event) {
 // ──────────────────────────────────────────────────────────────────
 async function fetchEdgesBetweenNodes() {
     const ids = nodesDS.getIds();
-    if (!neoDriver || !isConnected || ids.length < 2) return;
-    const session = neoDriver.session();
+    if (!isConnected || ids.length < 2) return;
     try {
-        const result = await session.run(
-            'MATCH (a)-[r]->(b) WHERE id(a) IN $ids AND id(b) IN $ids RETURN r', { ids }
+        const result = await runCypher(
+            'MATCH (a)-[r]->(b) WHERE id(a) IN $ids AND id(b) IN $ids RETURN r',
+            { ids }
         );
         const edgeMap = new Map();
-        for (const rec of result.records) {
-            const rel = rec.get('r');
-            if (neo4j.isRelationship(rel)) collectEdge(edgeMap, rel);
+        for (const item of (result.data || [])) {
+            for (const rel of (item.graph?.relationships || [])) {
+                collectEdge(edgeMap, rel);
+            }
         }
         const newEdges = [];
         for (const [id, e] of edgeMap) if (!edgesDS.get(id)) newEdges.push(e);
@@ -661,8 +689,6 @@ async function fetchEdgesBetweenNodes() {
         }
     } catch(e) {
         console.warn('[Graph] fetchEdgesBetweenNodes:', e.message);
-    } finally {
-        await session.close();
     }
 }
 
@@ -684,8 +710,9 @@ function onGraphClick(params) {
 function onGraphDoubleClick(params) {
     if (params.nodes.length > 0) {
         execQuery(
-            `MATCH (n)-[r]-(m) WHERE id(n) = ${params.nodes[0]} RETURN n,r,m LIMIT 80`,
-            false
+            'MATCH (n)-[r]-(m) WHERE id(n) = $nid RETURN n,r,m LIMIT 80',
+            false,
+            { nid: params.nodes[0] }
         );
     }
 }
@@ -769,109 +796,87 @@ function updateStats(nodes, edges, rows) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-// EVENT BINDINGS
+// EVENT BINDING
 // ──────────────────────────────────────────────────────────────────
 function bindEvents() {
-    // Org selector
-    document.getElementById('org-select').addEventListener('change', e => onOrgSelected(e.target.value));
-
-    // Reconnect
-    document.getElementById('reconnect-btn').addEventListener('click', autoConnect);
-
-    // Query dropdown — enable run btn when value chosen
-    document.getElementById('query-select').addEventListener('change', e => {
-        document.getElementById('run-query-btn').disabled = !e.target.value || !selectedOrg;
+    document.getElementById('reconnect-btn').addEventListener('click', () => {
+        const cfg = window.NEO4J_CONFIG || {};
+        connectToNeo4j(
+            cfg.httpUrl  || 'http://localhost:7474',
+            cfg.username || 'neo4j',
+            cfg.password || 'neo4j123'
+        );
     });
 
-    // Run preset query
-    document.getElementById('run-query-btn').addEventListener('click', () => {
-        const idx = parseInt(document.getElementById('query-select').value, 10);
-        if (isNaN(idx) || idx < 0 || idx >= PRESET_QUERIES.length) return;
-        execQuery(PRESET_QUERIES[idx].query, true);
-    });
+    const orgSel = document.getElementById('org-select');
+    orgSel.addEventListener('change', () => onOrgSelected(orgSel.value));
 
-    // Node search — trigger on Enter or button
-    document.getElementById('node-search-btn').addEventListener('click', () => {
-        searchNodes(document.getElementById('node-search').value);
+    const searchInput = document.getElementById('node-search');
+    const searchBtn   = document.getElementById('node-search-btn');
+    searchInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { clearTimeout(searchDebounce); searchNodes(searchInput.value); }
     });
-
-    document.getElementById('node-search').addEventListener('keydown', e => {
-        if (e.key === 'Enter') searchNodes(e.target.value);
-    });
-
-    // Live client-side highlight while typing (debounced, client-only)
-    document.getElementById('node-search').addEventListener('input', e => {
+    searchInput.addEventListener('input', () => {
         clearTimeout(searchDebounce);
-        const term = e.target.value.trim();
-        if (!term) { setSearchHint(''); visNetwork.unselectAll(); return; }
-        searchDebounce = setTimeout(() => {
-            const lower   = term.toLowerCase();
-            const matches = nodesDS.get().filter(n => {
-                const p = n._props || {};
-                return (p.IP   && p.IP.toLowerCase().includes(lower))   ||
-                       (p.HOSTNAME && p.HOSTNAME.toLowerCase().includes(lower));
-            });
-            if (matches.length > 0) {
-                visNetwork.selectNodes(matches.map(n => n.id));
-                setSearchHint(`${matches.length} en grafo`);
-            } else {
-                setSearchHint('Pulsa → para buscar en Neo4j');
-            }
-        }, 200);
+        searchDebounce = setTimeout(() => searchNodes(searchInput.value), 350);
+    });
+    searchBtn.addEventListener('click', () => { clearTimeout(searchDebounce); searchNodes(searchInput.value); });
+
+    const querySel = document.getElementById('query-select');
+    querySel.addEventListener('change', () => {
+        document.getElementById('run-query-btn').disabled =
+            !querySel.value || !selectedOrg;
     });
 
-    // Fit / Clear
-    document.getElementById('fit-btn').addEventListener('click', () =>
-        visNetwork && visNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } }));
+    document.getElementById('run-query-btn').addEventListener('click', () => {
+        const idx = parseInt(querySel.value, 10);
+        if (!isNaN(idx) && PRESET_QUERIES[idx]) {
+            execQuery(PRESET_QUERIES[idx].query, true, { org: selectedOrg || '' });
+        }
+    });
 
-    document.getElementById('clear-btn').addEventListener('click', () => clearGraph());
+    document.getElementById('fit-btn').addEventListener('click',
+        () => visNetwork.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } }));
 
-    // Physics toggle
-    document.getElementById('physics-toggle').addEventListener('change', e =>
-        visNetwork && visNetwork.setOptions({ physics: { enabled: e.target.checked } }));
+    document.getElementById('clear-btn').addEventListener('click', clearGraph);
 
-    // Right panel close
+    document.getElementById('physics-toggle').addEventListener('change', e => {
+        visNetwork.setOptions({ physics: { enabled: e.target.checked } });
+    });
+
     document.getElementById('rp-close').addEventListener('click', hideRightPanel);
-
-    // Back to graph from table
     document.getElementById('back-to-graph-btn').addEventListener('click', hideTableView);
-
-    // Move tooltip with mouse
-    document.addEventListener('mousemove', e => {
-        const tt = document.getElementById('custom-tooltip');
-        if (!tt.classList.contains('hidden')) positionTooltip(tt, e);
-    });
 }
 
 // ──────────────────────────────────────────────────────────────────
-// COLOR MATH
+// UTILITY
 // ──────────────────────────────────────────────────────────────────
-function darken(hex, amt)  { return adjustHex(hex, -Math.abs(amt)); }
-function lighten(hex, amt) { return adjustHex(hex,  Math.abs(amt)); }
-
-function adjustHex(hex, amt) {
-    const n = parseInt((hex || '#888').replace('#','').padEnd(6,'0'), 16);
-    const r = Math.min(255, Math.max(0, (n >> 16)         + amt));
-    const g = Math.min(255, Math.max(0, ((n >> 8) & 0xff) + amt));
-    const b = Math.min(255, Math.max(0, (n & 0xff)        + amt));
-    return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
-}
-
-// ──────────────────────────────────────────────────────────────────
-// UTILS
-// ──────────────────────────────────────────────────────────────────
-function formatCellValue(val) {
-    if (val === null || val === undefined) return '';
-    if (Array.isArray(val)) return val.map(formatCellValue).join(', ');
-    if (typeof val === 'object') {
-        if (typeof val.toNumber === 'function') return String(val.toNumber());
-        return JSON.stringify(val);
-    }
-    return String(val);
-}
-
 function escHtml(s) {
-    return String(s)
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function formatCellValue(v) {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'object') return JSON.stringify(v);
+    return String(v);
+}
+
+function darken(hex, amount) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, (n >> 16) - amount);
+    const g = Math.max(0, ((n >> 8) & 0xFF) - amount);
+    const b = Math.max(0, (n & 0xFF) - amount);
+    return `#${((r<<16)|(g<<8)|b).toString(16).padStart(6,'0')}`;
+}
+
+function lighten(hex, amount) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.min(255, (n >> 16) + amount);
+    const g = Math.min(255, ((n >> 8) & 0xFF) + amount);
+    const b = Math.min(255, (n & 0xFF) + amount);
+    return `#${((r<<16)|(g<<8)|b).toString(16).padStart(6,'0')}`;
 }

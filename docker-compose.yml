@@ -38,8 +38,8 @@ services:
     ports:
       - "7777:80"
     environment:
-      # The browser JS connects to Neo4j directly via Bolt on the host
-      - NEO4J_BOLT_URL=bolt://localhost:7687
+      # The browser JS connects to Neo4j via HTTP REST API (no WebSocket)
+      - NEO4J_HTTP_URL=http://localhost:7474
       - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
     restart: unless-stopped
