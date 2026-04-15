@@ -4,6 +4,7 @@ import json
 import sqlite3
 from typing import Optional
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from arsenal.web.core.models import NetworkCreateRequest, NetworkUpdateRequest, CriticalDeviceRequest, CriticalDeviceUpdateRequest
@@ -207,11 +208,26 @@ async def get_organizations():
     conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    
+
     orgs = cursor.execute("SELECT name, description, created_at FROM organizations ORDER BY name").fetchall()
     conn.close()
-    
+
     return [{"name": org["name"], "description": org["description"], "created_at": org["created_at"]} for org in orgs]
+
+
+class CreateOrgRequest(BaseModel):
+    name: str
+    description: str = ""
+
+
+@router.post("/api/organizations")
+async def create_organization(body: CreateOrgRequest):
+    """Crea una organización y su estructura de bitácora."""
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="El nombre no puede estar vacío.")
+    storage.create_organization(name, body.description)
+    return {"ok": True, "name": name.upper()}
 
 @router.get("/api/locations")
 async def get_locations(organization: Optional[str] = None):
