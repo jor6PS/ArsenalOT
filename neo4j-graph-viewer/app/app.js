@@ -256,16 +256,28 @@ async function connectToNeo4j(url, username, password) {
         if (neoDriver) { try { await neoDriver.close(); } catch(_) {} neoDriver = null; }
         neoDriver = neo4j.driver(url, neo4j.auth.basic(username, password), {
             maxConnectionPoolSize: 5,
-            connectionAcquisitionTimeout: 8000,
+            connectionAcquisitionTimeout: 10000,
+            connectionTimeout: 10000,
             disableLosslessIntegers: true,
         });
-        await neoDriver.verifyConnectivity({ database: 'neo4j' });
+
+        // verifyConnectivity has no built-in UI timeout — enforce one manually
+        const timeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout: Neo4j no respondió en 12 s')), 12000)
+        );
+        await Promise.race([
+            neoDriver.verifyConnectivity(),
+            timeout,
+        ]);
+
         isConnected = true;
-        setConnState('connected', url.replace('bolt://', ''));
+        setConnState('connected', url.replace(/^(bolt|neo4j):\/\//, ''));
         await fetchOrganizations();
     } catch (err) {
         isConnected = false;
-        setConnState('disconnected', 'Error: ' + (err.message || '').substring(0, 80));
+        const msg = (err.message || String(err)).substring(0, 120);
+        setConnState('disconnected', msg);
+        console.error('[Graph] Connection error:', err);
     }
 }
 
