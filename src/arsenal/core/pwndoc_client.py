@@ -37,19 +37,18 @@ class PwnDocClient:
     # ─── HTTP helper ───────────────────────────────────────────
 
     def _request(self, method: str, path: str,
-                 body: dict = None, auth: bool = True) -> dict:
+                 body=None, auth: bool = True) -> dict:
         full_url = f"{self.url}{path}"
-        headers  = {"Content-Type": "application/json"}
-        if auth and self._token:
-            headers["Authorization"] = f"Bearer {self._token}"
 
+        # El token se almacena en la sesión tras authenticate(); los headers de sesión
+        # se reenvían automáticamente en redirects al mismo host, por lo que no hace
+        # falta allow_redirects=False ni añadir el header manualmente por petición.
         try:
             resp = self._session.request(
                 method, full_url,
                 json=body,
-                headers=headers,
+                headers={"Content-Type": "application/json"},
                 timeout=10,
-                allow_redirects=False,   # evitar que redirects eliminen el header Authorization
             )
         except requests.exceptions.RequestException as exc:
             raise RuntimeError(f"PwnDoc {method} {path} → conexión fallida: {exc}") from exc
@@ -67,7 +66,7 @@ class PwnDocClient:
     # ─── Auth ──────────────────────────────────────────────────
 
     def authenticate(self) -> bool:
-        """Obtiene un token JWT. Devuelve True si tiene éxito."""
+        """Obtiene un token JWT y lo almacena en la sesión. Devuelve True si tiene éxito."""
         result = self._request("POST", "/api/users/token", {
             "username": self.username,
             "password": self.password,
@@ -76,6 +75,8 @@ class PwnDocClient:
         if not token:
             raise RuntimeError(f"Autenticación fallida: {result}")
         self._token = token
+        # Guardar en sesión para que se reenvíe en redirects automáticamente
+        self._session.headers["Authorization"] = f"Bearer {token}"
         return True
 
     def _ensure_auth(self):
@@ -109,9 +110,14 @@ class PwnDocClient:
         cvssv3: str = "",
         references: list = None,
     ) -> Dict:
-        """Crea un nuevo tipo de vulnerabilidad en la biblioteca de PwnDoc."""
+        """Crea un nuevo tipo de vulnerabilidad en la biblioteca de PwnDoc.
+
+        El endpoint POST /api/vulnerabilities espera un array de objetos
+        (importación masiva). Enviamos array de un solo elemento.
+        Respuesta: {"created": N, "duplicates": N}
+        """
         self._ensure_auth()
-        result = self._request("POST", "/api/vulnerabilities", {
+        vuln: dict = {
             "details": [{
                 "locale": locale,
                 "title": title,
@@ -121,9 +127,22 @@ class PwnDocClient:
             }],
             "cvssv3": cvssv3,
             "references": references or [],
-            "category": category,
-        })
-        return result.get("datas", {})
+        }
+        # category vacío provoca created:0 en PwnDoc; solo incluirlo si hay valor
+        if category:
+            vuln["category"] = category
+        payload = [vuln]
+        result = self._request("POST", "/api/vulnerabilities", payload)
+        datas = result.get("datas", {})
+
+        # El endpoint no devuelve el _id del elemento creado; lo buscamos por título.
+        if datas.get("created", 0) > 0:
+            for vuln in self.list_vulnerabilities():
+                details = vuln.get("details", [])
+                match = next((d for d in details if d.get("title") == title), None)
+                if match:
+                    return vuln
+        return datas
 
     # ─── Auditorías ────────────────────────────────────────────
 
