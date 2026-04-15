@@ -10,65 +10,74 @@
 const PRESET_QUERIES = [
     {
         title: "Mapa de Visibilidad",
+        // Filters strictly by $org — all derived node keys include org prefix to prevent
+        // cross-org collisions when multiple orgs have been exported to Neo4j.
         query: `MATCH (o:ORIGEN)-[]-(h:HOST)
 WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
-WITH COALESCE(o.LOCATION,'Desconocido') AS loc,
+  AND h.ORGANIZACION = $org
+WITH $org AS org_key, COALESCE(o.LOCATION,'Desconocido') AS loc,
      h.NOMBRE_SUBRED AS nsub, h.SUBRED AS rsub, h.IP AS ip,
      max(h.ORGANIZACION) AS p_org, max(h.MAC) AS p_mac,
      max(h.SISTEMA) AS p_sistema, max(h.VENDOR) AS p_vendor,
      max(h.OS) AS p_os, max(h.CRITICO) AS p_critico, max(h.HOSTNAME) AS p_hostname
-MERGE (vo:visibilitytest_Origen {name: loc})
-MERGE (vnombre:visibilitytest_NombreSubred {id: loc+'_'+nsub}) SET vnombre.name=nsub
+MERGE (vo:visibilitytest_Origen {id: org_key+'_'+loc}) SET vo.name=loc
+MERGE (vnombre:visibilitytest_NombreSubred {id: org_key+'_'+loc+'_'+nsub}) SET vnombre.name=nsub
 MERGE (vo)-[:VE_RED]->(vnombre)
-MERGE (vrango:visibilitytest_RangoSubred {id: loc+'_'+rsub}) SET vrango.rango=rsub
+MERGE (vrango:visibilitytest_RangoSubred {id: org_key+'_'+loc+'_'+rsub}) SET vrango.rango=rsub
 MERGE (vnombre)-[:CONTIENE_RANGO]->(vrango)
-MERGE (vh:visibilitytest_Host {id: loc+'_'+ip})
+MERGE (vh:visibilitytest_Host {id: org_key+'_'+loc+'_'+ip})
 SET vh.IP=ip,vh.MAC=p_mac,vh.SISTEMA=p_sistema,vh.VENDOR=p_vendor,
     vh.OS=p_os,vh.CRITICO=p_critico,vh.HOSTNAME=p_hostname,vh.ORGANIZACION=p_org
 MERGE (vrango)-[:CONTIENE_HOST]->(vh)
-WITH count(vh) AS b1
+WITH org_key, count(vh) AS b1
 MATCH (o:ORIGEN)-[]-(h:HOST)-[]-(s:SERVICE)
 WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
-WITH COALESCE(o.LOCATION,'Desconocido') AS loc, h.IP AS ip,
+  AND h.ORGANIZACION = $org
+WITH org_key, COALESCE(o.LOCATION,'Desconocido') AS loc, h.IP AS ip,
      s.port AS port, s.protocol AS protocol,
      max(s.name) AS p_name, max(s.product) AS p_product,
      max(s.version) AS p_version
-MATCH (vh:visibilitytest_Host {id: loc+'_'+ip})
+MATCH (vh:visibilitytest_Host {id: org_key+'_'+loc+'_'+ip})
 FOREACH (d IN CASE WHEN port IS NOT NULL THEN [1] ELSE [] END |
-    MERGE (vsrv:visibilitytest_Servicio {id: loc+'_'+ip+'_'+toString(port)+'_'+protocol})
+    MERGE (vsrv:visibilitytest_Servicio {id: org_key+'_'+loc+'_'+ip+'_'+toString(port)+'_'+protocol})
     SET vsrv.name=p_name,vsrv.port=port,vsrv.protocol=protocol,
         vsrv.product=p_product,vsrv.version=p_version,
         vsrv.etiqueta_visual=toString(port)+'/'+protocol
     MERGE (vh)-[:EXPONE_PUERTO]->(vsrv)
 )
-WITH count(vh) AS b2
-MATCH (vo:visibilitytest_Origen) RETURN DISTINCT vo`
+WITH org_key, count(vh) AS b2
+MATCH (vo:visibilitytest_Origen) WHERE vo.id STARTS WITH org_key+'_'
+RETURN DISTINCT vo`
     },
     {
         title: "Mapa de Red Global",
+        // $org filter + org-prefixed keys prevent IP collisions across orgs.
         query: `MATCH (h:HOST) WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
-WITH h.IP AS ip, max(h.ORGANIZACION) AS p_org, max(h.NOMBRE_SUBRED) AS p_nsub,
-     max(h.SUBRED) AS p_rsub, max(h.MAC) AS p_mac, max(h.SISTEMA) AS p_sistema,
+  AND h.ORGANIZACION = $org
+WITH $org AS org_key, h.IP AS ip, max(h.ORGANIZACION) AS p_org,
+     max(h.NOMBRE_SUBRED) AS p_nsub, max(h.SUBRED) AS p_rsub,
+     max(h.MAC) AS p_mac, max(h.SISTEMA) AS p_sistema,
      max(h.VENDOR) AS p_vendor, max(h.OS) AS p_os, max(h.CRITICO) AS p_critico,
      max(h.HOSTNAME) AS p_hostname, max(h.DISCOVERY_SOURCE) AS p_disc
 MERGE (org:networkmap_Organizacion {name: p_org})
-MERGE (nSub:networkmap_NombreSubred {name: p_nsub})
-MERGE (rSub:networkmap_RangoSubred {name: p_rsub})
-MERGE (uh:networkmap_HostUnificado {IP: ip})
-SET uh.MAC=p_mac,uh.SISTEMA=p_sistema,uh.VENDOR=p_vendor,uh.OS=p_os,
+MERGE (nSub:networkmap_NombreSubred {id: p_org+'_'+p_nsub}) SET nSub.name=p_nsub
+MERGE (rSub:networkmap_RangoSubred {id: p_org+'_'+p_rsub}) SET rSub.rango=p_rsub
+MERGE (uh:networkmap_HostUnificado {id: p_org+'_'+ip})
+SET uh.IP=ip,uh.MAC=p_mac,uh.SISTEMA=p_sistema,uh.VENDOR=p_vendor,uh.OS=p_os,
     uh.CRITICO=p_critico,uh.HOSTNAME=p_hostname,uh.DISCOVERY_SOURCE=p_disc,
     uh.ORGANIZACION=p_org,uh.NOMBRE_SUBRED=p_nsub,uh.SUBRED=p_rsub
 MERGE (org)-[relOrg:TIENE_SUBRED]->(nSub)
 MERGE (nSub)-[relRango:CONTIENE_RANGO]->(rSub)
 MERGE (rSub)-[relHost:TIENE_HOST]->(uh)
-WITH org,nSub,rSub,uh,relOrg,relRango,relHost,ip
+WITH org_key,org,nSub,rSub,uh,relOrg,relRango,relHost,ip,p_org
 OPTIONAL MATCH (h:HOST {IP:ip})-[]-(s:SERVICE)
-WHERE h.DISCOVERY_SOURCE STARTS WITH 'active' AND s IS NOT NULL
-WITH org,nSub,rSub,uh,relOrg,relRango,relHost,ip,
+WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
+  AND h.ORGANIZACION = $org AND s IS NOT NULL
+WITH org_key,org,nSub,rSub,uh,relOrg,relRango,relHost,ip,p_org,
      s.port AS port, s.protocol AS protocol,
      max(s.name) AS p_name, max(s.product) AS p_product, max(s.version) AS p_version
 FOREACH (d IN CASE WHEN port IS NOT NULL THEN [1] ELSE [] END |
-    MERGE (usrv:networkmap_ServiceUnificado {id: ip+'_'+toString(port)+'_'+protocol})
+    MERGE (usrv:networkmap_ServiceUnificado {id: p_org+'_'+ip+'_'+toString(port)+'_'+protocol})
     SET usrv.name=p_name,usrv.port=port,usrv.protocol=protocol,
         usrv.product=p_product,usrv.version=p_version,
         usrv.etiqueta_visual=toString(port)+'/'+protocol
@@ -78,18 +87,20 @@ RETURN DISTINCT org,nSub,rSub,uh,relOrg,relRango,relHost`
     },
     {
         title: "Camino de Ataque",
+        // $org filter + org-prefixed keys for critical host and origin nodes.
         query: `WITH 1 AS dummy
 MATCH (o:ORIGEN)-[]-(h:HOST)
 WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
   AND trim(toUpper(h.CRITICO)) IN ['SI','SÍ']
+  AND h.ORGANIZACION = $org
 WITH DISTINCT COALESCE(o.LOCATION,'Desconocido') AS loc, h.IP AS ip,
      max(h.MAC) AS p_mac, max(h.ORGANIZACION) AS p_org,
      max(h.SISTEMA) AS p_sistema, max(h.VENDOR) AS p_vendor,
      max(h.OS) AS p_os, max(h.HOSTNAME) AS p_hostname
-MERGE (vh:riskmap_HostCritico {IP: ip})
-SET vh.MAC=p_mac,vh.SISTEMA=p_sistema,vh.VENDOR=p_vendor,
+MERGE (vh:riskmap_HostCritico {id: p_org+'_'+ip})
+SET vh.IP=ip,vh.MAC=p_mac,vh.SISTEMA=p_sistema,vh.VENDOR=p_vendor,
     vh.OS=p_os,vh.HOSTNAME=p_hostname,vh.ORGANIZACION=p_org,vh.CRITICO='SI'
-MERGE (vo:riskmap_Origen {id: ip+'_'+loc}) SET vo.name=loc
+MERGE (vo:riskmap_Origen {id: p_org+'_'+ip+'_'+loc}) SET vo.name=loc
 MERGE (vh)-[rel:ACCESIBLE_DESDE]->(vo)
 RETURN vh,vo,rel`
     }
