@@ -66,7 +66,10 @@ class HostDiscovery:
             return discovered
 
         # Construir comando arp-scan
-        cmd = ["arp-scan", "--interface", self.interface, "--local", target_range]
+        # No usar --local cuando se pasa un rango explícito: son mutuamente excluyentes.
+        # --local hace que arp-scan genere los targets desde la interfaz local; con un
+        # rango explícito simplemente se pasa el rango directamente.
+        cmd = ["arp-scan", "--interface", self.interface, target_range]
 
         try:
             self.current_process = subprocess.Popen(

@@ -330,10 +330,10 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     register_process(process)
                     stdout, stderr = process.communicate()
                     
-                    # Extract IPs using HostDiscovery utility
+                    # Extract IPs (+ MAC/vendor when present) using HostDiscovery utility
                     host_discovery = HostDiscovery(interface=config.interface)
                     if process.returncode == 0 or stdout:
-                        discovered_ips = host_discovery.extract_ips_from_output(stdout)
+                        discovered_ips = host_discovery.extract_hosts_from_output(stdout)
                     
                     if process.returncode != 0 and not discovered_ips:
                         print(f"[Scan {scan_id}] ⚠️ El comando de descubrimiento devolvió error y no se encontraron IPs")
@@ -351,14 +351,16 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 
                 print(f"[Scan {scan_id}] ✅ Descubiertos {len(discovered_ips)} hosts")
                 
-                # Guardar hosts descubiertos en la BD
-                for host_ip in discovered_ips:
+                # Guardar hosts descubiertos en la BD (con MAC y vendor si los aportó arp-scan)
+                for host_ip, host_meta in discovered_ips.items():
                     if is_scan_cancelled(): return
                     try:
                         storage.save_discovered_host(
                             scan_id=scan_id,
                             host_ip=host_ip,
-                            discovery_method='host_discovery'
+                            discovery_method='host_discovery',
+                            mac_address=host_meta.get('mac_address'),
+                            vendor=host_meta.get('vendor'),
                         )
                     except Exception as e:
                         print(f"[Scan {scan_id}] ⚠️  Error guardando host {host_ip}: {e}")
