@@ -439,7 +439,13 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                 state=host_data.get('status', 'up'),
                                 service_data={},
                                 hostname=hostname,
-                                host_data={'vendor': host_data.get('vendor')},
+                                host_data={
+                                    'mac_address': host_data.get('mac_address'),
+                                    'vendor': host_data.get('vendor'),
+                                    'hostnames': host_data.get('hostnames', []),
+                                    'os': host_data.get('os', {}),
+                                    'host_scripts': host_data.get('host_scripts', {}),
+                                },
                                 discovery_method='nmap_ping',
                                 timestamp=host_data.get('endtime') or host_data.get('starttime')
                             )

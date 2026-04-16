@@ -124,6 +124,8 @@
                 <option value="">Filtrar por columna...</option>
                 <option value="ip_address">IP</option>
                 <option value="hostname">Hostname</option>
+                <option value="mac_address">MAC</option>
+                <option value="vendor">Fabricante</option>
                 <option value="port">Puerto</option>
                 <option value="protocol">Protocolo</option>
                 <option value="service_name">Servicio</option>
@@ -266,7 +268,7 @@
             const escCsv = v => `"${String(v || '').replace(/"/g, '""')}"`;
 
             // Active section
-            const activeHeaders = ['IP', 'Hostname', 'Puertos', 'Protocolos', 'Servicios', 'Productos', 'Versiones', 'Organización', 'Ubicación', 'Origen Descubrimiento', 'Screenshot', 'Web Source', 'Crítico'];
+            const activeHeaders = ['IP', 'Hostname', 'MAC', 'Fabricante', 'Puertos', 'Protocolos', 'Servicios', 'Productos', 'Versiones', 'Organización', 'Ubicación', 'Origen Descubrimiento', 'Screenshot', 'Web Source', 'Crítico'];
             const activeRows = consolidated.map(row => {
                 const portNums = row.ports.map(p => p.port).filter(Boolean);
                 const protos = [...new Set(row.ports.map(p => p.protocol).filter(Boolean))];
@@ -276,7 +278,9 @@
                 const hasShot = row.ports.some(p => p.has_screenshot) ? 'Sí' : 'No';
                 const hasSrc = row.ports.some(p => p.has_source_code) ? 'Sí' : 'No';
                 return [
-                    escCsv(row.ip_address), escCsv(row.hostname), escCsv(portNums.join(';')),
+                    escCsv(row.ip_address), escCsv(row.hostname),
+                    escCsv(row.mac_address), escCsv(row.vendor),
+                    escCsv(portNums.join(';')),
                     escCsv(protos.join(';')), escCsv(svcs.join(';')), escCsv(prods.join(';')),
                     escCsv(vers.join(';')), escCsv(row.organization_name), escCsv(row.location),
                     escCsv(row.discovery_method), escCsv(hasShot), escCsv(hasSrc),
@@ -378,6 +382,8 @@
                     map.set(ip, {
                         ip_address: ip,
                         hostname: r.hostname || null,
+                        mac_address: r.mac_address || null,
+                        vendor: r.vendor || null,
                         organization_name: r.organization_name,
                         location: r.location,
                         interfaces_json: r.interfaces_json,
@@ -388,6 +394,8 @@
                 }
                 const host = map.get(ip);
                 if (!host.hostname && r.hostname) host.hostname = r.hostname;
+                if (!host.mac_address && r.mac_address) host.mac_address = r.mac_address;
+                if (!host.vendor && r.vendor) host.vendor = r.vendor;
                 if (r.is_critical) host.is_critical = true;
                 if (r.interfaces_json && !host.interfaces_json) host.interfaces_json = r.interfaces_json;
                 if (r.port) {
@@ -599,6 +607,8 @@
                     return `<tr${rowStyle}>
                         <td>${row.ip_address || '-'}${criticalBadge}</td>
                         <td>${row.hostname || '-'}</td>
+                        <td style="font-family: monospace; font-size: 0.85rem;">${row.mac_address || '-'}</td>
+                        <td>${row.vendor || '-'}</td>
                         <td><div class="port-badges">${portBadges}</div></td>
                         <td>${protos}</td>
                         <td>${svcs}</td>

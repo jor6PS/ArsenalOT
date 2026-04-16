@@ -247,10 +247,11 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                     placeholders = ','.join(['?'] * len(batch_ips))
                     # JOIN con host_scan_metadata para aislamiento
                     query_h = f"""
-                        SELECT h.ip_address, h.subnet, h.first_seen, 
+                        SELECT h.ip_address, h.subnet, h.first_seen,
                                m.hostname as isolation_hostname,
                                m.hostnames_json as isolation_hostnames,
                                m.mac_address as isolation_mac,
+                               m.vendor as isolation_vendor,
                                m.interfaces_json as isolation_interfaces,
                                h.interfaces_json as global_interfaces,
                                m.last_seen as isolation_last_seen
@@ -287,8 +288,8 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                     'hostname': h_info.get('isolation_hostname') or '',
                     'organization': o_name,
                     'mi_ip': scan['myip'] or 'N/A',
-                    'vendor': '', # Aislado para pasivo por ahora, a menos que metadata diga lo contrario
-                    'mac': mac or h_info.get('isolation_mac') or '', # Captura pcap > metadata scan
+                    'vendor': (h_info.get('isolation_vendor') if h_info else '') or '',
+                    'mac': mac or (h_info.get('isolation_mac') if h_info else '') or '', # Captura pcap > metadata scan
                     'os_info': '', # Aislado
                     'hostnames': ", ".join([s.strip('\x00') for s in json.loads(h_info.get('isolation_hostnames'))]) if h_info and h_info.get('isolation_hostnames') else '',
                     'interfaces': ", ".join([s.strip('\x00') for s in json.loads(h_info.get('isolation_interfaces') or h_info.get('global_interfaces'))]) if h_info and (h_info.get('isolation_interfaces') or h_info.get('global_interfaces')) else '',
