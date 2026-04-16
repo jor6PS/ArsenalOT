@@ -299,6 +299,42 @@
 
 </div>
 
+<!-- ── Modal configuración de auditoría ── -->
+<div class="modal-backdrop" id="auditConfigModal">
+  <div class="modal-box">
+    <h3>⚙️ Configurar auditoría en PwnDoc</h3>
+    <p style="color:var(--text-secondary);font-size:.85rem;margin-top:-.25rem;">
+      No existe auditoría para esta organización. Elige el tipo y el idioma antes de añadir el primer finding.
+    </p>
+
+    <div class="form-row">
+      <label>Nombre de la auditoría</label>
+      <input type="text" id="acName" placeholder="Nombre en PwnDoc">
+    </div>
+    <div class="form-row">
+      <label>Tipo de auditoría <span style="color:#ef4444">*</span></label>
+      <select id="acType">
+        <option value="" disabled selected>Cargando tipos…</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Idioma <span style="color:#ef4444">*</span></label>
+      <select id="acLang">
+        <option value="es">Español (es)</option>
+        <option value="en">English (en)</option>
+        <option value="fr">Français (fr)</option>
+        <option value="de">Deutsch (de)</option>
+        <option value="pt">Português (pt)</option>
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeAuditConfigModal()">Cancelar</button>
+      <button class="btn-save" id="btnSaveAudit" onclick="saveAuditConfig()">Crear auditoría</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Modal nueva vulnerabilidad ── -->
 <div class="modal-backdrop" id="newVulnModal">
   <div class="modal-box">
@@ -341,13 +377,16 @@
 
 <script>
 /* ─── State ─────────────────────────────────────────────── */
-let allVulns    = [];
+let allVulns     = [];
 let selectedVuln = null;
+let auditTypes   = [];
+let auditExists  = false;       // true cuando la org ya tiene audit_id en DB
+let pendingFinding = null;      // finding esperando a que se cree la auditoría
 
 /* ─── Init ──────────────────────────────────────────────── */
 (async function init() {
   await checkStatus();
-  await loadLibrary();
+  await Promise.all([loadLibrary(), loadAuditTypes(), checkAuditExists()]);
 })();
 
 /* ─── PwnDoc status ─────────────────────────────────────── */
@@ -365,6 +404,76 @@ async function checkStatus() {
     }
   } catch {
     document.getElementById('pdStatusText').textContent = 'PwnDoc no alcanzable';
+  }
+}
+
+/* ─── Audit types & audit existence ────────────────────── */
+async function loadAuditTypes() {
+  try {
+    const r = await fetch('/api/pwndoc/audit-types');
+    if (!r.ok) return;
+    const d = await r.json();
+    auditTypes = d.audit_types || [];
+    const sel = document.getElementById('acType');
+    if (auditTypes.length) {
+      sel.innerHTML = auditTypes.map(t =>
+        `<option value="${escHtml(t.name)}">${escHtml(t.name)}</option>`
+      ).join('');
+    } else {
+      sel.innerHTML = '<option value="" disabled>Sin tipos configurados en PwnDoc</option>';
+    }
+  } catch { /* silencioso — PwnDoc puede no estar disponible */ }
+}
+
+async function checkAuditExists() {
+  try {
+    const r = await fetch(`/api/pwndoc/${encodeURIComponent(ORG)}/findings`);
+    if (!r.ok) return;
+    const d = await r.json();
+    auditExists = !!d.audit_id;
+  } catch { auditExists = false; }
+}
+
+/* ─── Audit config modal ────────────────────────────────── */
+function openAuditConfigModal() {
+  document.getElementById('acName').value = ORG;
+  document.getElementById('auditConfigModal').classList.add('open');
+}
+function closeAuditConfigModal() {
+  document.getElementById('auditConfigModal').classList.remove('open');
+  pendingFinding = null;
+}
+
+async function saveAuditConfig() {
+  const name      = document.getElementById('acName').value.trim() || ORG;
+  const auditType = document.getElementById('acType').value;
+  const language  = document.getElementById('acLang').value;
+
+  if (!auditType) { showToast('Selecciona un tipo de auditoría.', '#ef4444'); return; }
+
+  const btn = document.getElementById('btnSaveAudit');
+  btn.disabled = true;
+  btn.textContent = 'Creando…';
+  try {
+    const r = await fetch(`/api/pwndoc/${encodeURIComponent(ORG)}/ensure-audit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language, audit_type: auditType }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.statusText);
+    auditExists = true;
+    showToast('Auditoría configurada correctamente.', '#68d391');
+    closeAuditConfigModal();
+    // Si había un finding pendiente, lo enviamos ahora
+    if (pendingFinding) {
+      await _doSubmitFinding(pendingFinding.language, pendingFinding.audit_type);
+    }
+  } catch(e) {
+    showToast(`Error: ${e.message}`, '#fc8181');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Crear auditoría';
   }
 }
 
@@ -434,9 +543,22 @@ function showDetail() {
 /* ─── Add finding ───────────────────────────────────────── */
 async function submitFinding() {
   if (!selectedVuln) return;
-  const btn  = document.getElementById('btnAddFinding');
   const desc = document.getElementById('fDesc').value.trim();
   if (!desc) { showToast('La descripción es obligatoria.', '#ef4444'); return; }
+
+  // Si aún no hay auditoría, pedir configuración primero
+  if (!auditExists) {
+    pendingFinding = { language: null, audit_type: null };
+    openAuditConfigModal();
+    return;
+  }
+  await _doSubmitFinding();
+}
+
+async function _doSubmitFinding(language, audit_type) {
+  const btn  = document.getElementById('btnAddFinding');
+  const desc = document.getElementById('fDesc').value.trim();
+  if (!desc || !selectedVuln) return;
 
   btn.disabled = true;
   btn.textContent = '⏳ Guardando…';
@@ -451,15 +573,18 @@ async function submitFinding() {
         remediation:  document.getElementById('fRem').value.trim(),
         cvssv3:       document.getElementById('fCvss').value.trim(),
         vuln_type_id: selectedVuln.id || null,
+        language:     language  || document.getElementById('acLang').value  || 'es',
+        audit_type:   audit_type || document.getElementById('acType').value || null,
       }),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || r.statusText);
+    auditExists = true;
     showToast(`Finding añadido: ${selectedVuln.title}`, '#68d391');
-    // Reset form
     document.getElementById('fDesc').value = '';
     document.getElementById('fObs').value  = '';
     document.getElementById('fRem').value  = '';
+    pendingFinding = null;
   } catch(e) {
     showToast(`Error: ${e.message}`, '#fc8181');
   } finally {
@@ -529,9 +654,12 @@ function showToast(msg, color = '#68d391') {
   _toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 3500);
 }
 
-// Close modal on backdrop click
+// Close modals on backdrop click
 document.getElementById('newVulnModal').addEventListener('click', function(e) {
   if (e.target === this) closeNewVulnModal();
+});
+document.getElementById('auditConfigModal').addEventListener('click', function(e) {
+  if (e.target === this) closeAuditConfigModal();
 });
 </script>
 {% endblock %}
