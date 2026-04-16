@@ -14,6 +14,7 @@ Cada organización tiene su carpeta dentro del vault compartido:
 import os
 import shutil
 import hashlib
+import sqlite3
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
@@ -36,6 +37,13 @@ VAULT_ROOT_ITEMS = [".obsidian", "imagenes"]
 # Marcadores del bloque de visibilidad gestionado por ArsenalOT
 VISIBILIDAD_START = '<!-- ARSENAL:VISIBILIDAD -->'
 VISIBILIDAD_END   = '<!-- /ARSENAL:VISIBILIDAD -->'
+
+# Marcadores del bloque de evidencias web (screenshots + source code)
+EVIDENCIAS_START = '<!-- ARSENAL:EVIDENCIAS -->'
+EVIDENCIAS_END   = '<!-- /ARSENAL:EVIDENCIAS -->'
+
+# Subcarpeta dentro de Bitacoras donde se copian las evidencias
+EVIDENCIAS_SUBDIR = 'Evidencias'
 
 
 def _safe_path(base: Path, user_path: str) -> Path:
@@ -853,20 +861,220 @@ class BitacoraManager:
         self.create_file(org_name, rel_path, content)
         return True
 
+    # ─────────────────────────────────────────────────────────
+    # Evidencias web (screenshots + source code)
+    # ─────────────────────────────────────────────────────────
+
+    def _evidencias_dir(self, org_name: str) -> Path:
+        """Carpeta destino para evidencias de esta org dentro de la bitácora."""
+        d = (self.get_org_dir(org_name)
+             / "PENTEST IT OT" / "Bitacoras" / EVIDENCIAS_SUBDIR)
+        d.mkdir(parents=True, exist_ok=True)
+        _open_permissions(d)
+        src_d = d / "source"
+        src_d.mkdir(parents=True, exist_ok=True)
+        _open_permissions(src_d)
+        return d
+
+    def _fetch_evidencias(self, org_name: str, location: str,
+                          db_path) -> Dict[str, list]:
+        """
+        Consulta la BD y devuelve las evidencias de todos los escaneos
+        de una location. Retorna:
+          {
+            'screenshots': [{'ip', 'port', 'file_path'}, ...],
+            'sources':     [{'ip', 'port', 'file_path'}, ...],
+          }
+        """
+        conn = sqlite3.connect(str(db_path), timeout=10.0)
+        conn.row_factory = sqlite3.Row
+        screenshots = []
+        sources = []
+        try:
+            scan_ids = [r['id'] for r in conn.execute(
+                """SELECT id FROM scans
+                   WHERE UPPER(organization_name) = UPPER(?)
+                     AND UPPER(location) = UPPER(?)
+                     AND status = 'completed'""",
+                (org_name, location)
+            ).fetchall()]
+
+            if not scan_ids:
+                return {'screenshots': [], 'sources': []}
+
+            placeholders = ','.join('?' * len(scan_ids))
+            rows = conn.execute(
+                f"""SELECT LOWER(e.enrichment_type) AS etype, e.file_path,
+                           h.ip_address, sr.port
+                    FROM enrichments e
+                    JOIN scan_results sr ON sr.id = e.scan_result_id
+                    JOIN hosts h ON h.id = sr.host_id
+                    WHERE sr.scan_id IN ({placeholders})
+                      AND LOWER(e.enrichment_type) IN ('screenshot', 'websource',
+                                                        'source_code', 'source')
+                      AND e.file_path IS NOT NULL
+                    ORDER BY h.ip_address, sr.port""",
+                scan_ids
+            ).fetchall()
+
+            seen_ss  = set()
+            seen_src = set()
+            for r in rows:
+                key   = (r['ip_address'], r['port'])
+                entry = {'ip': r['ip_address'], 'port': r['port'],
+                         'file_path': r['file_path']}
+                etype = r['etype']
+                if etype == 'screenshot' and key not in seen_ss:
+                    screenshots.append(entry)
+                    seen_ss.add(key)
+                elif etype in ('websource', 'source_code', 'source') and key not in seen_src:
+                    sources.append(entry)
+                    seen_src.add(key)
+        finally:
+            conn.close()
+
+        return {'screenshots': screenshots, 'sources': sources}
+
+    def _resolve_evidence_path(self, file_path: str) -> Path:
+        """
+        Resuelve la ruta de evidencia almacenada en BD.
+        Los paths en BD son relativos al directorio padre de results_root
+        (p. ej. 'results/ORG/scan_xxx/img/x.png') o absolutos.
+        """
+        p = Path(file_path)
+        if p.is_absolute():
+            return p
+        # Intentar relativo al padre de results_root (raíz del proyecto)
+        candidate = self.results_root.parent / p
+        if candidate.exists():
+            return candidate
+        # Intentar relativo a results_root directamente (por si acaso)
+        candidate2 = self.results_root / p
+        if candidate2.exists():
+            return candidate2
+        # Devolver el primero aunque no exista (el caller comprobará .exists())
+        return candidate
+
+    def _copy_evidencias(self, org_name: str, evidencias: Dict[str, list]) -> Dict[str, list]:
+        """
+        Copia los archivos de evidencia al vault de Obsidian.
+        Devuelve los mismos dicts con 'vault_name' añadido (nombre de archivo en vault).
+        """
+        ev_dir  = self._evidencias_dir(org_name)
+        src_dir = ev_dir / "source"
+
+        for ev in evidencias['screenshots']:
+            src = self._resolve_evidence_path(ev['file_path'])
+            if not src.exists():
+                ev['vault_name'] = None
+                continue
+            name = f"{ev['ip']}_{ev['port']}.png"
+            dst  = ev_dir / name
+            try:
+                shutil.copy2(src, dst)
+                _open_permissions(dst)
+                ev['vault_name'] = name
+            except Exception:
+                ev['vault_name'] = None
+
+        for ev in evidencias['sources']:
+            src = self._resolve_evidence_path(ev['file_path'])
+            if not src.exists():
+                ev['vault_name'] = None
+                continue
+            name = f"{ev['ip']}_{ev['port']}.txt"
+            dst  = src_dir / name
+            try:
+                shutil.copy2(src, dst)
+                _open_permissions(dst)
+                ev['vault_name'] = f"source/{name}"
+            except Exception:
+                ev['vault_name'] = None
+
+        return evidencias
+
+    def _build_evidencias_block(self, evidencias: Dict[str, list]) -> str:
+        """Construye el bloque Markdown de evidencias para insertar en la nota."""
+        shots  = [e for e in evidencias['screenshots'] if e.get('vault_name')]
+        srcs   = [e for e in evidencias['sources']     if e.get('vault_name')]
+
+        if not shots and not srcs:
+            return ''
+
+        lines = [EVIDENCIAS_START, '#### 📸 Evidencias Web — ArsenalOT', '']
+
+        if shots:
+            lines += [
+                '##### Capturas de Pantalla',
+                '',
+                '| Host | Puerto | Captura |',
+                '|:---|:---|:---|',
+            ]
+            for e in shots:
+                # Obsidian resuelve wiki-links por nombre de archivo
+                lines.append(
+                    f"| `{e['ip']}` | {e['port']} | ![[{e['vault_name']}]] |"
+                )
+            lines.append('')
+
+        if srcs:
+            lines += ['##### Código Fuente', '']
+            for e in srcs:
+                lines.append(
+                    f"- [[{e['vault_name']}|{e['ip']}:{e['port']} — código fuente]]"
+                )
+            lines.append('')
+
+        lines.append(EVIDENCIAS_END)
+        return '\n'.join(lines)
+
+    def _inject_or_replace_evidencias(self, content: str, block: str) -> str:
+        """Reemplaza el bloque existente o lo añade al final del documento."""
+        if EVIDENCIAS_START in content and EVIDENCIAS_END in content:
+            s = content.index(EVIDENCIAS_START)
+            e = content.index(EVIDENCIAS_END) + len(EVIDENCIAS_END)
+            return content[:s] + block + content[e:]
+        return content.rstrip() + f'\n\n{block}\n'
+
+    def update_location_evidence(self, org_name: str, location: str,
+                                  db_path) -> bool:
+        """
+        Copia las evidencias de una location al vault y actualiza el bloque
+        ARSENAL:EVIDENCIAS de su nota. Devuelve True si actualizó algo.
+        """
+        note_path = self._find_location_note_path(org_name, location)
+        if note_path is None:
+            return False
+
+        evidencias = self._fetch_evidencias(org_name, location, db_path)
+        if not evidencias['screenshots'] and not evidencias['sources']:
+            return False
+
+        evidencias = self._copy_evidencias(org_name, evidencias)
+        block = self._build_evidencias_block(evidencias)
+        if not block:
+            return False
+
+        content     = note_path.read_text(encoding='utf-8')
+        new_content = self._inject_or_replace_evidencias(content, block)
+        if new_content != content:
+            note_path.write_text(new_content, encoding='utf-8')
+            _open_permissions(note_path)
+        return True
+
     def fill_from_scans(self, org_name: str, db_path) -> dict:
         """
         Crea/actualiza una nota por cada vector de acceso (location) con escaneos
         completados. No sobreescribe contenido manual fuera del bloque de visibilidad.
-        Devuelve {created, skipped, errors}.
+        Devuelve {created, skipped, evidence_copied, errors}.
         """
-        import sqlite3 as _sqlite3
+        created         = 0
+        skipped         = 0
+        evidence_copied = 0
+        errors          = []
 
-        created = 0
-        skipped = 0
-        errors  = []
-
-        conn = _sqlite3.connect(str(db_path), timeout=10.0)
-        conn.row_factory = _sqlite3.Row
+        conn = sqlite3.connect(str(db_path), timeout=10.0)
+        conn.row_factory = sqlite3.Row
         try:
             loc_rows = conn.execute(
                 """SELECT location, MIN(started_at) AS first_scan
@@ -889,10 +1097,23 @@ class BitacoraManager:
                 else:
                     skipped += 1
                 self.update_location_visibility(org_name, location, db_path)
+                # Copiar evidencias y actualizar bloque
+                evidencias = self._fetch_evidencias(org_name, location, db_path)
+                total_ev   = (len(evidencias['screenshots'])
+                              + len(evidencias['sources']))
+                if total_ev > 0:
+                    self._copy_evidencias(org_name, evidencias)
+                    evidence_copied += total_ev
+                    self.update_location_evidence(org_name, location, db_path)
             except Exception as e:
                 errors.append(f"{location}: {str(e)}")
 
-        return {'created': created, 'skipped': skipped, 'errors': errors}
+        return {
+            'created':         created,
+            'skipped':         skipped,
+            'evidence_copied': evidence_copied,
+            'errors':          errors,
+        }
 
     # ─────────────────────────────────────────────────────────
     # Hallazgos (findings) — bloque gestionado en VULNERABILIDADES.md

@@ -387,6 +387,11 @@
       Cargando ruta del vault…
     </div>
     <button class="editor-btn" onclick="refreshTree()" title="Recargar árbol de archivos">↺ Actualizar</button>
+    <button id="fillBtn" onclick="fillFromScans()"
+            title="Genera notas, copia capturas y código fuente de todos los escaneos"
+            style="margin-left:auto;background:linear-gradient(135deg,#48bb78,#38a169);border:none;border-radius:8px;color:#fff;padding:.45rem 1.1rem;font-size:.85rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:.4rem;transition:opacity .15s;white-space:nowrap;">
+      ⚡ Rellenar bitácora
+    </button>
   </div>
 
   <div class="bk-shell">
@@ -395,7 +400,6 @@
       <div class="tree-actions">
         <button class="tree-btn" onclick="openNewItemModal(false)">+ Archivo</button>
         <button class="tree-btn" onclick="openNewItemModal(true)">+ Carpeta</button>
-        <button class="tree-btn" id="fillBtn" onclick="fillFromScans()" title="Genera notas desde la plantilla para todos los escaneos sin bitácora">⚡ Rellenar</button>
         <button class="tree-btn" onclick="openNewVectorModal()" title="Crear nueva nota de vector de acceso desde plantilla" style="color:#f9a8d4;border-color:rgba(249,168,212,.25);">🗡 Nuevo Vector</button>
       </div>
       <div id="fileTree">
@@ -840,10 +844,11 @@ async function fillFromScans() {
     const r = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/fill-from-scans`, { method: 'POST' });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || r.statusText);
-    let msg = `Creadas: ${d.created} · Existentes: ${d.skipped}`;
-    if (d.errors && d.errors.length) msg += ` · Errores: ${d.errors.length}`;
-    showFillToast(msg, d.created > 0 ? '#68d391' : '#90cdf4');
-    if (d.created > 0) await refreshTree();
+    let msg = `Notas: ${d.created} creadas · ${d.skipped} existentes`;
+    if (d.evidence_copied > 0) msg += ` · 📸 ${d.evidence_copied} evidencias copiadas`;
+    if (d.errors && d.errors.length) msg += ` · ⚠️ ${d.errors.length} errores`;
+    showFillToast(msg, (d.created > 0 || d.evidence_copied > 0) ? '#68d391' : '#90cdf4');
+    await refreshTree();
   } catch(e) {
     showFillToast('Error: ' + e.message, '#fc8149');
   } finally {
