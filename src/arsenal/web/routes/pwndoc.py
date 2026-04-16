@@ -37,9 +37,26 @@ class AddFindingRequest(BaseModel):
     remediation: str = ""
     cvssv3: str = ""
     vuln_type_id: Optional[str] = None   # ID en la biblioteca PwnDoc (opcional)
+    language: str = "es"
+    audit_type: Optional[str] = None     # Nombre del auditType PwnDoc
+
+
+class EnsureAuditRequest(BaseModel):
+    language: str = "es"
+    audit_type: Optional[str] = None
 
 
 # ── Endpoints generales ────────────────────────────────────────
+
+@router.get("/audit-types")
+async def list_audit_types():
+    """Lista los tipos de auditoría disponibles en PwnDoc."""
+    try:
+        types = _client().list_audit_types()
+        return {"ok": True, "audit_types": [{"name": t["name"]} for t in types]}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error PwnDoc: {e}")
+
 
 @router.get("/status")
 async def pwndoc_status():
@@ -101,11 +118,14 @@ async def create_vulntype(body: NewVulnRequest):
 # ── Endpoints por organización ─────────────────────────────────
 
 @router.post("/{org_name}/ensure-audit")
-async def ensure_audit(org_name: str):
+async def ensure_audit(org_name: str, body: EnsureAuditRequest = None):
     """Crea la auditoría en PwnDoc para esta org si no existe aún."""
+    if body is None:
+        body = EnsureAuditRequest()
     try:
         c = _client()
-        audit_id = c.ensure_audit(org_name)
+        audit_id = c.ensure_audit(org_name, language=body.language,
+                                  audit_type=body.audit_type)
         storage.save_pwndoc_audit_id(org_name, audit_id)
         return {"ok": True, "audit_id": audit_id}
     except Exception as e:
@@ -136,7 +156,8 @@ async def add_finding(org_name: str, body: AddFindingRequest):
         c = _client()
         audit_id = storage.get_pwndoc_audit_id(org_name)
         if not audit_id:
-            audit_id = c.ensure_audit(org_name)
+            audit_id = c.ensure_audit(org_name, language=body.language,
+                                      audit_type=body.audit_type)
             storage.save_pwndoc_audit_id(org_name, audit_id)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error conectando PwnDoc: {e}")

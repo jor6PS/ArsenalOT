@@ -193,15 +193,16 @@ class PwnDocClient:
                 return audit
         return None
 
-    def ensure_audit(self, name: str, language: str = "es") -> str:
+    def ensure_audit(self, name: str, language: str = "es",
+                     audit_type: str = None) -> str:
         """
         Devuelve el _id de la auditoría con ese nombre.
-        Si no existe, la crea.
+        Si no existe, la crea con el language y audit_type indicados.
         """
         existing = self.get_audit_by_name(name)
         if existing:
             return str(existing.get("_id") or existing.get("id"))
-        created = self.create_audit(name, language)
+        created = self.create_audit(name, language, audit_type)
         return str(created.get("_id") or created.get("id"))
 
     # ─── Findings ──────────────────────────────────────────────
