@@ -1554,13 +1554,13 @@ async def get_neo4j_dashboard_stats(request: Neo4jQueryRequest):
             RETURN count(s) as count
         """,
         "vulnerabilities": f"""
-            MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE) 
-            {service_where} AND s.vulnerabilities <> ""
+            MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE)
+            {"WHERE" if not service_where else service_where + " AND"} s.vulnerabilities <> ""
             RETURN count(s) as count
         """,
         "locations": f"""
-            MATCH (h:HOST) 
-            {host_filter} AND h.SUBRED IS NOT NULL AND h.SUBRED <> 'Unknown'
+            MATCH (h:HOST)
+            {"WHERE" if not host_filter else host_filter + " AND"} h.SUBRED IS NOT NULL AND h.SUBRED <> 'Unknown'
             RETURN count(DISTINCT h.SUBRED) as count
         """
     }

@@ -173,7 +173,7 @@
                     </thead>
                     <tbody id="resultsBody">
                         <tr>
-                            <td colspan="14" class="loading">Cargando resultados activos...</td>
+                            <td colspan="16" class="loading">Cargando resultados activos...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -557,7 +557,7 @@
             const consolidatedActive = consolidateByIp(filteredActive);
             document.getElementById('activeCount').textContent = `(${consolidatedActive.length} hosts, ${filteredActive.length} puertos)`;
             if (consolidatedActive.length === 0) {
-                activeTbody.innerHTML = '<tr><td colspan="14" class="empty">No hay resultados activos</td></tr>';
+                activeTbody.innerHTML = '<tr><td colspan="16" class="empty">No hay resultados activos</td></tr>';
             } else {
                 const methodLabels = { 'nmap': '🔌 Nmap', 'passive_capture': '🎧 Captura Pasiva', 'host_discovery': '🔍 Host Discovery', 'arp_scan': '🔍 ARP Scan', 'icmp_ping': '🔍 ICMP Ping', 'syn_scan': '🔍 SYN Scan' };
                 activeTbody.innerHTML = consolidatedActive.map(row => {
