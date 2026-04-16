@@ -89,19 +89,20 @@ class HostDiscovery:
 
             if self.current_process.returncode == 0 or stdout:
                 # Formato de salida arp-scan: IP\tMAC\tVendor  (una línea por host)
+                # Las líneas de DATOS siempre empiezan por la IP; las cabeceras/pies
+                # ("Interface:", "Starting", "Ending"…) empiezan por texto y se ignoran.
+                ip_line_pattern = re.compile(r'^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s')
                 mac_pattern = re.compile(r'([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})', re.IGNORECASE)
-                ip_pattern = re.compile(r'\b((?:\d{1,3}\.){3}\d{1,3})\b')
 
                 for line in stdout.splitlines():
                     line = line.strip()
                     if not line:
                         continue
-                    ip_match = ip_pattern.search(line)
-                    mac_match = mac_pattern.search(line)
-                    if not ip_match or not mac_match:
+                    # Solo procesar líneas que empiecen por una IP (formato dato de arp-scan)
+                    ip_match = ip_line_pattern.match(line)
+                    if not ip_match:
                         continue
                     ip_str = ip_match.group(1)
-                    mac_str = mac_match.group(1).upper()
                     try:
                         ip_obj = ipaddress.ip_address(ip_str)
                         if ip_obj.is_multicast or ip_obj.is_reserved:
@@ -109,13 +110,17 @@ class HostDiscovery:
                     except ValueError:
                         continue
 
-                    # Extraer vendor: todo lo que sigue a la MAC en la línea
-                    parts = re.split(r'\s+', line, maxsplit=2)
+                    mac_match = mac_pattern.search(line)
+                    if not mac_match:
+                        continue
+                    mac_str = mac_match.group(1).upper()
+
+                    # Extraer vendor: tercer campo separado por espacios/tabs
+                    parts = re.split(r'\t+|\s{2,}', line, maxsplit=2)
                     vendor = parts[2].strip() if len(parts) >= 3 else None
                     # Ignorar entradas duplicadas (arp-scan las marca con "(DUP: N)")
                     if vendor and vendor.startswith('(DUP:'):
                         continue
-                    # Vaciar vendor vacío o genérico
                     if not vendor:
                         vendor = None
 
@@ -349,14 +354,19 @@ class HostDiscovery:
             Dict IP -> {mac_address, vendor}
         """
         discovered: Dict[str, Dict] = {}
+        # Líneas de datos arp-scan/netdiscover empiezan por la IP.
+        # Usar match (ancla al inicio) para no confundir cabeceras con IPs dentro del texto.
+        ip_line_pattern = re.compile(r'^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s')
+        ip_bare_pattern = re.compile(r'^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$')
         mac_pattern = re.compile(r'([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})', re.IGNORECASE)
-        ip_pattern_full = re.compile(r'\b((?:\d{1,3}\.){3}\d{1,3})\b')
 
         for line in output.splitlines():
             line = line.strip()
             if not line:
                 continue
-            ip_match = ip_pattern_full.search(line)
+
+            # Intentar match con IP al inicio de línea (con o sin campos adicionales)
+            ip_match = ip_line_pattern.match(line) or ip_bare_pattern.match(line)
             if not ip_match:
                 continue
             ip_str = ip_match.group(1)
@@ -366,7 +376,8 @@ class HostDiscovery:
             mac_match = mac_pattern.search(line)
             if mac_match:
                 mac_str = mac_match.group(1).upper()
-                parts = re.split(r'\s+', line, maxsplit=2)
+                # Vendor: tercer campo (separado por tabs o múltiples espacios)
+                parts = re.split(r'\t+|\s{2,}', line, maxsplit=2)
                 vendor = parts[2].strip() if len(parts) >= 3 else None
                 if vendor and vendor.startswith('(DUP:'):
                     continue
