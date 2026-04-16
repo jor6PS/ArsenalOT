@@ -1227,18 +1227,35 @@ class ScanStorage:
             conn = sqlite3.connect(str(self.db_path), timeout=10.0)
             conn.row_factory = sqlite3.Row
             row = conn.execute(
-                "SELECT organization_name, location, started_at FROM scans WHERE id = ?",
+                "SELECT organization_name, location, started_at, myip FROM scans WHERE id = ?",
                 (scan_id,)
             ).fetchone()
-            conn.close()
             if not row:
+                conn.close()
                 return
+            org      = row['organization_name']
+            location = row['location']
+            myip     = row['myip']
+            # Cuántas IPs distintas hay para este (org, location) en BD
+            distinct_ips = conn.execute(
+                """SELECT COUNT(DISTINCT CASE WHEN myip IS NULL OR myip = ''
+                                              THEN '__NOIP__' ELSE myip END) AS n
+                   FROM scans
+                   WHERE UPPER(organization_name) = UPPER(?)
+                     AND UPPER(location) = UPPER(?)
+                     AND status = 'completed'""",
+                (org, location)
+            ).fetchone()['n']
+            conn.close()
+
             from arsenal.core.bitacora_manager import BitacoraManager
             mgr        = BitacoraManager(self.results_root)
             first_date = str(row['started_at'] or '')[:10]
-            mgr.create_location_note(row['organization_name'], row['location'], first_date)
-            mgr.update_location_visibility(row['organization_name'], row['location'],
-                                           self.db_path)
+            # Migrar nota legacy SOLO si esta es la única IP para esta location
+            if distinct_ips == 1:
+                mgr._migrate_legacy_note(org, location, myip)
+            mgr.create_location_note(org, location, first_date, myip)
+            mgr.update_location_visibility(org, location, self.db_path, myip)
         except Exception:
             pass  # Nunca bloquear el flujo del escaneo
 

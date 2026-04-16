@@ -341,12 +341,46 @@ class BitacoraManager:
     # Visibilidad de redes por escaneo (bloque auto-gestionado)
     # ─────────────────────────────────────────────────────────
 
-    def _find_location_note_path(self, org_name: str, location: str) -> Optional[Path]:
+    # ── Sufijo de IP en nombre de nota ──
+    @staticmethod
+    def _ip_label(myip: Optional[str]) -> str:
+        """Devuelve la etiqueta de IP que aparece entre paréntesis en el nombre."""
+        ip = (myip or '').strip()
+        return ip if ip else 'sin IP'
+
+    @classmethod
+    def _note_basename(cls, location: str, myip: Optional[str]) -> str:
+        """`VE - LOCATION (IP)` o `VE - LOCATION (sin IP)`."""
+        return f"VE - {location} ({cls._ip_label(myip)})"
+
+    def _find_location_note_path(self, org_name: str, location: str,
+                                  myip: Optional[str] = None) -> Optional[Path]:
         """
-        Localiza el .md de un vector de acceso (location) en Bitacoras/.
-        Si existen varios (p.ej. duplicados de distintos días), devuelve el más
-        antiguo (orden alfabético = cronológico dado el prefijo YYYY-MM-DD).
+        Localiza el .md de un vector de acceso (location, myip) en Bitacoras/.
+
+        Busca exclusivamente la nota correspondiente al sufijo de IP
+        (`*VE - LOCATION (IP).md` o `*VE - LOCATION (sin IP).md` cuando
+        ``myip`` es None/'').
+
+        No hace fallback a notas legacy sin sufijo: si la nota antigua existe
+        y no se ha migrado, debe migrarse explícitamente con
+        :meth:`_migrate_legacy_note`. De lo contrario, los flujos
+        segmentados por IP escribirían sobre el mismo fichero.
+
+        Si existen varias coincidencias, devuelve la más antigua (orden
+        alfabético = cronológico dado el prefijo YYYY-MM-DD).
         """
+        bitacoras = self.get_org_dir(org_name) / "PENTEST IT OT" / "Bitacoras"
+        if not bitacoras.exists():
+            return None
+
+        label = self._ip_label(myip)
+        hits = sorted(bitacoras.glob(f"*VE - {location} ({label}).md"))
+        return hits[0] if hits else None
+
+    def _find_legacy_location_note_path(self, org_name: str,
+                                         location: str) -> Optional[Path]:
+        """Devuelve la nota legacy (`*VE - LOCATION.md`, sin sufijo IP) si existe."""
         bitacoras = self.get_org_dir(org_name) / "PENTEST IT OT" / "Bitacoras"
         if not bitacoras.exists():
             return None
@@ -568,27 +602,36 @@ class BitacoraManager:
         return content.rstrip() + f'\n\n{block}\n'
 
     def _build_location_visibility_block(self, org_name: str,
-                                          location: str, db_path) -> str:
+                                          location: str, db_path,
+                                          myip: Optional[str] = None) -> str:
         """
-        Construye el bloque de visibilidad agregando TODOS los escaneos de una location.
+        Construye el bloque de visibilidad agregando los escaneos de una
+        location. Si se proporciona ``myip``, sólo agrega los escaneos
+        ejecutados desde esa IP (o sin IP cuando ``myip`` es None/'').
         """
         import sqlite3 as _sq
         import ipaddress as _ipa
         from datetime import datetime as _dt
 
+        ip_filter = (myip or '').strip() or None
+
         conn = _sq.connect(str(db_path), timeout=10.0)
         conn.row_factory = _sq.Row
         try:
-            scans = conn.execute(
-                """SELECT id, scan_mode, target_range, started_at, completed_at,
-                          hosts_discovered, ports_found
-                   FROM scans
-                   WHERE UPPER(organization_name) = UPPER(?)
-                     AND UPPER(location) = UPPER(?)
-                     AND status = 'completed'
-                   ORDER BY started_at""",
-                (org_name, location)
-            ).fetchall()
+            base_q = """SELECT id, scan_mode, target_range, started_at, completed_at,
+                              hosts_discovered, ports_found
+                       FROM scans
+                       WHERE UPPER(organization_name) = UPPER(?)
+                         AND UPPER(location) = UPPER(?)
+                         AND status = 'completed'"""
+            params = [org_name, location]
+            if ip_filter is not None:
+                base_q += " AND myip = ?"
+                params.append(ip_filter)
+            else:
+                base_q += " AND (myip IS NULL OR myip = '')"
+            base_q += " ORDER BY started_at"
+            scans = conn.execute(base_q, params).fetchall()
             if not scans:
                 return ''
 
@@ -729,11 +772,13 @@ class BitacoraManager:
         last_date     = scan_stats[-1]['date'] if scan_stats else '—'
         period        = first_date if first_date == last_date else f"{first_date} → {last_date}"
 
+        ip_display = ip_filter if ip_filter else 'sin IP'
         lines = [
             VISIBILIDAD_START,
             '#### 🔍 Visibilidad de Redes — ArsenalOT',
             '',
-            f"**Vector de Acceso:** `{location}` · **Organización:** {org_name}  ",
+            (f"**Vector de Acceso:** `{location}` · **IP de origen:** `{ip_display}`"
+             f" · **Organización:** {org_name}  "),
             (f"**Escaneos realizados:** {len(scans)} · **Período:** {period}"
              f" · **Hosts únicos:** {total_hosts} · **Servicios totales:** {total_ports}"),
             '',
@@ -811,15 +856,18 @@ class BitacoraManager:
         return '\n'.join(lines)
 
     def update_location_visibility(self, org_name: str, location: str,
-                                    db_path) -> bool:
+                                    db_path,
+                                    myip: Optional[str] = None) -> bool:
         """
-        Actualiza el bloque ARSENAL:VISIBILIDAD de la nota del vector de acceso.
-        Solo reemplaza ese bloque; el resto del documento queda intacto.
+        Actualiza el bloque ARSENAL:VISIBILIDAD de la nota del vector de acceso
+        para el par (location, myip). Solo reemplaza ese bloque; el resto del
+        documento queda intacto.
         """
-        note_path = self._find_location_note_path(org_name, location)
+        note_path = self._find_location_note_path(org_name, location, myip)
         if note_path is None:
             return False
-        block = self._build_location_visibility_block(org_name, location, db_path)
+        block = self._build_location_visibility_block(org_name, location,
+                                                       db_path, myip)
         if not block:
             return False
         content     = note_path.read_text(encoding='utf-8')
@@ -833,26 +881,56 @@ class BitacoraManager:
     # Creación automática desde vectores de acceso (location)
     # ─────────────────────────────────────────────────────────
 
-    def create_location_note(self, org_name: str, location: str,
-                              first_date: str) -> bool:
+    def _migrate_legacy_note(self, org_name: str, location: str,
+                              myip: Optional[str]) -> Optional[Path]:
         """
-        Crea la nota de bitácora para un vector de acceso (location).
-        Nombre: YYYY-MM-DD - VE - {LOCATION}.md  (fecha del primer escaneo)
-        Devuelve True si la creó, False si ya existía.
+        Si existe la nota legacy `*VE - LOCATION.md` (sin sufijo de IP) y aún
+        no existe la nota correspondiente al par (location, myip), renombra
+        la legacy añadiendo el sufijo (IP) preservando contenido manual.
 
-        Busca primero por glob (*VE - {location}.md) para no duplicar la nota
-        si ya fue creada bajo una fecha diferente.
+        Devuelve la ruta nueva si renombró algo, None en caso contrario.
+        El llamador debe asegurarse de que sólo hay una IP candidata para esta
+        location antes de invocar (de lo contrario puede mezclar contenido).
         """
-        file_title = f"{first_date} - VE - {location}"
+        legacy = self._find_legacy_location_note_path(org_name, location)
+        if legacy is None:
+            return None
+
+        bitacoras = legacy.parent
+        # Reemplazar el sufijo del nombre conservando la fecha original.
+        new_name = legacy.stem + f" ({self._ip_label(myip)}).md"
+        new_path = bitacoras / new_name
+        if new_path.exists():
+            return None  # destino ya existe; no tocar
+
+        try:
+            legacy.rename(new_path)
+            _open_permissions(new_path)
+            return new_path
+        except OSError:
+            return None
+
+    def create_location_note(self, org_name: str, location: str,
+                              first_date: str,
+                              myip: Optional[str] = None) -> bool:
+        """
+        Crea la nota de bitácora para un vector de acceso (location, myip).
+        Nombre: ``YYYY-MM-DD - VE - {LOCATION} ({IP}).md`` (o ``(sin IP)`` si
+        no se conoce). Devuelve True si la creó, False si ya existía.
+
+        Nota: la migración de notas legacy (sin sufijo IP) la decide el
+        llamador llamando a :meth:`_migrate_legacy_note` antes; aquí no se
+        renombra automáticamente porque, si hay varias IPs para esa
+        location, no se puede saber a cuál pertenece el contenido manual.
+        """
+        # ── Comprobar si ya existe la nota concreta para (location, myip) ──
+        if self._find_location_note_path(org_name, location, myip) is not None:
+            return False
+
+        file_title = f"{first_date} - {self._note_basename(location, myip)}"
         rel_path   = f"PENTEST IT OT/Bitacoras/{file_title}.md"
 
         org_dir = self.get_org_dir(org_name)
-
-        # ── Comprobar por nombre de ubicación (cualquier fecha) ──
-        # Esto evita crear duplicados cuando la nota ya existe con otra fecha
-        if self._find_location_note_path(org_name, location) is not None:
-            return False
-
         # Comprobación exacta por si _find_location_note_path no la localizó
         if (org_dir / rel_path).exists():
             return False
@@ -867,9 +945,11 @@ class BitacoraManager:
 
         content = content.replace('<% tp.file.title %>', file_title)
         content = content.replace('`YYYY-MM-DD`', f'`{first_date}`', 1)
+        cliente_label = (f"{location} ({self._ip_label(myip)})"
+                         if (myip or '').strip() else location)
         content = content.replace(
             '| **Cliente / Objetivo** | `...` |',
-            f'| **Cliente / Objetivo** | `{location}` |',
+            f'| **Cliente / Objetivo** | `{cliente_label}` |',
         )
 
         self.create_file(org_name, rel_path, content)
@@ -891,27 +971,37 @@ class BitacoraManager:
         return d
 
     def _fetch_evidencias(self, org_name: str, location: str,
-                          db_path) -> Dict[str, list]:
+                          db_path,
+                          myip: Optional[str] = None) -> Dict[str, list]:
         """
-        Consulta la BD y devuelve las evidencias de todos los escaneos
-        de una location. Retorna:
+        Consulta la BD y devuelve las evidencias de los escaneos de una
+        location. Si se proporciona ``myip``, filtra por esa IP de origen
+        (o por escaneos sin IP cuando ``myip`` es None/'').
+
+        Retorna:
           {
             'screenshots': [{'ip', 'port', 'file_path'}, ...],
             'sources':     [{'ip', 'port', 'file_path'}, ...],
           }
         """
+        ip_filter = (myip or '').strip() or None
+
         conn = sqlite3.connect(str(db_path), timeout=10.0)
         conn.row_factory = sqlite3.Row
         screenshots = []
         sources = []
         try:
-            scan_ids = [r['id'] for r in conn.execute(
-                """SELECT id FROM scans
-                   WHERE UPPER(organization_name) = UPPER(?)
-                     AND UPPER(location) = UPPER(?)
-                     AND status = 'completed'""",
-                (org_name, location)
-            ).fetchall()]
+            scan_q = """SELECT id FROM scans
+                       WHERE UPPER(organization_name) = UPPER(?)
+                         AND UPPER(location) = UPPER(?)
+                         AND status = 'completed'"""
+            scan_params = [org_name, location]
+            if ip_filter is not None:
+                scan_q += " AND myip = ?"
+                scan_params.append(ip_filter)
+            else:
+                scan_q += " AND (myip IS NULL OR myip = '')"
+            scan_ids = [r['id'] for r in conn.execute(scan_q, scan_params).fetchall()]
 
             if not scan_ids:
                 return {'screenshots': [], 'sources': []}
@@ -1051,16 +1141,18 @@ class BitacoraManager:
         return content.rstrip() + f'\n\n{block}\n'
 
     def update_location_evidence(self, org_name: str, location: str,
-                                  db_path) -> bool:
+                                  db_path,
+                                  myip: Optional[str] = None) -> bool:
         """
-        Copia las evidencias de una location al vault y actualiza el bloque
-        ARSENAL:EVIDENCIAS de su nota. Devuelve True si actualizó algo.
+        Copia las evidencias de los escaneos de (location, myip) al vault y
+        actualiza el bloque ARSENAL:EVIDENCIAS de su nota. Devuelve True si
+        actualizó algo.
         """
-        note_path = self._find_location_note_path(org_name, location)
+        note_path = self._find_location_note_path(org_name, location, myip)
         if note_path is None:
             return False
 
-        evidencias = self._fetch_evidencias(org_name, location, db_path)
+        evidencias = self._fetch_evidencias(org_name, location, db_path, myip)
         if not evidencias['screenshots'] and not evidencias['sources']:
             return False
 
@@ -1076,18 +1168,25 @@ class BitacoraManager:
             _open_permissions(note_path)
         return True
 
-    def _remove_duplicate_notes(self, org_name: str, location: str):
+    def _remove_duplicate_notes(self, org_name: str, location: str,
+                                 myip: Optional[str] = None):
         """
-        Si existen varias notas *VE - {location}.md, conserva la más antigua
-        (primera alfabéticamente) y elimina las demás, pero solo si el contenido
-        de la duplicada es exclusivamente bloques auto-gestionados por ArsenalOT
-        (no hay edición manual). Las duplicadas con contenido manual se dejan
-        intactas para que el usuario las revise.
+        Si existen varias notas para el par (location, myip), conserva la más
+        antigua (primera alfabéticamente) y elimina las demás, pero solo si el
+        contenido de la duplicada es exclusivamente bloques auto-gestionados
+        por ArsenalOT (no hay edición manual). Las duplicadas con contenido
+        manual se dejan intactas para que el usuario las revise.
+
+        Si ``myip`` es None, opera sobre las notas legacy (sin sufijo de IP).
         """
         bitacoras = self.get_org_dir(org_name) / "PENTEST IT OT" / "Bitacoras"
         if not bitacoras.exists():
             return
-        hits = sorted(bitacoras.glob(f"*VE - {location}.md"))
+        if myip is None:
+            hits = sorted(bitacoras.glob(f"*VE - {location}.md"))
+        else:
+            label = self._ip_label(myip)
+            hits = sorted(bitacoras.glob(f"*VE - {location} ({label}).md"))
         if len(hits) <= 1:
             return   # Sin duplicados
 
@@ -1136,56 +1235,83 @@ class BitacoraManager:
 
     def fill_from_scans(self, org_name: str, db_path) -> dict:
         """
-        Crea/actualiza una nota por cada vector de acceso (location) con escaneos
-        completados. No sobreescribe contenido manual fuera del bloque de visibilidad.
-        Devuelve {created, skipped, evidence_copied, errors}.
+        Crea/actualiza una nota por cada par (vector de acceso, IP de origen)
+        con escaneos completados. No sobreescribe contenido manual fuera del
+        bloque de visibilidad.
+
+        Cuando para una location existe nota legacy (sin sufijo de IP) y solo
+        se ha registrado una IP única para esa location, la nota legacy se
+        renombra preservando el contenido. Si hay varias IPs, la legacy se
+        deja intacta para que el usuario decida.
+
+        Devuelve {created, skipped, evidence_copied, errors, renamed}.
         """
         created         = 0
         skipped         = 0
         evidence_copied = 0
+        renamed         = 0
         errors          = []
 
         conn = sqlite3.connect(str(db_path), timeout=10.0)
         conn.row_factory = sqlite3.Row
         try:
-            loc_rows = conn.execute(
-                """SELECT location, MIN(started_at) AS first_scan
+            # Una nota por (location, myip). Tratamos NULL y '' como "sin IP".
+            pair_rows = conn.execute(
+                """SELECT location,
+                          CASE WHEN myip IS NULL OR myip = '' THEN NULL ELSE myip END AS myip,
+                          MIN(started_at) AS first_scan
                    FROM scans
                    WHERE UPPER(organization_name) = UPPER(?) AND status = 'completed'
-                   GROUP BY location
-                   ORDER BY location""",
+                   GROUP BY location, CASE WHEN myip IS NULL OR myip = '' THEN NULL ELSE myip END
+                   ORDER BY location, myip""",
                 (org_name,)
             ).fetchall()
         finally:
             conn.close()
 
-        for lr in loc_rows:
+        # Cuántas IPs distintas tiene cada location (incluye 'sin IP')
+        ip_count_by_loc: Dict[str, int] = {}
+        for r in pair_rows:
+            ip_count_by_loc[r['location']] = ip_count_by_loc.get(r['location'], 0) + 1
+
+        for lr in pair_rows:
             location   = lr['location']
+            myip       = lr['myip']  # None si era NULL o ''
             first_date = str(lr['first_scan'] or '')[:10]
             try:
-                # Eliminar notas duplicadas para esta location (conservar la más antigua)
-                self._remove_duplicate_notes(org_name, location)
+                # Migrar nota legacy SOLO si hay una única IP para esta location
+                # (de lo contrario no podemos saber a qué IP pertenece su contenido).
+                if ip_count_by_loc[location] == 1:
+                    if self._migrate_legacy_note(org_name, location, myip) is not None:
+                        renamed += 1
 
-                was_created = self.create_location_note(org_name, location, first_date)
+                # Eliminar duplicados auto-generados para este par concreto.
+                self._remove_duplicate_notes(org_name, location, myip)
+
+                was_created = self.create_location_note(org_name, location,
+                                                         first_date, myip)
                 if was_created:
                     created += 1
                 else:
                     skipped += 1
-                self.update_location_visibility(org_name, location, db_path)
+                self.update_location_visibility(org_name, location, db_path, myip)
                 # Copiar evidencias y actualizar bloque
-                evidencias = self._fetch_evidencias(org_name, location, db_path)
+                evidencias = self._fetch_evidencias(org_name, location, db_path, myip)
                 total_ev   = (len(evidencias['screenshots'])
                               + len(evidencias['sources']))
                 if total_ev > 0:
                     self._copy_evidencias(org_name, evidencias)
                     evidence_copied += total_ev
-                    self.update_location_evidence(org_name, location, db_path)
+                    self.update_location_evidence(org_name, location,
+                                                   db_path, myip)
             except Exception as e:
-                errors.append(f"{location}: {str(e)}")
+                tag = f"{location} ({self._ip_label(myip)})"
+                errors.append(f"{tag}: {str(e)}")
 
         return {
             'created':         created,
             'skipped':         skipped,
+            'renamed':         renamed,
             'evidence_copied': evidence_copied,
             'errors':          errors,
         }

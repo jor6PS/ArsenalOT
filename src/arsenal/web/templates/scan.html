@@ -193,11 +193,14 @@
                     <span>📥 Opcional: Importar desde XML de Nmap</span>
                 </summary>
                 <div style="margin-top: 1rem;" id="xmlImportSection">
+                    <div style="margin-bottom: 0.6rem; padding: 0.5rem 0.7rem; background: rgba(234, 179, 8, 0.08); border-left: 3px solid #eab308; border-radius: 4px; color: #facc15; font-size: 0.75rem;">
+                        💡 Indica en <strong>Mi IP</strong> (arriba) la dirección desde la que se ejecutó el escaneo, para que la bitácora pueda separar las pruebas por origen. Si no la recuerdas, déjala vacía y la nota se creará como <em>“sin IP”</em>.
+                    </div>
                     <div class="form-group" style="margin-bottom: 0.5rem;">
                         <label for="xml_files" style="font-size: 0.8rem;">Archivo(s) XML de Nmap</label>
                         <input type="file" id="xml_files" name="xml_files" accept=".xml" multiple
                             style="font-size: 0.8rem; padding: 0.3rem;">
-                        <small style="display: block; color: #94a3b8; font-size: 0.7rem; margin-top: 2px;">Puedes seleccionar varios archivos. Usará el Origen e Interfaz definidos arriba.</small>
+                        <small style="display: block; color: #94a3b8; font-size: 0.7rem; margin-top: 2px;">Puedes seleccionar varios archivos. Usará el Origen, Interfaz y Mi IP definidos arriba.</small>
                     </div>
                     <button type="button" class="btn btn-sm" id="importXmlBtn" style="font-size: 0.75rem; background: var(--accent-blue); color: white;">
                         <span id="importBtnSpinner" class="spinner hidden" style="margin-right: 5px;">⏳</span>
@@ -368,11 +371,14 @@
                     <span>📥 Opcional: Importar desde archivo PCAP</span>
                 </summary>
                 <div style="margin-top: 1rem;" id="pcapImportSection">
+                    <div style="margin-bottom: 0.6rem; padding: 0.5rem 0.7rem; background: rgba(234, 179, 8, 0.08); border-left: 3px solid #eab308; border-radius: 4px; color: #facc15; font-size: 0.75rem;">
+                        💡 Indica en <strong>Mi IP</strong> (arriba) la dirección desde la que se realizó la captura, para que la bitácora pueda separar las pruebas por origen. Si no la recuerdas, déjala vacía y la nota se creará como <em>“sin IP”</em>.
+                    </div>
                     <div class="form-group" style="margin-bottom: 0.5rem;">
                         <label for="pcap_files" style="font-size: 0.8rem;">Archivo(s) PCAP/PCAPNG</label>
                         <input type="file" id="pcap_files" name="pcap_files" accept=".pcap,.pcapng" multiple
                             style="font-size: 0.8rem; padding: 0.3rem;">
-                        <small style="display: block; color: #94a3b8; font-size: 0.7rem; margin-top: 2px;">Puedes seleccionar varios archivos. Usará el Origen e Interfaz definidos arriba.</small>
+                        <small style="display: block; color: #94a3b8; font-size: 0.7rem; margin-top: 2px;">Puedes seleccionar varios archivos. Usará el Origen, Interfaz y Mi IP definidos arriba.</small>
                     </div>
                     <button type="button" class="btn btn-sm btn-success" id="importPcapBtn" style="font-size: 0.75rem; background: #10b981; color: white;">
                         <span id="importPcapBtnSpinner" class="spinner hidden" style="margin-right: 5px;">⏳</span>
