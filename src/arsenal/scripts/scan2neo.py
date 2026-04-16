@@ -202,7 +202,9 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
                     'name': row['service_name'],
                     'product': row['product'],
                     'version': row['version'],
-                    'extrainfo': row['extrainfo'],
+                    'extrainfo': row['extrainfo'] or '',
+                    'cpe': row['cpe'] or '',
+                    'reason': row['reason'] or '',
                     'scripts': row['scripts_json'],
                     'vulnerabilities': [dict(v) for v in vulns]
                 }
@@ -307,9 +309,99 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
     except: pass
     return all_data
 
+def _duration_seconds(started_at, completed_at) -> int:
+    """Retorna la duración en segundos entre dos timestamps ISO, o 0 si no aplica."""
+    if not started_at or not completed_at:
+        return 0
+    try:
+        from datetime import datetime
+        for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S'):
+            try:
+                s = datetime.strptime(str(started_at)[:26], fmt)
+                e = datetime.strptime(str(completed_at)[:26], fmt)
+                return max(0, int((e - s).total_seconds()))
+            except ValueError:
+                continue
+    except Exception:
+        pass
+    return 0
+
+
+def compute_org_stats(all_scans: List[Dict]) -> Dict[str, Dict]:
+    """
+    Calcula estadísticas agregadas por organización a partir de los escaneos ya cargados.
+    Devuelve Dict[org_name → props dict listo para Neo4j].
+    """
+    raw: Dict[str, Dict] = {}
+
+    for scan in all_scans:
+        org = scan['organization_name'].upper()
+        if org not in raw:
+            raw[org] = {
+                'ips': set(),
+                'services': 0,
+                'vulns': 0,
+                'screenshots': 0,
+                'source_code': 0,
+                'subnets': set(),
+                'locations': set(),
+                'num_scans': 0,
+                'first_scan': None,
+                'last_scan': None,
+                'critical_ips': set(),
+            }
+        r = raw[org]
+        r['num_scans'] += 1
+
+        started = scan.get('started_at') or ''
+        completed = scan.get('completed_at') or started
+        if started:
+            if not r['first_scan'] or started < r['first_scan']:
+                r['first_scan'] = started
+            if not r['last_scan'] or completed > r['last_scan']:
+                r['last_scan'] = completed
+
+        if scan.get('location'):
+            r['locations'].add(scan['location'])
+
+        for h in scan['hosts']:
+            r['ips'].add(h['ip'])
+            if h.get('network_range'):
+                r['subnets'].add(h['network_range'])
+            if h.get('is_critical'):
+                r['critical_ips'].add(h['ip'])
+            for svc in h.get('services', []):
+                r['services'] += 1
+                r['vulns'] += len(svc.get('vulnerabilities') or [])
+                if svc.get('SCREENSHOT'):
+                    r['screenshots'] += 1
+                if svc.get('WEBSOURCE'):
+                    r['source_code'] += 1
+
+    result: Dict[str, Dict] = {}
+    for org, r in raw.items():
+        result[org] = {
+            'TOTAL_HOSTS':              len(r['ips']),
+            'TOTAL_SERVICIOS':          r['services'],
+            'TOTAL_VULNERABILIDADES':   r['vulns'],
+            'TOTAL_SCREENSHOTS':        r['screenshots'],
+            'TOTAL_CODIGO_FUENTE':      r['source_code'],
+            'TOTAL_SUBREDES':           len(r['subnets']),
+            'TOTAL_UBICACIONES':        len(r['locations']),
+            'NUM_ESCANEOS':             r['num_scans'],
+            'PRIMER_ESCANEO':           str(r['first_scan'] or ''),
+            'ULTIMO_ESCANEO':           str(r['last_scan'] or ''),
+            'NUM_DISPOSITIVOS_CRITICOS': len(r['critical_ips']),
+        }
+    return result
+
+
 def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
     """Procesa los datos e importa a Neo4j con correlación y metadatos mejorados (OPTIMIZADO)."""
-    
+
+    # Pre-computar estadísticas por organización a partir de todos los escaneos cargados
+    org_stats = compute_org_stats(all_scans)
+
     # Track de hosts creados para correlación posterior (IP -> List[Node])
     ip_nodes_map = {}
 
@@ -323,71 +415,108 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
         org_name = scan['organization_name'].upper()
         scan_mode = scan['scan_mode'] or 'active'
         is_active = scan_mode != 'passive'
-        
-        # 1. Nodo ORGANIZACION (Merge simple, es uno por scan o pocos)
-        org_node = Node("ORGANIZACION", name=org_name)
+
+        # 1. Nodo ORGANIZACION — incluye estadísticas agregadas de toda la org
+        org_props = {'name': org_name, **org_stats.get(org_name, {})}
+        org_node = Node("ORGANIZACION", **org_props)
         graph.merge(org_node, "ORGANIZACION", "name")
-        
-        # 2. Nodo ORIGEN (Fusionado con ESCANEO)
+
+        # 2. Nodo ORIGEN — metadatos del escaneo + contadores y duración
         myip = scan['myip'] or 'N/A'
+        duration = _duration_seconds(scan.get('started_at'), scan.get('completed_at'))
         origin_props = {
             'NAME': "ESCANEO PASIVO" if not is_active else f"Escaneo {scan['id']}",
             'ORGANIZACION': org_name,
             'MI_IP': myip,
             'SCAN_ID': scan['id'],
-            'SCAN_TYPE': scan['scan_type'],
-            'SCAN_MODE': scan['scan_mode'],
-            'TARGET_RANGE': scan['target_range'],
-            'PCAP_FILE': scan.get('pcap_file') or ('N/A' if is_active else scan['target_range']),
-            'INTERFACE': scan['interface'],
+            'SCAN_TYPE': scan['scan_type'] or '',
+            'SCAN_MODE': scan['scan_mode'] or '',
+            'TARGET_RANGE': scan['target_range'] or '',
+            'PCAP_FILE': scan.get('pcap_file') or ('N/A' if is_active else scan.get('target_range', '')),
+            'INTERFACE': scan['interface'] or '',
             'COMMAND': scan.get('nmap_command') or 'N/A',
-            'STARTED_AT': scan['started_at'],
-            'COMPLETED_AT': scan['completed_at'],
-            'STATUS': scan['status'],
-            'LOCATION': scan['location']
+            'STARTED_AT': scan['started_at'] or '',
+            'COMPLETED_AT': scan['completed_at'] or '',
+            'DURACION_SEG': duration,
+            'STATUS': scan['status'] or '',
+            'LOCATION': scan['location'] or '',
+            'HOSTS_DESCUBIERTOS': scan.get('hosts_discovered') or 0,
+            'PUERTOS_ENCONTRADOS': scan.get('ports_found') or 0,
         }
-        
+
         origin_node = Node("ORIGEN", **origin_props)
         graph.merge(origin_node, "ORIGEN", ("ORGANIZACION", "SCAN_ID"))
-        
+
         # Relación ORG -> ORIGEN
         rel_org_origin = Relationship(org_node, "HAS_SOURCE", origin_node)
         graph.merge(rel_org_origin)
-        
+
         discovery_source = f"{scan['scan_mode']}:{scan['id']}"
 
-        # 4. PREPARAR DATOS PARA BULK INSERT (UNWIND)
+        # 3. PREPARAR DATOS PARA BULK INSERT (UNWIND)
         hosts_data = []
         services_data = []
-        
+
         for h in scan['hosts']:
+            svcs = h.get('services', [])
+            has_vulns = any(s.get('vulnerabilities') for s in svcs)
+            has_screenshots = any(s.get('SCREENSHOT') for s in svcs)
+            has_source = any(s.get('WEBSOURCE') for s in svcs)
+
             h_props = {
-                'IP': h['ip'], 'HOSTNAME': h['hostname'], 'ORGANIZACION': h['organization'],
-                'CRITICO': "SÍ" if h['is_critical'] else "NO", 'RAZON_CRITICO': h.get('critical_reason', ''), 'NOMBRE_CRITICO': h.get('critical_name', ''),
-                'SUBRED': h.get('network_range') or 'Unknown',
-                'NOMBRE_SUBRED': h.get('network_name') or 'Unknown', 'SISTEMA': h.get('network_system') or 'N/A',
-                'VENDOR': h['vendor'] or '', 'MAC': h['mac'] or '', 'OS': h['os_info'] or '',
-                'HOSTNAMES': h.get('hostnames') or '', 'INTERFACES': h.get('interfaces') or '',
-                'TIMESTAMP': h.get('timestamp') or '',
-                'DISCOVERY_SOURCE': discovery_source
+                'IP':               h['ip'],
+                'HOSTNAME':         h['hostname'] or '',
+                'ORGANIZACION':     h['organization'],
+                'CRITICO':          "SÍ" if h['is_critical'] else "NO",
+                'RAZON_CRITICO':    h.get('critical_reason') or '',
+                'NOMBRE_CRITICO':   h.get('critical_name') or '',
+                'SUBRED':           h.get('network_range') or 'Unknown',
+                'NOMBRE_SUBRED':    h.get('network_name') or 'Unknown',
+                'SISTEMA':          h.get('network_system') or 'N/A',
+                'VENDOR':           h['vendor'] or '',
+                'MAC':              h['mac'] or '',
+                'OS':               h['os_info'] or '',
+                'HOSTNAMES':        h.get('hostnames') or '',
+                'INTERFACES':       h.get('interfaces') or '',
+                'SCRIPTS_HOST':     h.get('scripts') or '',
+                'TIMESTAMP':        h.get('timestamp') or '',
+                'DISCOVERY_SOURCE': discovery_source,
+                'NUM_PUERTOS':      len(svcs),
+                'TIENE_VULNERABILIDADES': "SÍ" if has_vulns else "NO",
+                'TIENE_SCREENSHOTS':     "SÍ" if has_screenshots else "NO",
+                'TIENE_CODIGO_FUENTE':   "SÍ" if has_source else "NO",
             }
             hosts_data.append(h_props)
-            
+
             # Recolectar Servicios
-            for s in h['services']:
+            for s in svcs:
+                vulns_list = s.get('vulnerabilities') or []
+                vuln_ids = [v.get('cve_id') or v.get('vulnerability_id') or '' for v in vulns_list]
+
                 s_props = {
-                    'host_ip': h['ip'],
-                    'id': f"{h['ip']}_{s['port']}_{s['protocol']}_{discovery_source}",
-                    'port': s['port'], 'protocol': s['protocol'], 'name': s['name'] or 'unknown',
-                    'product': s['product'] or '', 'version': s['version'] or '',
-                    'vulnerabilities': ", ".join([v.get('cve_id') or v.get('vulnerability_id') for v in s['vulnerabilities']]) if s['vulnerabilities'] else ''
+                    'host_ip':              h['ip'],
+                    'id':                   f"{h['ip']}_{s['port']}_{s['protocol']}_{discovery_source}",
+                    'port':                 s['port'],
+                    'protocol':             s['protocol'] or '',
+                    'name':                 s['name'] or 'unknown',
+                    'product':              s['product'] or '',
+                    'version':              s['version'] or '',
+                    'extrainfo':            s.get('extrainfo') or '',
+                    'cpe':                  s.get('cpe') or '',
+                    'reason':               s.get('reason') or '',
+                    'vulnerabilidades':     ", ".join(filter(None, vuln_ids)),
+                    'num_vulnerabilidades': len(vulns_list),
+                    'tiene_screenshot':     "SÍ" if s.get('SCREENSHOT') else "NO",
+                    'tiene_codigo_fuente':  "SÍ" if s.get('WEBSOURCE') else "NO",
                 }
-                
-                # Añadir enriquecimientos (ahora son propiedades en s)
+
+                # Añadir enriquecimientos binarios (SCREENSHOT, WEBSOURCE, IOXID…)
+                _skip = {'port', 'protocol', 'name', 'product', 'version', 'extrainfo',
+                         'cpe', 'reason', 'scripts', 'vulnerabilities', 'host_ip', 'id'}
                 for k, v in s.items():
-                    if k not in ['port', 'protocol', 'name', 'product', 'version', 'extrainfo', 'scripts', 'vulnerabilities']:
+                    if k not in _skip and k not in s_props:
                         s_props[k] = v
-                
+
                 services_data.append(s_props)
 
         # --- EJECUTAR BULK HOSTS ---
