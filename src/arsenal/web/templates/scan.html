@@ -937,7 +937,8 @@
         }
 
         const targetRange = document.getElementById('target_range_active').value || 'TARGET_IP';
-        return `arp-scan --localnet ${targetRange}`;
+        const iface = document.getElementById('interface') ? document.getElementById('interface').value : 'eth0';
+        return `arp-scan --interface ${iface || 'eth0'} ${targetRange}`;
     }
 
     function buildPingCommand() {
