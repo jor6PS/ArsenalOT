@@ -728,9 +728,12 @@ async def get_scan_results_live(scan_id: int):
         raise HTTPException(status_code=404, detail="Escaneo no encontrado")
     
     query = """
-        SELECT 
+        SELECT
             h.ip_address,
-            h.hostname,
+            COALESCE(m.hostname, h.hostname) as hostname,
+            COALESCE(m.mac_address, h.mac_address) as mac_address,
+            COALESCE(m.vendor, h.vendor) as vendor,
+            m.os_info_json,
             sr.port,
             sr.protocol,
             sr.service_name,
@@ -746,6 +749,7 @@ async def get_scan_results_live(scan_id: int):
         FROM scan_results sr
         JOIN hosts h ON h.id = sr.host_id
         JOIN scans s ON s.id = sr.scan_id
+        LEFT JOIN host_scan_metadata m ON m.scan_id = sr.scan_id AND m.host_id = sr.host_id
         WHERE s.id = ?
         ORDER BY h.ip_address, COALESCE(sr.port, 0)
         LIMIT 5000
@@ -847,9 +851,12 @@ async def get_results(
     cursor = conn.cursor()
     
     query = """
-        SELECT 
+        SELECT
             h.ip_address,
-            h.hostname,
+            COALESCE(m.hostname, h.hostname) as hostname,
+            COALESCE(m.mac_address, h.mac_address) as mac_address,
+            COALESCE(m.vendor, h.vendor) as vendor,
+            m.os_info_json,
             sr.port,
             sr.protocol,
             sr.service_name,
@@ -865,7 +872,8 @@ async def get_results(
         FROM scan_results sr
         JOIN hosts h ON h.id = sr.host_id
         JOIN scans s ON s.id = sr.scan_id
-        WHERE 1=1 
+        LEFT JOIN host_scan_metadata m ON m.scan_id = sr.scan_id AND m.host_id = sr.host_id
+        WHERE 1=1
         AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'
     """
     params = []

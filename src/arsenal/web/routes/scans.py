@@ -302,9 +302,10 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 with running_scans_lock:
                     running_processes[str(scan_id)] = proc
 
-        discovered_ips = set()
+        # Dict IP -> {mac_address, vendor} — Phase 1 popula MAC/vendor, fases 2+ sólo añaden IPs
+        discovered_ips: dict = {}
 
-        
+
         # ============================================================================
         # PASO 1: HOST DISCOVERY (si está habilitado)
         # ============================================================================
@@ -422,7 +423,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     new_hosts_count = 0
                     for host_ip, host_data in parsed_data['hosts'].items():
                         if host_ip not in discovered_ips:
-                            discovered_ips.add(host_ip)
+                            discovered_ips[host_ip] = {'mac_address': None, 'vendor': None}
                             new_hosts_count += 1
                         
                         # Guardar host en BD (aunque no tenga puertos)
@@ -604,20 +605,16 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                 )
                                 
                                 # Guardar cada vulnerabilidad
+                                # VulnerabilityParser ya devuelve claves que coinciden con
+                                # la firma de save_vulnerability (vulnerability_id, vulnerability_name,
+                                # severity, description, cve_id, cvss_score, script_source, script_output)
                                 for vuln in vulnerabilities:
                                     storage.save_vulnerability(
                                         scan_id=scan_id,
                                         host_ip=host_ip,
                                         port=port_num,
                                         protocol=proto,
-                                        vulnerability_type=vuln.get('type', 'unknown'),
-                                        title=vuln.get('title', ''),
-                                        description=vuln.get('description', ''),
-                                        severity=vuln.get('severity', 'info'),
-                                        cvss_score=vuln.get('cvss', None),
-                                        references=vuln.get('references', ''),
-                                        script_id=script_id,
-                                        script_output=output_text
+                                        vulnerability_data=vuln,
                                     )
                             
                             # Screenshots (si está habilitado y es servicio web)
