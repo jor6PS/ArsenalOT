@@ -342,11 +342,15 @@ class BitacoraManager:
     # ─────────────────────────────────────────────────────────
 
     def _find_location_note_path(self, org_name: str, location: str) -> Optional[Path]:
-        """Localiza el .md de un vector de acceso (location) en Bitacoras/."""
+        """
+        Localiza el .md de un vector de acceso (location) en Bitacoras/.
+        Si existen varios (p.ej. duplicados de distintos días), devuelve el más
+        antiguo (orden alfabético = cronológico dado el prefijo YYYY-MM-DD).
+        """
         bitacoras = self.get_org_dir(org_name) / "PENTEST IT OT" / "Bitacoras"
         if not bitacoras.exists():
             return None
-        hits = list(bitacoras.glob(f"*VE - {location}.md"))
+        hits = sorted(bitacoras.glob(f"*VE - {location}.md"))
         return hits[0] if hits else None
 
     def _build_visibility_block(self, scan_id: int, db_path) -> str:  # kept for compat
@@ -833,13 +837,23 @@ class BitacoraManager:
                               first_date: str) -> bool:
         """
         Crea la nota de bitácora para un vector de acceso (location).
-        Nombre: YYYY-MM-DD - VE - {LOCATION}.md
+        Nombre: YYYY-MM-DD - VE - {LOCATION}.md  (fecha del primer escaneo)
         Devuelve True si la creó, False si ya existía.
+
+        Busca primero por glob (*VE - {location}.md) para no duplicar la nota
+        si ya fue creada bajo una fecha diferente.
         """
         file_title = f"{first_date} - VE - {location}"
         rel_path   = f"PENTEST IT OT/Bitacoras/{file_title}.md"
 
         org_dir = self.get_org_dir(org_name)
+
+        # ── Comprobar por nombre de ubicación (cualquier fecha) ──
+        # Esto evita crear duplicados cuando la nota ya existe con otra fecha
+        if self._find_location_note_path(org_name, location) is not None:
+            return False
+
+        # Comprobación exacta por si _find_location_note_path no la localizó
         if (org_dir / rel_path).exists():
             return False
 
@@ -1062,6 +1076,64 @@ class BitacoraManager:
             _open_permissions(note_path)
         return True
 
+    def _remove_duplicate_notes(self, org_name: str, location: str):
+        """
+        Si existen varias notas *VE - {location}.md, conserva la más antigua
+        (primera alfabéticamente) y elimina las demás, pero solo si el contenido
+        de la duplicada es exclusivamente bloques auto-gestionados por ArsenalOT
+        (no hay edición manual). Las duplicadas con contenido manual se dejan
+        intactas para que el usuario las revise.
+        """
+        bitacoras = self.get_org_dir(org_name) / "PENTEST IT OT" / "Bitacoras"
+        if not bitacoras.exists():
+            return
+        hits = sorted(bitacoras.glob(f"*VE - {location}.md"))
+        if len(hits) <= 1:
+            return   # Sin duplicados
+
+        canonical = hits[0]   # La más antigua — la que conservamos
+        for dup in hits[1:]:
+            try:
+                text = dup.read_text(encoding='utf-8', errors='replace')
+                # Considerar "sin edición manual" si solo contiene bloques ARSENAL
+                # o el texto de la plantilla sin rellenar (líneas vacías, encabezados
+                # de plantilla, marcadores ARSENAL).
+                # Heurística: si NO hay nada fuera de los bloques gestionados y
+                # las primeras líneas de plantilla, es seguro eliminar.
+                stripped = text
+                for marker_pair in [
+                    (VISIBILIDAD_START, VISIBILIDAD_END),
+                    (EVIDENCIAS_START,  EVIDENCIAS_END),
+                    (self.FINDINGS_START, self.FINDINGS_END),
+                ]:
+                    if marker_pair[0] in stripped and marker_pair[1] in stripped:
+                        s = stripped.index(marker_pair[0])
+                        e = stripped.index(marker_pair[1]) + len(marker_pair[1])
+                        stripped = stripped[:s] + stripped[e:]
+
+                # Descontar líneas que son boilerplate de plantilla:
+                # encabezados, separadores, placeholders `...`, referencias
+                # de plantilla, comentarios HTML, líneas vacías, etc.
+                manual_lines = [
+                    ln for ln in stripped.strip().splitlines()
+                    if ln.strip()
+                    and not ln.startswith('#')
+                    and not ln.startswith('|')
+                    and not ln.startswith('>')
+                    and not ln.startswith('---')
+                    and not ln.startswith('***')
+                    and not ln.startswith('<!--')
+                    and 'tp.file'      not in ln
+                    and 'YYYY-MM-DD'   not in ln
+                    and '`...`'        not in ln   # placeholder sin rellenar
+                    and ln.strip() not in ('...', '`...`', '-', '*')
+                ]
+                # Si el contenido real (sin plantilla) es mínimo, es seguro borrar
+                if len('\n'.join(manual_lines)) < 300:
+                    dup.unlink()
+            except Exception:
+                pass   # Nunca bloquear por error en limpieza
+
     def fill_from_scans(self, org_name: str, db_path) -> dict:
         """
         Crea/actualiza una nota por cada vector de acceso (location) con escaneos
@@ -1091,6 +1163,9 @@ class BitacoraManager:
             location   = lr['location']
             first_date = str(lr['first_scan'] or '')[:10]
             try:
+                # Eliminar notas duplicadas para esta location (conservar la más antigua)
+                self._remove_duplicate_notes(org_name, location)
+
                 was_created = self.create_location_note(org_name, location, first_date)
                 if was_created:
                     created += 1
