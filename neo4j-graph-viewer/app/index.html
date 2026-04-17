@@ -58,7 +58,14 @@
                     <option value="0">🗺️ Mapa de Visibilidad</option>
                     <option value="1">🌐 Mapa de Red Global</option>
                     <option value="2">🚨 Camino de Ataque</option>
+                    <option value="3">🎯 Nodo de Ataque</option>
                 </select>
+                <select id="visibility-origin-select" class="query-select hidden" disabled>
+                    <option value="">— Selecciona el origen —</option>
+                </select>
+                <input type="text" id="attack-target-input" class="node-search hidden"
+                       placeholder="IP o hostname del objetivo" autocomplete="off">
+                <div id="query-extra-hint" class="search-hint"></div>
                 <button class="btn-run" id="run-query-btn" disabled>▶ Ejecutar</button>
             </div>
 

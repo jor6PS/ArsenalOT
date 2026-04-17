@@ -5,17 +5,30 @@
 'use strict';
 
 // ──────────────────────────────────────────────────────────────────
-// PRESET QUERIES  (3 only)
+// PRESET QUERIES — mismas que las publicadas en `static/data/neo4j_queries.json`
+// (pestaña Neo4j de la app principal). Mantener en sincronía si se actualizan.
+//
+// Cada entrada declara:
+//   id        — identificador estable
+//   title     — texto del dropdown
+//   needsExtra — si requiere parámetro extra del usuario
+//                ('visibility-origin' | 'attack-target' | null)
+//   query     — Cypher (con parámetros $org, $location, $target según haga falta)
 // ──────────────────────────────────────────────────────────────────
 const PRESET_QUERIES = [
     {
+        id: 'visibility',
         title: "Mapa de Visibilidad",
-        // Filters strictly by $org — all derived node keys include org prefix to prevent
-        // cross-org collisions when multiple orgs have been exported to Neo4j.
+        needsExtra: 'visibility-origin',
+        // Pinta el árbol completo desde el origen indicado (no devuelve solo
+        // los nodos `ORIGEN`, sino también las subredes, hosts y servicios
+        // ya desplegados, evitando que el usuario tenga que hacer doble-click
+        // para expandir cada rama).
         query: `MATCH (o:ORIGEN)-[]-(h:HOST)
 WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
   AND h.ORGANIZACION = $org
-WITH $org AS org_key, COALESCE(o.LOCATION,'Desconocido') AS loc,
+  AND COALESCE(o.LOCATION,'Desconocido') = $location
+WITH $org AS org_key, $location AS loc,
      h.NOMBRE_SUBRED AS nsub, h.SUBRED AS rsub, h.IP AS ip,
      max(h.ORGANIZACION) AS p_org, max(h.MAC) AS p_mac,
      max(h.SISTEMA) AS p_sistema, max(h.VENDOR) AS p_vendor,
@@ -29,11 +42,12 @@ MERGE (vh:visibilitytest_Host {id: org_key+'_'+loc+'_'+ip})
 SET vh.IP=ip,vh.MAC=p_mac,vh.SISTEMA=p_sistema,vh.VENDOR=p_vendor,
     vh.OS=p_os,vh.CRITICO=p_critico,vh.HOSTNAME=p_hostname,vh.ORGANIZACION=p_org
 MERGE (vrango)-[:CONTIENE_HOST]->(vh)
-WITH org_key, count(vh) AS b1
+WITH org_key, loc, count(vh) AS b1
 MATCH (o:ORIGEN)-[]-(h:HOST)-[]-(s:SERVICE)
 WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
   AND h.ORGANIZACION = $org
-WITH org_key, COALESCE(o.LOCATION,'Desconocido') AS loc, h.IP AS ip,
+  AND COALESCE(o.LOCATION,'Desconocido') = $location
+WITH org_key, loc, h.IP AS ip,
      s.port AS port, s.protocol AS protocol,
      max(s.name) AS p_name, max(s.product) AS p_product,
      max(s.version) AS p_version
@@ -45,13 +59,18 @@ FOREACH (d IN CASE WHEN port IS NOT NULL THEN [1] ELSE [] END |
         vsrv.etiqueta_visual=toString(port)+'/'+protocol
     MERGE (vh)-[:EXPONE_PUERTO]->(vsrv)
 )
-WITH org_key, count(vh) AS b2
-MATCH (vo:visibilitytest_Origen) WHERE vo.id STARTS WITH org_key+'_'
-RETURN DISTINCT vo`
+WITH org_key, loc, count(*) AS b2
+MATCH (vo:visibilitytest_Origen {id: org_key+'_'+loc})
+OPTIONAL MATCH (vo)-[r1:VE_RED]->(vnombre:visibilitytest_NombreSubred)
+OPTIONAL MATCH (vnombre)-[r2:CONTIENE_RANGO]->(vrango:visibilitytest_RangoSubred)
+OPTIONAL MATCH (vrango)-[r3:CONTIENE_HOST]->(vh:visibilitytest_Host)
+OPTIONAL MATCH (vh)-[r4:EXPONE_PUERTO]->(vsrv:visibilitytest_Servicio)
+RETURN vo, vnombre, vrango, vh, vsrv, r1, r2, r3, r4`
     },
     {
+        id: 'networkmap',
         title: "Mapa de Red Global",
-        // $org filter + org-prefixed keys prevent IP collisions across orgs.
+        needsExtra: null,
         query: `MATCH (h:HOST) WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
   AND h.ORGANIZACION = $org
 WITH $org AS org_key, h.IP AS ip, max(h.ORGANIZACION) AS p_org,
@@ -86,8 +105,9 @@ FOREACH (d IN CASE WHEN port IS NOT NULL THEN [1] ELSE [] END |
 RETURN DISTINCT org,nSub,rSub,uh,relOrg,relRango,relHost`
     },
     {
+        id: 'attackpath',
         title: "Camino de Ataque",
-        // $org filter + org-prefixed keys for critical host and origin nodes.
+        needsExtra: null,
         query: `WITH 1 AS dummy
 MATCH (o:ORIGEN)-[]-(h:HOST)
 WHERE h.DISCOVERY_SOURCE STARTS WITH 'active'
@@ -103,6 +123,54 @@ SET vh.IP=ip,vh.MAC=p_mac,vh.SISTEMA=p_sistema,vh.VENDOR=p_vendor,
 MERGE (vo:riskmap_Origen {id: p_org+'_'+ip+'_'+loc}) SET vo.name=loc
 MERGE (vh)-[rel:ACCESIBLE_DESDE]->(vo)
 RETURN vh,vo,rel`
+    },
+    {
+        id: 'attacknode',
+        title: "Nodo de Ataque",
+        needsExtra: 'attack-target',
+        // Dado un host objetivo (IP o hostname), pinta todos los orígenes
+        // desde los que se ha alcanzado, junto con sus servicios expuestos.
+        query: `WITH $target AS target
+MATCH (h:HOST)
+WHERE h.ORGANIZACION = $org
+  AND (h.IP = target OR toLower(coalesce(h.HOSTNAME,'')) = toLower(target))
+WITH $org AS org_key, h.IP AS ip,
+     max(h.MAC) AS p_mac, max(h.HOSTNAME) AS p_hostname,
+     max(h.SISTEMA) AS p_sistema, max(h.VENDOR) AS p_vendor,
+     max(h.OS) AS p_os, max(h.CRITICO) AS p_critico,
+     max(h.SUBRED) AS p_subred, max(h.NOMBRE_SUBRED) AS p_nsubred,
+     max(h.ORGANIZACION) AS p_org
+MERGE (ah:attackmap_HostObjetivo {id: org_key+'_'+ip})
+SET ah.IP=ip, ah.MAC=p_mac, ah.HOSTNAME=p_hostname,
+    ah.SISTEMA=p_sistema, ah.VENDOR=p_vendor, ah.OS=p_os,
+    ah.CRITICO=p_critico, ah.SUBRED=p_subred,
+    ah.NOMBRE_SUBRED=p_nsubred, ah.ORGANIZACION=p_org
+WITH org_key, ip, ah
+OPTIONAL MATCH (o:ORIGEN)-[]-(h:HOST {IP: ip})
+WHERE h.ORGANIZACION = $org
+WITH org_key, ah, ip, collect(DISTINCT COALESCE(o.LOCATION,'Desconocido')) AS locs
+FOREACH (loc IN [x IN locs WHERE x IS NOT NULL] |
+    MERGE (ao:attackmap_Origen {id: org_key+'_'+ah.IP+'_'+loc}) SET ao.name=loc
+    MERGE (ao)-[:LLEGA_A]->(ah)
+)
+WITH org_key, ah, ip
+OPTIONAL MATCH (h:HOST {IP: ip})-[]-(s:SERVICE)
+WHERE h.ORGANIZACION = $org
+WITH org_key, ah, ip, s.port AS port, s.protocol AS protocol,
+     max(s.name) AS p_name, max(s.product) AS p_product,
+     max(s.version) AS p_version, max(s.vulnerabilities) AS p_vuln
+FOREACH (d IN CASE WHEN port IS NOT NULL THEN [1] ELSE [] END |
+    MERGE (asrv:attackmap_Servicio {id: org_key+'_'+ip+'_'+toString(port)+'_'+protocol})
+    SET asrv.port=port, asrv.protocol=protocol, asrv.name=p_name,
+        asrv.product=p_product, asrv.version=p_version,
+        asrv.vulnerabilities=p_vuln,
+        asrv.etiqueta_visual=toString(port)+'/'+protocol
+    MERGE (ah)-[:EXPONE_PUERTO]->(asrv)
+)
+WITH ah
+OPTIONAL MATCH r1=(ao:attackmap_Origen)-[:LLEGA_A]->(ah)
+OPTIONAL MATCH r2=(ah)-[:EXPONE_PUERTO]->(asrv:attackmap_Servicio)
+RETURN ah, ao, asrv, r1, r2`
     }
 ];
 
@@ -129,6 +197,7 @@ const NODE_STYLES = {
     'nombredsubred':    { emoji: '🔗',  color: '#22c55e', size: 18 },
     'nombresubred':     { emoji: '🔗',  color: '#22c55e', size: 18 },
     'rangosubred':      { emoji: '📍',  color: '#16a34a', size: 16 },
+    'hostobjetivo':     { emoji: '🎯',  color: '#ef4444', size: 30 },
 };
 
 const LEGEND_ITEMS = [
@@ -139,6 +208,7 @@ const LEGEND_ITEMS = [
     { emoji: '🐛', color: '#f97316', label: 'Vulnerabilidad' },
     { emoji: '🌐', color: '#22c55e', label: 'Subred / Red' },
     { emoji: '⚠️', color: '#ef4444', label: 'Host Crítico' },
+    { emoji: '🎯', color: '#ef4444', label: 'Host Objetivo (Nodo de Ataque)' },
     { emoji: '🔗', color: '#22c55e', label: 'Nombre de subred' },
     { emoji: '📍', color: '#16a34a', label: 'Rango de subred' },
 ];
@@ -358,6 +428,20 @@ async function fetchOrganizations() {
 function onOrgSelected(org) {
     selectedOrg = org || null;
     setLeftPanelState(!!org);
+
+    // Reset extra controls — they're org-scoped
+    const visOriginSel   = document.getElementById('visibility-origin-select');
+    const attackTargetIn = document.getElementById('attack-target-input');
+    if (visOriginSel) {
+        visOriginSel.innerHTML = '<option value="">— Selecciona el origen —</option>';
+        visOriginSel.disabled  = true;
+    }
+    if (attackTargetIn) attackTargetIn.value = '';
+
+    // Re-evaluate the active preset so origins get re-fetched if needed
+    const querySel = document.getElementById('query-select');
+    if (querySel && querySel.value) querySel.dispatchEvent(new Event('change'));
+
     clearGraph();
     if (!org) return;
 
@@ -370,8 +454,45 @@ function onOrgSelected(org) {
 
 function setLeftPanelState(enabled) {
     document.getElementById('left-panel').classList.toggle('no-org', !enabled);
-    document.getElementById('run-query-btn').disabled =
-        !enabled || !document.getElementById('query-select').value;
+    // Run button gating is delegated to refreshRunButtonState() in bindEvents();
+    // here we just disable when no org so the button can't fire pre-selection.
+    if (!enabled) document.getElementById('run-query-btn').disabled = true;
+}
+
+// ──────────────────────────────────────────────────────────────────
+// VISIBILITY-ORIGIN POPULATION
+// Populates the #visibility-origin-select with the distinct ORIGEN
+// locations that have active discovery records for the selected org.
+// ──────────────────────────────────────────────────────────────────
+async function populateOriginsForOrg(org) {
+    const sel = document.getElementById('visibility-origin-select');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Cargando…</option>';
+    sel.disabled  = true;
+
+    if (!org || !isConnected) {
+        sel.innerHTML = '<option value="">— Selecciona el origen —</option>';
+        return;
+    }
+    try {
+        const result = await runCypher(
+            "MATCH (o:ORIGEN)-[]-(h:HOST) " +
+            "WHERE h.ORGANIZACION = $org AND h.DISCOVERY_SOURCE STARTS WITH 'active' " +
+            "RETURN DISTINCT COALESCE(o.LOCATION,'Desconocido') AS loc ORDER BY loc",
+            { org }
+        );
+        const locs = (result.data || []).map(d => d.row[0]).filter(Boolean);
+        sel.disabled = false;
+        if (!locs.length) {
+            sel.innerHTML = '<option value="">Sin orígenes activos</option>';
+            return;
+        }
+        sel.innerHTML = '<option value="">— Selecciona el origen —</option>' +
+            locs.map(l => `<option value="${escHtml(l)}">${escHtml(l)}</option>`).join('');
+    } catch (e) {
+        console.error('[Graph] populateOriginsForOrg:', e);
+        sel.innerHTML = '<option value="">Error cargando orígenes</option>';
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -833,17 +954,66 @@ function bindEvents() {
     });
     searchBtn.addEventListener('click', () => { clearTimeout(searchDebounce); searchNodes(searchInput.value); });
 
-    const querySel = document.getElementById('query-select');
+    const querySel        = document.getElementById('query-select');
+    const visOriginSel    = document.getElementById('visibility-origin-select');
+    const attackTargetIn  = document.getElementById('attack-target-input');
+    const extraHint       = document.getElementById('query-extra-hint');
+
+    function getActivePreset() {
+        const idx = parseInt(querySel.value, 10);
+        return (!isNaN(idx) && PRESET_QUERIES[idx]) ? PRESET_QUERIES[idx] : null;
+    }
+
+    function refreshRunButtonState() {
+        const preset = getActivePreset();
+        const baseEnabled = !!preset && !!selectedOrg;
+        let extraOk = true;
+        if (preset && preset.needsExtra === 'visibility-origin') {
+            extraOk = !!visOriginSel.value;
+        } else if (preset && preset.needsExtra === 'attack-target') {
+            extraOk = !!attackTargetIn.value.trim();
+        }
+        document.getElementById('run-query-btn').disabled = !(baseEnabled && extraOk);
+    }
+
+    function setExtraVisibility(preset) {
+        const showOrigin = preset && preset.needsExtra === 'visibility-origin';
+        const showTarget = preset && preset.needsExtra === 'attack-target';
+        visOriginSel.classList.toggle('hidden',   !showOrigin);
+        attackTargetIn.classList.toggle('hidden', !showTarget);
+
+        if (showOrigin) {
+            extraHint.textContent = 'Selecciona el origen desde el que ver la visibilidad';
+            populateOriginsForOrg(selectedOrg);
+        } else if (showTarget) {
+            extraHint.textContent = 'Indica IP o hostname del host objetivo';
+            attackTargetIn.value = '';
+        } else {
+            extraHint.textContent = '';
+        }
+    }
+
     querySel.addEventListener('change', () => {
-        document.getElementById('run-query-btn').disabled =
-            !querySel.value || !selectedOrg;
+        setExtraVisibility(getActivePreset());
+        refreshRunButtonState();
     });
 
+    visOriginSel.addEventListener('change',   refreshRunButtonState);
+    attackTargetIn.addEventListener('input',  refreshRunButtonState);
+
     document.getElementById('run-query-btn').addEventListener('click', () => {
-        const idx = parseInt(querySel.value, 10);
-        if (!isNaN(idx) && PRESET_QUERIES[idx]) {
-            execQuery(PRESET_QUERIES[idx].query, true, { org: selectedOrg || '' });
+        const preset = getActivePreset();
+        if (!preset) return;
+        const params = { org: selectedOrg || '' };
+        if (preset.needsExtra === 'visibility-origin') {
+            if (!visOriginSel.value) return;
+            params.location = visOriginSel.value;
+        } else if (preset.needsExtra === 'attack-target') {
+            const t = attackTargetIn.value.trim();
+            if (!t) return;
+            params.target = t;
         }
+        execQuery(preset.query, true, params);
     });
 
     document.getElementById('fit-btn').addEventListener('click',
