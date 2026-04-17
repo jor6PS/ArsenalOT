@@ -63,10 +63,14 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
             ph_h          = ','.join('?' * len(host_ids))  if host_ids else '0'
             ph_sr         = ','.join('?' * len(sr_ids))    if sr_ids   else '0'
 
+            org_rec = cursor.execute("SELECT * FROM organizations WHERE name = ?", (scan['organization_name'],)).fetchone()
+            pwndoc_rows = cursor.execute("SELECT * FROM pwndoc_audits WHERE UPPER(org_name) = UPPER(?)", (scan['organization_name'],)).fetchall()
+
             export_data = {
                 'type': 'scan',
                 'scan_id': scan_id,
                 'metadata': dict(scan),
+                'organization_record':  dict(org_rec) if org_rec else None,
                 'scans': [dict(scan)],
                 'scan_results':         [dict(r) for r in scan_results],
                 'hosts':                [dict(h) for h in cursor.execute(f"SELECT * FROM hosts WHERE id IN ({ph_h})", host_ids).fetchall()] if host_ids else [],
@@ -76,6 +80,7 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'passive_conversations': [dict(p) for p in cursor.execute("SELECT * FROM passive_conversations WHERE scan_id = ?", (scan_id,)).fetchall()],
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (scan['organization_name'],)).fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (scan['organization_name'],)).fetchall()],
+                'pwndoc_audits':        [dict(p) for p in pwndoc_rows],
             }
 
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
@@ -98,9 +103,13 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
             ph_h         = ','.join('?' * len(host_ids)) if host_ids else '0'
             ph_sr        = ','.join('?' * len(sr_ids))   if sr_ids   else '0'
 
+            org_rec = cursor.execute("SELECT * FROM organizations WHERE name = ?", (organization.upper(),)).fetchone()
+            pwndoc_rows = cursor.execute("SELECT * FROM pwndoc_audits WHERE UPPER(org_name) = UPPER(?)", (organization.upper(),)).fetchall()
+
             export_data = {
                 'type': 'location',
                 'organization': organization.upper(),
+                'organization_record':  dict(org_rec) if org_rec else None,
                 'location': location.upper(),
                 'scans':                [dict(s) for s in scans],
                 'scan_results':         [dict(r) for r in scan_results],
@@ -111,6 +120,7 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'passive_conversations': [dict(p) for p in cursor.execute(f"SELECT * FROM passive_conversations WHERE scan_id IN ({ph_s})", scan_ids).fetchall()] if scan_ids else [],
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (organization.upper(),)).fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (organization.upper(),)).fetchall()],
+                'pwndoc_audits':        [dict(p) for p in pwndoc_rows],
             }
 
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
@@ -131,6 +141,8 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
             ph_h         = ','.join('?' * len(host_ids)) if host_ids else '0'
             ph_sr        = ','.join('?' * len(sr_ids))   if sr_ids   else '0'
 
+            pwndoc_rows = cursor.execute("SELECT * FROM pwndoc_audits WHERE UPPER(org_name) = UPPER(?)", (organization.upper(),)).fetchall()
+
             export_data = {
                 'type': 'organization',
                 'organization':         dict(org_data) if org_data else None,
@@ -143,6 +155,7 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'passive_conversations': [dict(p) for p in cursor.execute(f"SELECT * FROM passive_conversations WHERE scan_id IN ({ph_s})", scan_ids).fetchall()] if scan_ids else [],
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (organization.upper(),)).fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (organization.upper(),)).fetchall()],
+                'pwndoc_audits':        [dict(p) for p in pwndoc_rows],
             }
 
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
@@ -172,6 +185,7 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'passive_conversations': [dict(p) for p in cursor.execute("SELECT * FROM passive_conversations").fetchall()],
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks").fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices").fetchall()],
+                'pwndoc_audits':        [dict(p) for p in cursor.execute("SELECT * FROM pwndoc_audits").fetchall()],
             }
 
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
@@ -314,12 +328,19 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
             
             elif export_data['type'] == 'location':
                 org_name = export_data.get('organization', '')
+                org_rec  = export_data.get('organization_record')
                 if org_name:
                     org_name = org_name.strip().upper()
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO organizations (name, description, created_at)
-                        VALUES (?, ?, ?)
-                    """, (org_name, None, datetime.now().isoformat()))
+                    if isinstance(org_rec, dict):
+                        cursor.execute("""
+                            INSERT OR IGNORE INTO organizations (name, description, created_at)
+                            VALUES (?, ?, ?)
+                        """, (org_name, org_rec.get('description'), org_rec.get('created_at') or datetime.now().isoformat()))
+                    else:
+                        cursor.execute("""
+                            INSERT OR IGNORE INTO organizations (name, description, created_at)
+                            VALUES (?, ?, ?)
+                        """, (org_name, None, datetime.now().isoformat()))
                     import_stats['organizations'] += 1
                 
                 _import_scan_data(cursor, export_data, import_stats)
@@ -342,13 +363,20 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
                 scan_meta = export_data.get('metadata', {})
                 org_name = scan_meta.get('organization_name', '')
                 location = scan_meta.get('location', '')
-                
+                org_rec  = export_data.get('organization_record')
+
                 if org_name:
                     org_name = org_name.strip().upper()
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO organizations (name, description, created_at)
-                        VALUES (?, ?, ?)
-                    """, (org_name, None, datetime.now().isoformat()))
+                    if isinstance(org_rec, dict):
+                        cursor.execute("""
+                            INSERT OR IGNORE INTO organizations (name, description, created_at)
+                            VALUES (?, ?, ?)
+                        """, (org_name, org_rec.get('description'), org_rec.get('created_at') or datetime.now().isoformat()))
+                    else:
+                        cursor.execute("""
+                            INSERT OR IGNORE INTO organizations (name, description, created_at)
+                            VALUES (?, ?, ?)
+                        """, (org_name, None, datetime.now().isoformat()))
                     import_stats['organizations'] += 1
                 
                 _import_scan_data(cursor, export_data, import_stats)
@@ -693,4 +721,20 @@ def _import_org_metadata(cursor, export_data: Dict, import_stats: Dict):
         if 'critical_devices' not in import_stats:
             import_stats['critical_devices'] = 0
         import_stats['critical_devices'] += 1
+
+    # Importar auditorías PwnDoc (mapping org → audit_id)
+    for pw in export_data.get('pwndoc_audits', []):
+        if not pw.get('org_name') or not pw.get('audit_id'):
+            continue
+        cursor.execute("""
+            INSERT INTO pwndoc_audits (org_name, audit_id, created_at)
+            VALUES (UPPER(?), ?, ?)
+            ON CONFLICT(org_name) DO UPDATE SET audit_id = excluded.audit_id
+        """, (
+            pw['org_name'], pw['audit_id'],
+            pw.get('created_at') or datetime.now().isoformat()
+        ))
+        if 'pwndoc_audits' not in import_stats:
+            import_stats['pwndoc_audits'] = 0
+        import_stats['pwndoc_audits'] += 1
 
