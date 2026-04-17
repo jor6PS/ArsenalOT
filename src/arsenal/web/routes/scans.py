@@ -352,14 +352,17 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 
                 print(f"[Scan {scan_id}] ✅ Descubiertos {len(discovered_ips)} hosts")
                 
-                # Guardar hosts descubiertos en la BD (con MAC y vendor si los aportó arp-scan)
+                # Guardar hosts descubiertos en la BD (con MAC y vendor si los aportó arp-scan).
+                # Diferenciamos la técnica para que la bitácora pueda indicar visibilidad
+                # por capa: con MAC → ARP (L2); sin MAC → ICMP/ping (L3).
                 for host_ip, host_meta in discovered_ips.items():
                     if is_scan_cancelled(): return
                     try:
+                        method = 'arp_discovery' if host_meta.get('mac_address') else 'icmp_discovery'
                         storage.save_discovered_host(
                             scan_id=scan_id,
                             host_ip=host_ip,
-                            discovery_method='host_discovery',
+                            discovery_method=method,
                             mac_address=host_meta.get('mac_address'),
                             vendor=host_meta.get('vendor'),
                         )

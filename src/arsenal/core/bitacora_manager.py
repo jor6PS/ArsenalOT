@@ -387,6 +387,58 @@ class BitacoraManager:
         hits = sorted(bitacoras.glob(f"*VE - {location}.md"))
         return hits[0] if hits else None
 
+    # Orden y etiquetas de las técnicas de descubrimiento. La capa indica
+    # qué tipo de visibilidad implica desde el origen hasta el segmento:
+    # L2 (mismo dominio de broadcast) vs L3 (alcance enrutado) vs L7.
+    _TECHNIQUE_ORDER = ('arp', 'ping', 'ports', 'passive', 'ioxid')
+    _TECHNIQUE_LABELS = {
+        'arp':     'ARP (L2)',
+        'ping':    'Ping (L3)',
+        'ports':   'Ports (L3)',
+        'passive': 'Pasivo',
+        'ioxid':   'IOXID (L7)',
+    }
+
+    @staticmethod
+    def _method_to_technique(discovery_method: Optional[str], has_mac: bool,
+                              has_port: bool = False) -> Optional[str]:
+        """
+        Traduce ``scan_results.discovery_method`` a una técnica de descubrimiento
+        normalizada. ``has_mac`` desambigua el valor legacy ``host_discovery``
+        (Phase 1 antes de separar ARP e ICMP): con MAC ⇒ ARP (L2);
+        sin MAC ⇒ ICMP/ping (L3).
+        """
+        m = (discovery_method or '').lower()
+        if m == 'arp_discovery':
+            return 'arp'
+        if m == 'icmp_discovery':
+            return 'ping'
+        if m == 'host_discovery':
+            return 'arp' if has_mac else 'ping'
+        if m == 'nmap_ping':
+            return 'ping'
+        if m == 'nmap_ports':
+            # Si el registro de nmap_ports no tiene puerto es un host marcado
+            # 'up' por nmap (ping efectivo); con puerto sí implica L3 + servicio.
+            return 'ports' if has_port else 'ping'
+        if m in ('passive_capture', 'specific_capture'):
+            return 'passive'
+        if m == 'ioxid':
+            return 'ioxid'
+        # 'enrichment', 'imported', 'nmap_import' no son técnicas de
+        # descubrimiento de visibilidad propias — se omiten.
+        return None
+
+    @classmethod
+    def _format_techniques(cls, techs: set) -> str:
+        """Renderiza un conjunto de técnicas en el orden canónico."""
+        if not techs:
+            return '—'
+        labels = [cls._TECHNIQUE_LABELS[t] for t in cls._TECHNIQUE_ORDER if t in techs]
+        # Conservar técnicas desconocidas (defensive) al final
+        labels += [t for t in sorted(techs) if t not in cls._TECHNIQUE_LABELS]
+        return ' · '.join(labels) if labels else '—'
+
     def _build_visibility_block(self, scan_id: int, db_path) -> str:  # kept for compat
         """Construye el bloque Markdown de visibilidad para un escaneo."""
         import sqlite3 as _sq
@@ -658,6 +710,7 @@ class BitacoraManager:
             # Agregar hosts y puertos de todos los escaneos de esta location
             all_hosts: Dict = {}   # ip → {hostname, mac, vendor}
             port_map:  Dict = {}   # ip → set of "port/svc"
+            host_techniques: Dict[str, set] = {}  # ip → {'arp', 'ping', 'ports', ...}
             scan_stats = []        # lista de resúmenes por escaneo
 
             for s in scans:
@@ -688,6 +741,7 @@ class BitacoraManager:
                     for r in ip_rows:
                         all_hosts.setdefault(r['ip'], {
                             'hostname': None, 'mac_address': None, 'vendor': None})
+                        host_techniques.setdefault(r['ip'], set()).add('passive')
                     for pr in conn.execute(
                         """SELECT DISTINCT dst_ip, dst_port, protocol
                              FROM passive_conversations
@@ -700,17 +754,18 @@ class BitacoraManager:
                         p_count += 1
                 else:
                     h_rows = conn.execute(
-                        """SELECT DISTINCT h.ip_address, h.hostname,
-                                  h.mac_address, h.vendor
+                        """SELECT h.ip_address, h.hostname,
+                                  h.mac_address, h.vendor,
+                                  sr.discovery_method, sr.port
                              FROM scan_results sr
                              JOIN hosts h ON h.id = sr.host_id
                             WHERE sr.scan_id = ?""",
                         (sid,)
                     ).fetchall()
-                    h_count = len(h_rows)
-                    p_count = 0
+                    seen_ips = set()
                     for h in h_rows:
                         ip = h['ip_address']
+                        seen_ips.add(ip)
                         if ip not in all_hosts or (h['mac_address'] and
                                 not all_hosts[ip]['mac_address']):
                             all_hosts[ip] = {
@@ -718,6 +773,14 @@ class BitacoraManager:
                                 'mac_address': h['mac_address'],
                                 'vendor':      h['vendor'],
                             }
+                        tech = self._method_to_technique(
+                            h['discovery_method'], bool(h['mac_address']),
+                            has_port=h['port'] is not None,
+                        )
+                        if tech:
+                            host_techniques.setdefault(ip, set()).add(tech)
+                    h_count = len(seen_ips)
+                    p_count = 0
                     for pr in conn.execute(
                         """SELECT h.ip_address, sr.port, sr.service_name
                              FROM scan_results sr
@@ -747,11 +810,13 @@ class BitacoraManager:
         # Clasificar hosts en redes conocidas / desconocidas
         net_count: Dict = {}
         unknown:   Dict = {}
+        net_methods: Dict[str, set] = {}   # range → set of techniques
         for ip_str, hdata in sorted(all_hosts.items()):
             try:
                 host_ip = _ipa.ip_address(ip_str)
             except ValueError:
                 continue
+            techs = host_techniques.get(ip_str, set())
             matched = False
             for n in known_nets:
                 if host_ip in n['obj']:
@@ -759,12 +824,14 @@ class BitacoraManager:
                         'name': n['name'], 'system': n['system'],
                         'hosts': [], 'known': True,
                     })['hosts'].append(ip_str)
+                    net_methods.setdefault(n['range'], set()).update(techs)
                     matched = True
                     break
             if not matched:
                 parts = ip_str.rsplit('.', 1)
                 subnet = f"{parts[0]}.0/24" if len(parts) == 2 else '0.0.0.0/0'
                 unknown.setdefault(subnet, []).append(ip_str)
+                net_methods.setdefault(subnet, set()).update(techs)
 
         total_hosts   = len(all_hosts)
         total_ports   = sum(len(v) for v in port_map.values())
@@ -809,14 +876,20 @@ class BitacoraManager:
             lines += [
                 '##### Redes con Visibilidad',
                 '',
-                '| Red | Nombre | Sistema | Tipo | Hosts únicos |',
-                '|:---|:---|:---|:---|---:|',
+                ('> _Visibilidad por capa — **ARP (L2)**: descubrimiento por capa 2'
+                 ' (mismo segmento broadcast); **Ping (L3)** / **Ports (L3)**:'
+                 ' visibilidad por capa 3 (enrutada); **Pasivo**: tráfico observado'
+                 ' en captura; **IOXID (L7)**: enumeración DCOM._'),
+                '',
+                '| Red | Nombre | Sistema | Tipo | Visibilidad | Hosts únicos |',
+                '|:---|:---|:---|:---|:---|---:|',
             ]
             for n in all_nets:
                 tipo = '✅ Conocida' if n['known'] else '⚠️ Desconocida'
+                vis = self._format_techniques(net_methods.get(n['range'], set()))
                 lines.append(
                     f"| `{n['range']}` | {n['name']} | {n['system']}"
-                    f" | {tipo} | {len(n['hosts'])} |"
+                    f" | {tipo} | {vis} | {len(n['hosts'])} |"
                 )
             lines.append('')
 
@@ -825,8 +898,8 @@ class BitacoraManager:
             lines += [
                 '##### Hosts Descubiertos',
                 '',
-                '| IP | Hostname | MAC / Vendor | Servicios detectados |',
-                '|:---|:---|:---|:---|',
+                '| IP | Hostname | MAC / Vendor | Visibilidad | Servicios detectados |',
+                '|:---|:---|:---|:---|:---|',
             ]
             for ip_str in sorted(all_hosts,
                                   key=lambda x: tuple(int(p) for p in x.split('.')
@@ -849,7 +922,10 @@ class BitacoraManager:
                 svc_str = ', '.join(ports[:8]) or '—'
                 if len(ports) > 8:
                     svc_str += ', …'
-                lines.append(f"| `{ip_str}` | `{hn}` | {mac_str} | {svc_str} |")
+                vis_str = self._format_techniques(host_techniques.get(ip_str, set()))
+                lines.append(
+                    f"| `{ip_str}` | `{hn}` | {mac_str} | {vis_str} | {svc_str} |"
+                )
             lines.append('')
 
         lines.append(VISIBILIDAD_END)
