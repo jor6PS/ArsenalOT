@@ -389,6 +389,7 @@
                         interfaces_json: r.interfaces_json,
                         is_critical: !!r.is_critical,
                         discovery_method: r.discovery_method,
+                        netexec: r.netexec || null,
                         ports: []
                     });
                 }
@@ -398,6 +399,7 @@
                 if (!host.vendor && r.vendor) host.vendor = r.vendor;
                 if (r.is_critical) host.is_critical = true;
                 if (r.interfaces_json && !host.interfaces_json) host.interfaces_json = r.interfaces_json;
+                if (r.netexec && !host.netexec) host.netexec = r.netexec;
                 if (r.port) {
                     host.ports.push({
                         port: r.port,
@@ -567,7 +569,7 @@
             if (consolidatedActive.length === 0) {
                 activeTbody.innerHTML = '<tr><td colspan="16" class="empty">No hay resultados activos</td></tr>';
             } else {
-                const methodLabels = { 'nmap': '🔌 Nmap', 'passive_capture': '🎧 Captura Pasiva', 'host_discovery': '🔍 Host Discovery', 'arp_scan': '🔍 ARP Scan', 'icmp_ping': '🔍 ICMP Ping', 'syn_scan': '🔍 SYN Scan' };
+                const methodLabels = { 'nmap': '🔌 Nmap', 'passive_capture': '🎧 Captura Pasiva', 'host_discovery': '🔍 Host Discovery', 'arp_scan': '🔍 ARP Scan', 'icmp_ping': '🔍 ICMP Ping', 'syn_scan': '🔍 SYN Scan', 'netexec': '🔓 NetExec' };
                 activeTbody.innerHTML = consolidatedActive.map(row => {
                     // Interfaces
                     let interfacesHtml = '-';
@@ -602,7 +604,13 @@
                     const isCritical = row.is_critical || criticalIps.has(row.ip_address);
                     const rowStyle = isCritical ? ' style="border-left: 3px solid #ef4444; background: rgba(239,68,68,0.05);"' : '';
                     const criticalBadge = isCritical ? ' <span title="Dispositivo Crítico" style="color:#ef4444;font-size:0.9rem;">🚨</span>' : '';
-                    const discoveryDisplay = methodLabels[row.discovery_method] || row.discovery_method || '-';
+                    let discoveryDisplay = methodLabels[row.discovery_method] || row.discovery_method || '-';
+                    if (row.netexec) {
+                        const nxcKey = `nxc_${row.ip_address}`;
+                        window.__nxcCache = window.__nxcCache || {};
+                        window.__nxcCache[nxcKey] = { ip: row.ip_address, hostname: row.hostname, data: row.netexec };
+                        discoveryDisplay += ` <button class="btn-evidence" style="margin-left:.4rem;" title="Datos NetExec" onclick="showNetexec('${nxcKey}')">🔓 NX</button>`;
+                    }
 
                     return `<tr${rowStyle}>
                         <td>${row.ip_address || '-'}${criticalBadge}</td>
@@ -1161,6 +1169,77 @@
                     modal.remove();
                 }
             });
+        }
+
+        function showNetexec(cacheKey) {
+            const entry = (window.__nxcCache || {})[cacheKey];
+            if (!entry) return;
+            const { ip, hostname, data } = entry;
+
+            const escape = (s) => String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            // Protocols block
+            const protoRows = Object.entries(data.protocols || {}).map(([proto, info]) => {
+                const props = Object.entries(info)
+                    .filter(([k]) => k !== 'port')
+                    .map(([k, v]) => `<span style="margin-right:.6rem;"><b>${escape(k)}</b>=${escape(v)}</span>`)
+                    .join(' ');
+                return `<tr><td style="padding:.25rem .6rem;"><b>${escape(proto.toUpperCase())}</b></td>
+                        <td style="padding:.25rem .6rem;">:${escape(info.port || '?')}</td>
+                        <td style="padding:.25rem .6rem;font-size:.82rem;">${props}</td></tr>`;
+            }).join('') || '<tr><td colspan="3" style="color:#94a3b8;padding:.4rem;">—</td></tr>';
+
+            // Shares
+            const sharesRows = (data.shares || []).map(s =>
+                `<tr><td style="padding:.2rem .6rem;font-family:monospace;">${escape(s.name)}</td>
+                     <td style="padding:.2rem .6rem;">${s.read ? '✅R' : '·'} ${s.write ? '✏️W' : '·'}</td>
+                     <td style="padding:.2rem .6rem;font-size:.78rem;color:#94a3b8;">${escape(s.remark || '')}</td>
+                     <td style="padding:.2rem .6rem;font-size:.78rem;">${escape(s.user || '')}</td></tr>`
+            ).join('') || '<tr><td colspan="4" style="color:#94a3b8;padding:.4rem;">—</td></tr>';
+
+            // Loot files
+            const lootRows = (data.loot_files || []).map(l =>
+                `<tr><td style="padding:.2rem .6rem;"><span class="port-badge">${escape(l.kind)}</span></td>
+                     <td style="padding:.2rem .6rem;font-size:.78rem;">${escape(l.timestamp)}</td>
+                     <td style="padding:.2rem .6rem;font-family:monospace;font-size:.78rem;">${escape(l.path)}</td></tr>`
+            ).join('') || '<tr><td colspan="3" style="color:#94a3b8;padding:.4rem;">—</td></tr>';
+
+            const adminPills = (data.admin_users || []).map(u =>
+                `<span class="port-badge" style="background:#dc2626;color:#fff;">${escape(u)}</span>`).join(' ') || '—';
+            const loggedInPills = (data.loggedin_users || []).map(u =>
+                `<span class="port-badge">${escape(u)}</span>`).join(' ') || '—';
+
+            const modal = document.createElement('div');
+            modal.className = 'evidence-modal';
+            modal.innerHTML = `
+            <div class="modal-content" style="max-width: 900px;">
+                <div class="modal-header">
+                    <h3>🔓 NetExec — ${escape(ip)} ${hostname ? '· ' + escape(hostname) : ''}</h3>
+                    <button class="modal-close" onclick="this.closest('.evidence-modal').remove()">×</button>
+                </div>
+                <div class="modal-body" style="max-height:75vh;overflow:auto;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem;">
+                        <div><b>Dominio:</b> ${escape(data.domain || '—')}</div>
+                        <div><b>SO:</b> ${escape(data.os || '—')}</div>
+                    </div>
+
+                    <h4 style="margin:.6rem 0 .3rem;">Protocolos</h4>
+                    <table style="width:100%;border-collapse:collapse;"><tbody>${protoRows}</tbody></table>
+
+                    <h4 style="margin:1rem 0 .3rem;">Recursos compartidos (${(data.shares||[]).length})</h4>
+                    <table style="width:100%;border-collapse:collapse;"><tbody>${sharesRows}</tbody></table>
+
+                    <h4 style="margin:1rem 0 .3rem;">Usuarios admin / Logged-in</h4>
+                    <div style="margin-bottom:.5rem;"><b>Admin:</b> ${adminPills}</div>
+                    <div><b>Logged-in:</b> ${loggedInPills}</div>
+
+                    <h4 style="margin:1rem 0 .3rem;">Loot files (${(data.loot_files||[]).length})</h4>
+                    <table style="width:100%;border-collapse:collapse;"><tbody>${lootRows}</tbody></table>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
         }
     </script>
 

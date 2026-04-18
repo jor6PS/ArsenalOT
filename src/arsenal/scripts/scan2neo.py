@@ -52,7 +52,8 @@ def connect_to_neo4j(ip: str, username: str = None, password: str = None) -> Gra
             return Graph(f"bolt://{ip}:7687", auth=(username, password))
         raise e
 
-def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[Dict]:
+def get_scans_data(db_path: str, org: str = None, location: str = None,
+                   scan_id: int = None) -> List[Dict]:
     """Obtiene los datos de los escaneos de la base de datos."""
     # Copiar la base de datos y sus archivos temporales a un directorio temporal
     temp_dir = tempfile.mkdtemp()
@@ -102,7 +103,7 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
     except: pass
 
     # 2. Filtrar escaneos (incluir pasivos aunque no estén 'completed' para mayor visibilidad)
-    query_scans = "SELECT * FROM scans WHERE (status = 'completed' OR (scan_mode = 'passive' AND status != 'failed'))"
+    query_scans = "SELECT * FROM scans WHERE (status = 'completed' OR (scan_mode IN ('passive','netexec') AND status != 'failed'))"
     params = []
     if org:
         query_scans += " AND UPPER(organization_name) = UPPER(?)"
@@ -110,7 +111,10 @@ def get_scans_data(db_path: str, org: str = None, location: str = None) -> List[
     if location:
         query_scans += " AND UPPER(location) = UPPER(?)"
         params.append(location)
-    
+    if scan_id:
+        query_scans += " AND id = ?"
+        params.append(scan_id)
+
     scans = cursor.execute(query_scans, params).fetchall()
     all_data = []
 
@@ -578,6 +582,154 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
             if h['ip'] not in ip_nodes_map: ip_nodes_map[h['ip']] = []
             # Guardamos solo el source para correlacionar después
             ip_nodes_map[h['ip']].append(discovery_source)
+
+def _load_netexec_data(db_path: str, scan_id: int) -> Dict:
+    """Lee enrichments NETEXEC y credenciales asociadas a un escaneo."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    out = {'hosts': {}, 'credentials': []}
+    try:
+        rows = conn.execute("""
+            SELECT h.ip_address AS ip, e.data
+            FROM enrichments e
+            JOIN scan_results sr ON sr.id = e.scan_result_id
+            JOIN hosts h ON h.id = sr.host_id
+            WHERE sr.scan_id = ? AND e.enrichment_type = 'NETEXEC'
+        """, (scan_id,)).fetchall()
+        for r in rows:
+            try:
+                payload = json.loads(r['data']) if r['data'] else {}
+            except Exception:
+                payload = {}
+            out['hosts'][r['ip']] = payload
+        cred_rows = conn.execute("""
+            SELECT domain, username, password, credtype, source_protocol, source_host_ip
+            FROM credentials WHERE scan_id = ?
+        """, (scan_id,)).fetchall()
+        out['credentials'] = [dict(r) for r in cred_rows]
+    except Exception as e:
+        print(f"⚠️  Error leyendo enriquecimientos NETEXEC: {e}")
+    finally:
+        conn.close()
+    return out
+
+
+def _push_netexec_to_neo4j(graph, org_name: str, discovery_source: str,
+                            nxc_data: Dict):
+    """Crea/actualiza nodos :CREDENCIAL y enriquece :HOST con metadatos NetExec."""
+    # 1) Enriquecer hosts con propiedades nxc-específicas
+    host_updates = []
+    for ip, payload in (nxc_data.get('hosts') or {}).items():
+        protocols = payload.get('protocols') or {}
+        smb = protocols.get('smb') or {}
+        ldap = protocols.get('ldap') or {}
+        rdp = protocols.get('rdp') or {}
+        host_updates.append({
+            'IP': ip,
+            'NXC_DOMAIN': payload.get('domain') or '',
+            'NXC_OS': payload.get('os') or '',
+            'NXC_SMB_SIGNING': str(smb.get('signing')) if smb else '',
+            'NXC_SMBV1': str(smb.get('smbv1')) if smb else '',
+            'NXC_SMB_DC': str(smb.get('dc')) if smb else '',
+            'NXC_RDP_NLA': str(rdp.get('nla')) if rdp else '',
+            'NXC_LDAP_SIGNING_REQUIRED': str(ldap.get('signing_required')) if ldap else '',
+            'NXC_SHARES': ', '.join(s.get('name', '') for s in (payload.get('shares') or [])),
+            'NXC_ADMIN_USERS': ', '.join(payload.get('admin_users') or []),
+            'NXC_LOOT_FILES': str(len(payload.get('loot_files') or [])),
+        })
+    if host_updates:
+        graph.run("""
+            UNWIND $data AS row
+            MATCH (h:HOST {ORGANIZACION: $org, IP: row.IP, DISCOVERY_SOURCE: $ds})
+            SET h += row
+        """, data=host_updates, org=org_name, ds=discovery_source)
+
+    # 2) Crear nodos :CREDENCIAL y relaciones
+    cred_rows = []
+    for c in (nxc_data.get('credentials') or []):
+        if not c.get('username'):
+            continue
+        domain = (c.get('domain') or '').strip()
+        username = c['username']
+        password = c.get('password') or ''
+        credtype = c.get('credtype') or ''
+        cred_rows.append({
+            'ID': f"{org_name}|{domain}|{username}|{credtype}|{password[:32]}",
+            'DOMINIO': domain,
+            'USUARIO': username,
+            'PASSWORD': password,
+            'TIPO': credtype,
+            'PROTOCOLO_ORIGEN': c.get('source_protocol') or '',
+            'HOST_ORIGEN': c.get('source_host_ip') or '',
+            'ORGANIZACION': org_name,
+        })
+
+    if cred_rows:
+        graph.run("""
+            UNWIND $data AS row
+            MERGE (c:CREDENCIAL {ID: row.ID})
+            SET c += row
+            WITH c, row
+            MATCH (org:ORGANIZACION {name: $org})
+            MERGE (org)-[:HAS_CREDENTIAL]->(c)
+        """, data=cred_rows, org=org_name)
+
+        # Vincular credencial → host origen si aplica
+        graph.run("""
+            UNWIND $data AS row
+            WITH row WHERE row.HOST_ORIGEN <> ''
+            MATCH (c:CREDENCIAL {ID: row.ID})
+            MATCH (h:HOST {ORGANIZACION: $org, IP: row.HOST_ORIGEN, DISCOVERY_SOURCE: $ds})
+            MERGE (c)-[:PILLAGED_FROM]->(h)
+        """, data=cred_rows, org=org_name, ds=discovery_source)
+
+    return {
+        'hosts_updated': len(host_updates),
+        'credentials_pushed': len(cred_rows),
+    }
+
+
+def export_single_scan(scan_id: int) -> Dict:
+    """Exporta un único escaneo a Neo4j. Pensado para invocarse desde el web API.
+
+    Lee la conexión de Neo4j desde variables de entorno (NEO4J_HOST, NEO4J_USERNAME,
+    NEO4J_PASSWORD).
+    """
+    db_path = os.getenv("ARSENAL_DB_PATH", "results/scans.db")
+    if not Path(db_path).exists():
+        return {'ok': False, 'error': f'BD no encontrada: {db_path}'}
+
+    host = os.getenv("NEO4J_HOST", "127.0.0.1")
+    user = os.getenv("NEO4J_USERNAME", "neo4j")
+    password = os.getenv("NEO4J_PASSWORD", "neo4j123")
+
+    try:
+        graph = connect_to_neo4j(host, user, password)
+    except Exception as e:
+        return {'ok': False, 'error': f'Neo4j: {e}'}
+
+    scans_data = get_scans_data(db_path, scan_id=scan_id)
+    if not scans_data:
+        return {'ok': False, 'error': f'Scan {scan_id} no encontrado o no completado'}
+
+    process_to_neo4j_v2(graph, scans_data)
+
+    scan = scans_data[0]
+    nxc = _load_netexec_data(db_path, scan_id)
+    nxc_stats = _push_netexec_to_neo4j(
+        graph,
+        scan['organization_name'].upper(),
+        f"{scan['scan_mode']}:{scan['id']}",
+        nxc,
+    )
+
+    return {
+        'ok': True,
+        'scan_id': scan_id,
+        'hosts_in_scan': len(scan['hosts']),
+        **nxc_stats,
+    }
+
 
 def main():
     parser = argparse.ArgumentParser(description='Importar resultados de escaneos a Neo4j (Consolidado - Remodelado)')

@@ -9,6 +9,9 @@ services:
     privileged: true
     volumes:
       - ./results:/app/results
+      # Mount host's NetExec workspaces read-only so the exploitation tab can
+      # import nxcdb data. HOME defaults to the invoking user's home.
+      - ${HOME}/.nxc:/root/.nxc:ro
     env_file:
       - .env
     restart: unless-stopped

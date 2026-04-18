@@ -433,6 +433,28 @@ class ScanStorage:
             )
         """)
 
+        # Tabla de credenciales (NetExec / pentest loot)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS credentials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_id INTEGER,
+                organization_name TEXT NOT NULL,
+                domain TEXT,
+                username TEXT NOT NULL,
+                password TEXT,
+                credtype TEXT,
+                source_protocol TEXT,
+                source_host_ip TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE SET NULL,
+                UNIQUE(organization_name, domain, username, password, credtype)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_credentials_org
+            ON credentials(organization_name)
+        """)
+
         conn.commit()
         conn.close()
     
@@ -1135,18 +1157,28 @@ class ScanStorage:
     def save_enrichment(self, scan_id: int, host_ip: str, port: int,
                        protocol: str, enrichment_type: str, data: str,
                        file_path: str = None):
-        """Guarda un enriquecimiento (screenshot, banner, etc.)."""
+        """Guarda un enriquecimiento (screenshot, banner, etc.).
+        Si port/protocol son None, busca el registro 'host descubierto' (port IS NULL)."""
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
         cursor = conn.cursor()
-        
-        # Obtener scan_result_id
-        result = cursor.execute("""
-            SELECT sr.id FROM scan_results sr
-            JOIN hosts h ON h.id = sr.host_id
-            WHERE sr.scan_id = ? AND h.ip_address = ? 
-              AND sr.port = ? AND sr.protocol = ?
-        """, (scan_id, host_ip, port, protocol)).fetchone()
+
+        # Obtener scan_result_id (NULL-aware match)
+        if port is None and protocol is None:
+            result = cursor.execute("""
+                SELECT sr.id FROM scan_results sr
+                JOIN hosts h ON h.id = sr.host_id
+                WHERE sr.scan_id = ? AND h.ip_address = ?
+                  AND sr.port IS NULL AND sr.protocol IS NULL
+                LIMIT 1
+            """, (scan_id, host_ip)).fetchone()
+        else:
+            result = cursor.execute("""
+                SELECT sr.id FROM scan_results sr
+                JOIN hosts h ON h.id = sr.host_id
+                WHERE sr.scan_id = ? AND h.ip_address = ?
+                  AND sr.port = ? AND sr.protocol = ?
+            """, (scan_id, host_ip, port, protocol)).fetchone()
         
         if result:
             scan_result_id = result[0]
@@ -2015,7 +2047,7 @@ class ScanStorage:
         """Obtiene estadísticas de un escaneo pasivo."""
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         cursor = conn.cursor()
-        
+
         try:
             # Hosts únicos (origen o destino)
             hosts_query = """
@@ -2026,15 +2058,241 @@ class ScanStorage:
                 )
             """
             hosts_count = cursor.execute(hosts_query, (scan_id, scan_id)).fetchone()[0]
-            
+
             # Número de conversaciones
             conv_count = cursor.execute(
                 "SELECT COUNT(*) FROM passive_conversations WHERE scan_id = ?", (scan_id,)
             ).fetchone()[0]
-            
+
             return {
                 "hosts_count": hosts_count,
                 "conversations_count": conv_count
             }
         finally:
             conn.close()
+
+    # ─────────────── Credenciales / NetExec import ───────────────
+
+    def save_credentials_bulk(self, organization: str, credentials: List[Dict],
+                              scan_id: Optional[int] = None) -> int:
+        """Inserta credenciales en bloque (UPSERT por (org, domain, user, pwd, type)).
+
+        Args:
+            organization: nombre de la organización (se normaliza a UPPER).
+            credentials: lista de dicts con {domain, username, password, credtype,
+                source_protocol, source_host_ip}.
+            scan_id: opcional, escaneo origen.
+
+        Returns:
+            número de credenciales nuevas insertadas (ignorando duplicadas).
+        """
+        if not credentials:
+            return 0
+
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys = ON")
+        cursor = conn.cursor()
+        inserted = 0
+        try:
+            for c in credentials:
+                username = c.get('username')
+                if not username:
+                    continue
+                try:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO credentials
+                            (scan_id, organization_name, domain, username, password,
+                             credtype, source_protocol, source_host_ip, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        scan_id, organization.upper(),
+                        c.get('domain'), username, c.get('password'),
+                        c.get('credtype'), c.get('source_protocol'),
+                        c.get('source_host_ip'), datetime.now()
+                    ))
+                    if cursor.rowcount > 0:
+                        inserted += 1
+                except sqlite3.IntegrityError:
+                    pass
+            conn.commit()
+            return inserted
+        finally:
+            conn.close()
+
+    def get_credentials(self, organization: str,
+                        scan_id: Optional[int] = None) -> List[Dict]:
+        """Devuelve las credenciales de una organización (opcional: por scan)."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        try:
+            if scan_id:
+                rows = conn.execute("""
+                    SELECT * FROM credentials
+                    WHERE organization_name = ? AND scan_id = ?
+                    ORDER BY domain, username
+                """, (organization.upper(), scan_id)).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT * FROM credentials
+                    WHERE organization_name = ?
+                    ORDER BY domain, username
+                """, (organization.upper(),)).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def import_netexec_data(self, organization: str, location: str,
+                            workspace_data: Dict,
+                            created_by: str = 'netexec_import') -> Dict:
+        """Persiste un import de NetExec como un nuevo escaneo.
+
+        ``workspace_data`` debe ser el dict producido por
+        ``netexec_importer.import_workspace`` (con NetExecHost / NetExecCredential
+        como objetos, NO serializado).
+
+        Returns:
+            {scan_id, hosts_imported, ports_imported, credentials_inserted}
+        """
+        from arsenal.core.scanners.netexec_importer import (
+            NetExecHost, NetExecCredential, PROTOCOL_PORT_MAP
+        )
+
+        hosts_dict = workspace_data.get('hosts', {}) or {}
+        creds_list = workspace_data.get('credentials', []) or []
+        ws_name = workspace_data.get('workspace', 'default')
+
+        if not hosts_dict and not creds_list:
+            return {'scan_id': None, 'hosts_imported': 0,
+                    'ports_imported': 0, 'credentials_inserted': 0}
+
+        # Determinar target_range a partir de las IPs vistas
+        ips = sorted(hosts_dict.keys())
+        target_range = ', '.join(ips[:5]) + (f' (+{len(ips)-5} más)' if len(ips) > 5 else '')
+        if not target_range:
+            target_range = f'NetExec workspace: {ws_name}'
+
+        scan_id = self.start_scan(
+            organization=organization,
+            location=location,
+            scan_type='netexec_import',
+            target_range=target_range,
+            created_by=created_by,
+            scan_mode='netexec',
+            nmap_command=f'netexec workspace="{ws_name}"',
+        )
+
+        # Construir entradas para guardado en bloque
+        results: List[Dict] = []
+        for ip, host in hosts_dict.items():
+            host_obj: NetExecHost = host
+            ts = host_obj.last_seen or datetime.now()
+
+            # Una entrada base sin puerto (host descubierto)
+            base_host_data = {
+                'hostnames': [host_obj.hostname] if host_obj.hostname else [],
+                'os': {'name': host_obj.os} if host_obj.os else None,
+            }
+
+            results.append({
+                'host_ip': ip,
+                'port': None,
+                'protocol': None,
+                'state': 'up',
+                'service_data': {},
+                'hostname': host_obj.hostname,
+                'host_data': base_host_data,
+                'discovery_method': 'netexec',
+                'discovered_at': ts,
+            })
+
+            # Una entrada por protocolo detectado
+            for proto, info in (host_obj.protocols or {}).items():
+                port_default, transport, service_name = PROTOCOL_PORT_MAP.get(
+                    proto, (0, 'tcp', proto))
+                port = info.get('port') or port_default
+                product_bits = []
+                if info.get('signing') is not None:
+                    product_bits.append(f"signing={info['signing']}")
+                if info.get('smbv1') is not None:
+                    product_bits.append(f"smbv1={info['smbv1']}")
+                if info.get('nla') is not None:
+                    product_bits.append(f"nla={info['nla']}")
+                if info.get('signing_required') is not None:
+                    product_bits.append(f"signing_required={info['signing_required']}")
+                product = '; '.join(product_bits) if product_bits else None
+
+                results.append({
+                    'host_ip': ip,
+                    'port': port,
+                    'protocol': transport,
+                    'state': 'open',
+                    'service_data': {
+                        'name': service_name,
+                        'product': product,
+                        'extrainfo': info.get('banner'),
+                    },
+                    'hostname': host_obj.hostname,
+                    'host_data': base_host_data,
+                    'discovery_method': 'netexec',
+                    'discovered_at': ts,
+                })
+
+        ok = self.save_host_results_bulk(scan_id, results)
+        if not ok:
+            print("⚠️  save_host_results_bulk reportó error parcial en import nxc")
+
+        # Adjuntar enriquecimiento NETEXEC por host (port=NULL)
+        for ip, host in hosts_dict.items():
+            host_obj: NetExecHost = host
+            payload = {
+                'protocols': host_obj.protocols,
+                'shares': host_obj.shares,
+                'admin_users': host_obj.admin_users,
+                'loggedin_users': host_obj.loggedin_users,
+                'loot_files': [{
+                    'kind': l['kind'],
+                    'path': l['path'],
+                    'timestamp': l['timestamp'].isoformat(),
+                    'size': l.get('size'),
+                } for l in (host_obj.loot_files or [])],
+                'domain': host_obj.domain,
+                'os': host_obj.os,
+            }
+            try:
+                self.save_enrichment(
+                    scan_id=scan_id, host_ip=ip, port=None, protocol=None,
+                    enrichment_type='NETEXEC',
+                    data=json.dumps(payload, default=str),
+                    file_path=None,
+                )
+            except Exception as e:
+                print(f"⚠️  No se pudo guardar enrichment NETEXEC para {ip}: {e}")
+
+        # Persistir credenciales
+        cred_dicts: List[Dict] = []
+        for c in creds_list:
+            if isinstance(c, NetExecCredential):
+                cred_dicts.append({
+                    'domain': c.domain,
+                    'username': c.username,
+                    'password': c.password,
+                    'credtype': c.credtype,
+                    'source_protocol': c.source_protocol,
+                    'source_host_ip': c.source_host_ip,
+                })
+            elif isinstance(c, dict):
+                cred_dicts.append(c)
+        creds_inserted = self.save_credentials_bulk(organization, cred_dicts, scan_id=scan_id)
+
+        # Cerrar el scan
+        self.complete_scan(scan_id,
+                           hosts_count=len(hosts_dict),
+                           ports_count=sum(len(h.protocols or {}) for h in hosts_dict.values()))
+
+        return {
+            'scan_id': scan_id,
+            'hosts_imported': len(hosts_dict),
+            'ports_imported': sum(len(h.protocols or {}) for h in hosts_dict.values()),
+            'credentials_inserted': creds_inserted,
+        }

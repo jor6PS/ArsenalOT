@@ -78,7 +78,10 @@ from arsenal.web.routes.api import router as api_router
 from arsenal.web.routes import scans as scans_module
 from arsenal.web.routes.scans import router as scans_router
 from arsenal.web.routes.export_import import router as export_import_router
-from arsenal.web.routes.exploitation import router as exploitation_router
+from arsenal.web.routes.exploitation import (
+    router as exploitation_router,
+    nxc_router as exploitation_nxc_router,
+)
 from arsenal.web.routes.bitacora import router as bitacora_router
 from arsenal.web.routes.pwndoc import router as pwndoc_router
 
@@ -88,6 +91,7 @@ app.include_router(api_router)
 app.include_router(scans_router)
 app.include_router(export_import_router)
 app.include_router(exploitation_router)
+app.include_router(exploitation_nxc_router)
 app.include_router(bitacora_router)
 app.include_router(pwndoc_router)
 
@@ -905,6 +909,25 @@ async def get_results(
         result_dict['has_source_code'] = any(e['enrichment_type'] == 'Websource' for e in enrichments)
         result_dict['screenshot_path'] = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Screenshot'), None)
         result_dict['source_code_path'] = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Websource'), None)
+
+        # Adjuntar enriquecimiento NetExec (lo asociamos al host completo, no al puerto)
+        nxc_row = cursor.execute("""
+            SELECT e.data
+            FROM enrichments e
+            JOIN scan_results sr2 ON sr2.id = e.scan_result_id
+            WHERE e.enrichment_type = 'NETEXEC'
+              AND sr2.scan_id = ?
+              AND sr2.host_id = (SELECT host_id FROM scan_results WHERE id = ?)
+            ORDER BY e.id DESC LIMIT 1
+        """, (result_dict['scan_id'], result_dict['scan_result_id'])).fetchone()
+        if nxc_row and nxc_row['data']:
+            try:
+                result_dict['netexec'] = json.loads(nxc_row['data'])
+            except Exception:
+                result_dict['netexec'] = None
+        else:
+            result_dict['netexec'] = None
+
         enriched_results.append(result_dict)
 
     # 2. Si pedimos un scan específico, no mezclamos pasivos aquí (se hará en otro endpoint)

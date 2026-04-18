@@ -1474,3 +1474,166 @@ class BitacoraManager:
         )
         note_path.write_text(new_content, encoding="utf-8")
         _open_permissions(note_path)
+
+    # ─────────────────────────────────────────────────────────
+    # Credenciales — bloque gestionado en CREDENCIALES.md
+    # ─────────────────────────────────────────────────────────
+
+    CREDS_START = '<!-- ARSENAL:CREDENCIALES-NETEXEC -->'
+    CREDS_END   = '<!-- /ARSENAL:CREDENCIALES-NETEXEC -->'
+
+    # Protocolos OT vs IT — todo lo que NetExec descubre es IT, pero permitimos
+    # que el caller indique IT/OT vía el dict de credencial (campo opcional).
+    _IT_PROTOCOLS = {'smb', 'ssh', 'ldap', 'mssql', 'winrm', 'rdp', 'ftp',
+                     'wmi', 'vnc', 'nfs'}
+
+    def _get_creds_note_path(self, org_name: str) -> Path:
+        """Ruta de CREDENCIALES.md dentro de la org (la crea si no existe)."""
+        org_dir   = self.get_org_dir(org_name)
+        note_path = org_dir / "PENTEST IT OT" / "Bitacoras" / "NOTAS" / "CREDENCIALES.md"
+        note_path.parent.mkdir(parents=True, exist_ok=True)
+        _open_permissions(note_path.parent)
+        if not note_path.exists():
+            note_path.write_text("## IT\n\n## OT\n", encoding="utf-8")
+            _open_permissions(note_path)
+        return note_path
+
+    @staticmethod
+    def _md_escape(value) -> str:
+        if value is None:
+            return ''
+        s = str(value)
+        return s.replace('|', '\\|').replace('\n', ' ').strip()
+
+    @staticmethod
+    def _mask_password(value: Optional[str], credtype: Optional[str]) -> str:
+        """Devuelve la password/hash tal cual si es hash, o `***` si es plaintext.
+
+        La bitácora vive en el vault del usuario y es visible; preferimos no
+        exponer plaintext directamente. El usuario siempre puede consultar la
+        password cruda en `arsenal.db` (tabla credentials) si lo necesita.
+        """
+        if not value:
+            return ''
+        if (credtype or '').lower() == 'hash':
+            # Hashes (NTLM, etc.) son útiles tal cual para PtH
+            return value
+        # plaintext: mostrar parcial — primeros 2 chars + ***
+        if len(value) <= 2:
+            return '***'
+        return f"{value[:2]}{'*' * (len(value) - 2)}"
+
+    def add_credentials_to_note(
+        self,
+        org_name: str,
+        credentials: List[Dict],
+        scan_id: Optional[int] = None,
+    ) -> Dict:
+        """
+        Renderiza un bloque ARSENAL:CREDENCIALES-NETEXEC en CREDENCIALES.md
+        bajo la sección ## IT, con una tabla por dominio.
+
+        Idempotente: si el bloque ya existe lo reemplaza completamente con la
+        nueva lista (para mantener una vista cumulativa pasa el resultado de
+        ``storage.get_credentials(org_name)``).
+
+        ``credentials`` es lista de dicts con claves:
+            domain, username, password, credtype, source_protocol, source_host_ip
+        """
+        from datetime import datetime as _dt
+
+        note_path = self._get_creds_note_path(org_name)
+        content   = note_path.read_text(encoding="utf-8")
+
+        # Deduplicar por (domain, username, password, credtype)
+        seen = set()
+        deduped = []
+        for c in credentials or []:
+            key = (
+                (c.get('domain') or '').lower(),
+                (c.get('username') or '').lower(),
+                c.get('password') or '',
+                (c.get('credtype') or '').lower(),
+            )
+            if not c.get('username') or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(c)
+
+        # Agrupar por dominio (vacío → "WORKGROUP")
+        by_domain: Dict[str, List[Dict]] = {}
+        for c in deduped:
+            dom = (c.get('domain') or 'WORKGROUP').strip() or 'WORKGROUP'
+            by_domain.setdefault(dom, []).append(c)
+
+        ts = _dt.now().strftime("%Y-%m-%d %H:%M")
+        scan_tag = f" (scan #{scan_id})" if scan_id else ""
+
+        # Construir cuerpo del bloque
+        if not deduped:
+            block_body = (
+                f"\n### Credenciales NetExec{scan_tag}\n\n"
+                f"_Sin credenciales — última actualización {ts}._\n\n"
+            )
+        else:
+            lines = [f"\n### Credenciales NetExec{scan_tag}\n"]
+            lines.append(f"_Total: {len(deduped)} credenciales · "
+                         f"última actualización {ts}_\n")
+            for dom in sorted(by_domain.keys(), key=str.lower):
+                rows = sorted(
+                    by_domain[dom],
+                    key=lambda x: ((x.get('username') or '').lower(),
+                                   x.get('source_host_ip') or '')
+                )
+                lines.append(f"\n#### Dominio: `{self._md_escape(dom)}`\n")
+                lines.append(
+                    "| Usuario | Password / Hash | Tipo | Protocolo | Host origen |"
+                )
+                lines.append(
+                    "|---------|-----------------|------|-----------|-------------|"
+                )
+                for r in rows:
+                    masked = self._mask_password(
+                        r.get('password'), r.get('credtype')
+                    )
+                    lines.append("| {u} | `{p}` | {t} | {pr} | {h} |".format(
+                        u=self._md_escape(r.get('username')),
+                        p=self._md_escape(masked) or '—',
+                        t=self._md_escape(r.get('credtype')) or 'plaintext',
+                        pr=self._md_escape(r.get('source_protocol')) or '—',
+                        h=self._md_escape(r.get('source_host_ip')) or '—',
+                    ))
+                lines.append("")
+            block_body = "\n".join(lines) + "\n"
+
+        new_block = (
+            "\n"
+            + self.CREDS_START + "\n"
+            + block_body
+            + self.CREDS_END + "\n"
+        )
+
+        # Reemplazar bloque existente o insertarlo bajo "## IT"
+        if self.CREDS_START in content and self.CREDS_END in content:
+            pre, rest      = content.split(self.CREDS_START, 1)
+            _, post        = rest.split(self.CREDS_END, 1)
+            # Quitar el "\n" inicial que añadiremos al recomponer
+            pre = pre.rstrip("\n") + "\n"
+            new_content = pre + self.CREDS_START + "\n" + block_body + self.CREDS_END + post
+        elif "## IT" in content:
+            # Insertar justo después del encabezado ## IT (antes de ## OT si existe)
+            head, tail = content.split("## IT", 1)
+            # tail empieza tras "## IT"; preservamos el resto y metemos el bloque al inicio
+            new_content = head + "## IT\n" + new_block + tail.lstrip("\n")
+        else:
+            # Sin sección IT — anexar al final
+            new_content = content.rstrip("\n") + "\n\n## IT\n" + new_block
+
+        note_path.write_text(new_content, encoding="utf-8")
+        _open_permissions(note_path)
+
+        return {
+            'note': str(note_path),
+            'credentials_written': len(deduped),
+            'domains': sorted(by_domain.keys()),
+        }
