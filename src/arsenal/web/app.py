@@ -910,16 +910,18 @@ async def get_results(
         result_dict['screenshot_path'] = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Screenshot'), None)
         result_dict['source_code_path'] = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Websource'), None)
 
-        # Adjuntar enriquecimiento NetExec (lo asociamos al host completo, no al puerto)
+        # Adjuntar enriquecimiento NetExec más reciente para esta IP, sea cual
+        # sea el escaneo de origen. Limita a la misma org para no mezclar datos.
         nxc_row = cursor.execute("""
             SELECT e.data
             FROM enrichments e
             JOIN scan_results sr2 ON sr2.id = e.scan_result_id
+            JOIN scans s2 ON s2.id = sr2.scan_id
             WHERE e.enrichment_type = 'NETEXEC'
-              AND sr2.scan_id = ?
               AND sr2.host_id = (SELECT host_id FROM scan_results WHERE id = ?)
+              AND UPPER(s2.organization_name) = UPPER(?)
             ORDER BY e.id DESC LIMIT 1
-        """, (result_dict['scan_id'], result_dict['scan_result_id'])).fetchone()
+        """, (result_dict['scan_result_id'], result_dict.get('organization_name') or '')).fetchone()
         if nxc_row and nxc_row['data']:
             try:
                 result_dict['netexec'] = json.loads(nxc_row['data'])

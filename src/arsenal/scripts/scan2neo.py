@@ -420,6 +420,7 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
         org_name = scan['organization_name'].upper()
         scan_mode = scan['scan_mode'] or 'active'
         is_active = scan_mode != 'passive'
+        is_netexec = scan_mode == 'netexec'
 
         # 1. Nodo ORGANIZACION — incluye estadísticas agregadas de toda la org
         org_props = {'name': org_name, **org_stats.get(org_name, {})}
@@ -429,8 +430,15 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
         # 2. Nodo ORIGEN — metadatos del escaneo + contadores y duración
         myip = scan['myip'] or 'N/A'
         duration = _duration_seconds(scan.get('started_at'), scan.get('completed_at'))
+        if is_netexec:
+            origin_name = f"NetExec import #{scan['id']}"
+        elif not is_active:
+            origin_name = "ESCANEO PASIVO"
+        else:
+            origin_name = f"Escaneo {scan['id']}"
+
         origin_props = {
-            'NAME': "ESCANEO PASIVO" if not is_active else f"Escaneo {scan['id']}",
+            'NAME': origin_name,
             'ORGANIZACION': org_name,
             'MI_IP': myip,
             'SCAN_ID': scan['id'],

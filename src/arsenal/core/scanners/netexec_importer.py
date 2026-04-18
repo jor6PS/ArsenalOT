@@ -537,6 +537,149 @@ def import_workspace(workspace_path: Path,
     }
 
 
+def global_date_range(root: Optional[Path] = None,
+                      logs_root: Optional[Path] = None
+                      ) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """Rango temporal combinado de TODOS los workspaces + loot files."""
+    root = root or default_workspace_root()
+    timestamps: List[datetime] = []
+    if root.exists():
+        for ws in root.iterdir():
+            if not ws.is_dir():
+                continue
+            for db in ws.glob('*.db'):
+                try:
+                    timestamps.append(datetime.fromtimestamp(db.stat().st_mtime))
+                except OSError:
+                    pass
+    for item in collect_loot(logs_root):
+        timestamps.append(item['timestamp'])
+    if not timestamps:
+        return None, None
+    return min(timestamps), max(timestamps)
+
+
+def import_all_workspaces(root: Optional[Path] = None,
+                          date_from: Optional[datetime] = None,
+                          date_to: Optional[datetime] = None,
+                          logs_root: Optional[Path] = None,
+                          require_loot_in_range: bool = True) -> dict:
+    """Importa TODOS los workspaces de NetExec mergeando resultados por IP.
+
+    Igual contrato de salida que ``import_workspace`` pero el campo ``workspace``
+    es una lista con los nombres procesados. Los loot files se asocian una sola
+    vez (compartidos entre workspaces) para evitar duplicados.
+    """
+    root = root or default_workspace_root()
+    if not root.exists():
+        raise FileNotFoundError(f"Raíz de workspaces no encontrada: {root}")
+
+    workspaces = [p for p in sorted(root.iterdir()) if p.is_dir()]
+    if not workspaces:
+        raise FileNotFoundError(f"Sin workspaces bajo {root}")
+
+    merged_hosts: Dict[str, NetExecHost] = {}
+    all_creds: List[NetExecCredential] = []
+    all_dpapi: List[dict] = []
+    ws_names: List[str] = []
+
+    for ws_path in workspaces:
+        ws_names.append(ws_path.name)
+
+        # Reusar la lógica por-workspace pero evitando que asocie loot (lo haremos
+        # una sola vez al final) y que filtre por fecha (lo hacemos al final).
+        sub = _import_workspace_raw(ws_path)
+        # Fusionar hosts por IP
+        for ip, h in sub['hosts'].items():
+            cur = merged_hosts.setdefault(ip, NetExecHost(ip=ip))
+            cur.hostname = cur.hostname or h.hostname
+            cur.domain = cur.domain or h.domain
+            cur.os = cur.os or h.os
+            for proto, meta in h.protocols.items():
+                cur.protocols.setdefault(proto, meta)
+            for s in h.shares:
+                if s not in cur.shares:
+                    cur.shares.append(s)
+            for u in h.admin_users:
+                if u not in cur.admin_users:
+                    cur.admin_users.append(u)
+            for u in h.loggedin_users:
+                if u not in cur.loggedin_users:
+                    cur.loggedin_users.append(u)
+        all_creds.extend(sub['credentials'])
+        all_dpapi.extend(sub['dpapi_secrets'])
+
+    # Asociar loot una sola vez (logs son globales, no por workspace)
+    loot_items = collect_loot(logs_root)
+    for item in loot_items:
+        ip = item['ip']
+        host = merged_hosts.setdefault(ip, NetExecHost(ip=ip))
+        host.hostname = host.hostname or item['hostname']
+        host.loot_files.append(item)
+        if not host.last_seen or item['timestamp'] > host.last_seen:
+            host.last_seen = item['timestamp']
+
+    # Filtrado temporal
+    if date_from or date_to:
+        lo = date_from or datetime(1970, 1, 1)
+        hi = date_to or datetime(2999, 12, 31)
+        for host in merged_hosts.values():
+            host.loot_files = [l for l in host.loot_files if lo <= l['timestamp'] <= hi]
+        if require_loot_in_range:
+            keep = {ip for ip, h in merged_hosts.items() if h.loot_files}
+            merged_hosts = {ip: h for ip, h in merged_hosts.items() if ip in keep}
+            all_creds = [c for c in all_creds
+                         if not c.source_host_ip or c.source_host_ip in keep]
+
+    summary = {
+        'workspaces': ws_names,
+        'hosts_total': len(merged_hosts),
+        'credentials_total': len(all_creds),
+        'dpapi_secrets_total': len(all_dpapi),
+        'loot_files_total': sum(len(h.loot_files) for h in merged_hosts.values()),
+        'protocols_seen': sorted({p for h in merged_hosts.values() for p in h.protocols}),
+        'date_from': date_from.isoformat() if date_from else None,
+        'date_to': date_to.isoformat() if date_to else None,
+    }
+    return {
+        'workspace': '+'.join(ws_names) if ws_names else '',
+        'workspace_path': str(root),
+        'hosts': merged_hosts,
+        'credentials': all_creds,
+        'dpapi_secrets': all_dpapi,
+        'summary': summary,
+    }
+
+
+def _import_workspace_raw(workspace_path: Path) -> dict:
+    """Carga las DBs de un workspace sin asociar loot ni filtrar por fecha."""
+    hosts: Dict[str, NetExecHost] = {}
+    creds: List[NetExecCredential] = []
+    dpapi_secrets: List[dict] = []
+
+    smb_db = workspace_path / 'smb.db'
+    if smb_db.exists():
+        sc, ds = _load_smb(smb_db, hosts)
+        creds.extend(sc)
+        dpapi_secrets.extend(ds)
+    ldap_db = workspace_path / 'ldap.db'
+    if ldap_db.exists():
+        creds.extend(_load_ldap(ldap_db, hosts))
+    mssql_db = workspace_path / 'mssql.db'
+    if mssql_db.exists():
+        creds.extend(_load_mssql(mssql_db, hosts))
+    rdp_db = workspace_path / 'rdp.db'
+    if rdp_db.exists():
+        _load_rdp(rdp_db, hosts)
+    winrm_db = workspace_path / 'winrm.db'
+    if winrm_db.exists():
+        creds.extend(_load_winrm(winrm_db, hosts))
+    for proto in ('ftp', 'ssh', 'nfs', 'vnc', 'wmi'):
+        creds.extend(_load_simple_protocol(workspace_path / f'{proto}.db', proto, hosts))
+
+    return {'hosts': hosts, 'credentials': creds, 'dpapi_secrets': dpapi_secrets}
+
+
 def serialize_for_api(import_result: dict) -> dict:
     """Convierte el resultado de import_workspace a dicts JSON-serializables."""
     hosts_out = []
