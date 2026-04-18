@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from arsenal.web.core.config import templates
 
 router = APIRouter()
@@ -44,16 +44,16 @@ async def recon_findings_page(request: Request, org_name: str):
     """Página de findings (vulnerabilidades) integrada con PwnDoc."""
     return templates.TemplateResponse(request, "findings.html", {"org_name": org_name})
 
+@router.get("/pentest/{org_name}/exploitation", response_class=HTMLResponse)
+async def exploitation_page(request: Request, org_name: str):
+    """Página de explotación IT (import de NetExec)."""
+    return templates.TemplateResponse(request, "exploitation.html", {"org_name": org_name})
+
+
 @router.get("/pentest/{org_name}/exploitation-ot", response_class=HTMLResponse)
 async def exploitation_ot_page(request: Request, org_name: str):
-    """Página de explotación OT (protocolos industriales + NetExec)."""
+    """Página de explotación OT (protocolos industriales)."""
     return templates.TemplateResponse(request, "exploitation_ot.html", {"org_name": org_name})
-
-
-@router.get("/pentest/{org_name}/exploitation")
-async def exploitation_legacy_redirect(org_name: str):
-    """Compat: la antigua pestaña única de explotación ahora es Explotación OT."""
-    return RedirectResponse(url=f"/pentest/{org_name}/exploitation-ot", status_code=307)
 
 @router.get("/pentest/{org_name}/bitacora", response_class=HTMLResponse)
 async def bitacora_page(request: Request, org_name: str):

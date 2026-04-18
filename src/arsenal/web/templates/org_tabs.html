@@ -34,11 +34,11 @@ Variables esperadas:
         <span class="phase-tab-badge">Próx.</span>
       </span>
 
-      <span class="phase-tab phase-tab--disabled" title="En desarrollo">
+      <a href="/pentest/{{ org_name | urlencode }}/exploitation"
+        class="phase-tab {% if active_phase == 'explotacion' %}phase-tab--active phase-tab--exploit{% endif %}">
         <span class="phase-tab-icon">💣</span>
         <span class="phase-tab-label">Explotación</span>
-        <span class="phase-tab-badge">Próx.</span>
-      </span>
+      </a>
 
       <a href="/pentest/{{ org_name | urlencode }}/exploitation-ot"
         class="phase-tab {% if active_phase == 'explotacion_ot' %}phase-tab--active phase-tab--exploit{% endif %}">

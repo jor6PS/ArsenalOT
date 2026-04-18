@@ -71,23 +71,72 @@ class NetExecCredential:
     source_host_hostname: Optional[str] = None
 
 
+def _candidate_nxc_homes() -> List[Path]:
+    """Orden de búsqueda para localizar un directorio ``.nxc``.
+
+    Se pensó para funcionar bajo sudo/Docker donde ``Path.home()`` suele
+    resolver a ``/root`` pese a que los datos viven en el home del usuario que
+    invocó el proceso. Se combinan: variable explícita, HOME del usuario
+    actual, SUDO_USER, ``/home/<user>`` y ``/root``.
+    """
+    candidates: List[Path] = []
+
+    env = os.environ.get('NXC_HOME') or os.environ.get('CME_HOME')
+    if env:
+        candidates.append(Path(env))
+
+    try:
+        candidates.append(Path.home() / '.nxc')
+    except (RuntimeError, KeyError):
+        pass
+
+    sudo_user = os.environ.get('SUDO_USER')
+    if sudo_user and sudo_user != 'root':
+        try:
+            import pwd
+            candidates.append(Path(pwd.getpwnam(sudo_user).pw_dir) / '.nxc')
+        except (KeyError, ImportError, OSError):
+            pass
+
+    home_root = Path('/home')
+    if home_root.is_dir():
+        for user_dir in sorted(home_root.iterdir()):
+            candidates.append(user_dir / '.nxc')
+
+    candidates.append(Path('/root/.nxc'))
+
+    # Deduplicar preservando orden
+    seen, ordered = set(), []
+    for c in candidates:
+        key = str(c)
+        if key not in seen:
+            seen.add(key)
+            ordered.append(c)
+    return ordered
+
+
+def _pick_nxc_home(subdir: str) -> Path:
+    """Devuelve el primer candidato con <home>/<subdir> presente; si ninguno
+    existe, el primero de la lista (para que el mensaje de error sea útil)."""
+    for home in _candidate_nxc_homes():
+        if (home / subdir).is_dir():
+            return home / subdir
+    return _candidate_nxc_homes()[0] / subdir
+
+
 def default_workspace_root() -> Path:
     """Raíz por defecto donde NetExec guarda los workspaces.
 
-    Respeta NXC_HOME si está definido (también el viejo CME_HOME por compat.).
+    Respeta ``NXC_HOME`` / ``CME_HOME`` si están definidos. Si no, busca
+    automáticamente en el home del usuario actual, del usuario que invocó sudo
+    y de cualquier usuario bajo ``/home``.
     """
-    base = os.environ.get('NXC_HOME') or os.environ.get('CME_HOME')
-    if base:
-        return Path(base) / 'workspaces'
-    return Path.home() / '.nxc' / 'workspaces'
+    return _pick_nxc_home('workspaces')
 
 
 def default_logs_root() -> Path:
     """Raíz por defecto del directorio de loot/logs de NetExec."""
-    base = os.environ.get('NXC_HOME') or os.environ.get('CME_HOME')
-    if base:
-        return Path(base) / 'logs'
-    return Path.home() / '.nxc' / 'logs'
+    return _pick_nxc_home('logs')
 
 
 def list_workspaces(root: Optional[Path] = None) -> List[str]:
