@@ -71,37 +71,68 @@ class NetExecCredential:
     source_host_hostname: Optional[str] = None
 
 
-def _candidate_nxc_homes() -> List[Path]:
+def _candidate_nxc_homes(explicit: Optional[Path] = None) -> List[Path]:
     """Orden de búsqueda para localizar un directorio ``.nxc``.
 
-    Se pensó para funcionar bajo sudo/Docker donde ``Path.home()`` suele
-    resolver a ``/root`` pese a que los datos viven en el home del usuario que
-    invocó el proceso. Se combinan: variable explícita, HOME del usuario
-    actual, SUDO_USER, ``/home/<user>`` y ``/root``.
+    Funciona bajo sudo/Docker donde ``Path.home()`` suele resolver a
+    ``/root`` pese a que los datos viven en el home del usuario que invocó
+    el proceso. Orden de prioridad:
+
+      1. Ruta explícita pasada por parámetro (UI)
+      2. ``ARSENAL_NXC_PATH`` (override propio de la app)
+      3. ``NXC_PATH`` (única env var canónica de NetExec / nxcdb)
+      4. ``Path.home() / .nxc``
+      5. Home del usuario en ``SUDO_USER``
+      6. Home de TODOS los usuarios reales del sistema (``pwd.getpwall``)
+      7. Cualquier directorio bajo ``/home``
+      8. ``/root/.nxc``
     """
     candidates: List[Path] = []
 
-    env = os.environ.get('NXC_HOME') or os.environ.get('CME_HOME')
-    if env:
-        candidates.append(Path(env))
+    if explicit:
+        candidates.append(Path(explicit))
+
+    for var in ('ARSENAL_NXC_PATH', 'NXC_PATH'):
+        env = os.environ.get(var)
+        if env:
+            candidates.append(Path(env))
 
     try:
         candidates.append(Path.home() / '.nxc')
     except (RuntimeError, KeyError):
         pass
 
+    try:
+        import pwd
+    except ImportError:
+        pwd = None  # type: ignore
+
     sudo_user = os.environ.get('SUDO_USER')
-    if sudo_user and sudo_user != 'root':
+    if pwd and sudo_user and sudo_user != 'root':
         try:
-            import pwd
             candidates.append(Path(pwd.getpwnam(sudo_user).pw_dir) / '.nxc')
-        except (KeyError, ImportError, OSError):
+        except (KeyError, OSError):
+            pass
+
+    # Enumerar todos los usuarios reales del sistema (UID >= 1000 por defecto
+    # en Linux para excluir cuentas de servicio, pero incluimos también root).
+    if pwd:
+        try:
+            for entry in pwd.getpwall():
+                if not entry.pw_dir:
+                    continue
+                if entry.pw_name == 'root' or entry.pw_uid >= 1000:
+                    candidates.append(Path(entry.pw_dir) / '.nxc')
+        except OSError:
             pass
 
     home_root = Path('/home')
     if home_root.is_dir():
-        for user_dir in sorted(home_root.iterdir()):
-            candidates.append(user_dir / '.nxc')
+        try:
+            for user_dir in sorted(home_root.iterdir()):
+                candidates.append(user_dir / '.nxc')
+        except OSError:
+            pass
 
     candidates.append(Path('/root/.nxc'))
 
@@ -115,28 +146,34 @@ def _candidate_nxc_homes() -> List[Path]:
     return ordered
 
 
-def _pick_nxc_home(subdir: str) -> Path:
+def _pick_nxc_home(subdir: str, explicit: Optional[Path] = None) -> Path:
     """Devuelve el primer candidato con <home>/<subdir> presente; si ninguno
     existe, el primero de la lista (para que el mensaje de error sea útil)."""
-    for home in _candidate_nxc_homes():
+    cands = _candidate_nxc_homes(explicit)
+    for home in cands:
         if (home / subdir).is_dir():
             return home / subdir
-    return _candidate_nxc_homes()[0] / subdir
+    return cands[0] / subdir
 
 
-def default_workspace_root() -> Path:
+def default_workspace_root(explicit: Optional[Path] = None) -> Path:
     """Raíz por defecto donde NetExec guarda los workspaces.
 
-    Respeta ``NXC_HOME`` / ``CME_HOME`` si están definidos. Si no, busca
-    automáticamente en el home del usuario actual, del usuario que invocó sudo
-    y de cualquier usuario bajo ``/home``.
+    Respeta ``ARSENAL_NXC_PATH`` y ``NXC_PATH`` si están definidos. Si no,
+    busca automáticamente en el home del usuario actual, del usuario que
+    invocó sudo y de cualquier usuario real del sistema.
     """
-    return _pick_nxc_home('workspaces')
+    return _pick_nxc_home('workspaces', explicit)
 
 
-def default_logs_root() -> Path:
+def default_logs_root(explicit: Optional[Path] = None) -> Path:
     """Raíz por defecto del directorio de loot/logs de NetExec."""
-    return _pick_nxc_home('logs')
+    return _pick_nxc_home('logs', explicit)
+
+
+def searched_paths(explicit: Optional[Path] = None) -> List[str]:
+    """Lista las rutas inspeccionadas (para mensajes de diagnóstico)."""
+    return [str(p) for p in _candidate_nxc_homes(explicit)]
 
 
 def list_workspaces(root: Optional[Path] = None) -> List[str]:
@@ -587,10 +624,12 @@ def import_workspace(workspace_path: Path,
 
 
 def global_date_range(root: Optional[Path] = None,
-                      logs_root: Optional[Path] = None
+                      logs_root: Optional[Path] = None,
+                      explicit: Optional[Path] = None
                       ) -> Tuple[Optional[datetime], Optional[datetime]]:
     """Rango temporal combinado de TODOS los workspaces + loot files."""
-    root = root or default_workspace_root()
+    root = root or default_workspace_root(explicit)
+    logs_root = logs_root or default_logs_root(explicit)
     timestamps: List[datetime] = []
     if root.exists():
         for ws in root.iterdir():
@@ -612,16 +651,21 @@ def import_all_workspaces(root: Optional[Path] = None,
                           date_from: Optional[datetime] = None,
                           date_to: Optional[datetime] = None,
                           logs_root: Optional[Path] = None,
-                          require_loot_in_range: bool = True) -> dict:
+                          require_loot_in_range: bool = True,
+                          explicit: Optional[Path] = None) -> dict:
     """Importa TODOS los workspaces de NetExec mergeando resultados por IP.
 
     Igual contrato de salida que ``import_workspace`` pero el campo ``workspace``
     es una lista con los nombres procesados. Los loot files se asocian una sola
     vez (compartidos entre workspaces) para evitar duplicados.
     """
-    root = root or default_workspace_root()
+    root = root or default_workspace_root(explicit)
+    logs_root = logs_root or default_logs_root(explicit)
     if not root.exists():
-        raise FileNotFoundError(f"Raíz de workspaces no encontrada: {root}")
+        searched = ', '.join(searched_paths(explicit))
+        raise FileNotFoundError(
+            f"Raíz de workspaces no encontrada: {root}. Rutas inspeccionadas: {searched}"
+        )
 
     workspaces = [p for p in sorted(root.iterdir()) if p.is_dir()]
     if not workspaces:

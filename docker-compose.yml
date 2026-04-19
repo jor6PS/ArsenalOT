@@ -10,8 +10,9 @@ services:
     volumes:
       - ./results:/app/results
       # Mount host's NetExec workspaces read-only so the exploitation tab can
-      # import nxcdb data. HOME defaults to the invoking user's home.
-      - ${HOME}/.nxc:/root/.nxc:ro
+      # import nxcdb data. Override the host path with ARSENAL_NXC_HOST_PATH if
+      # nxc is not run as the same user that launches docker-compose.
+      - ${ARSENAL_NXC_HOST_PATH:-${HOME}/.nxc}:/root/.nxc:ro
     env_file:
       - .env
     restart: unless-stopped
