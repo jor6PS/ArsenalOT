@@ -2,7 +2,7 @@
 Partial: org_tabs.html
 Variables esperadas:
 - org_name: str — nombre de la organización
-- active_phase: str — 'inicio' | 'recon' | 'acceso' | 'explotacion'
+- active_phase: str — 'inicio' | 'recon' | 'acceso' | 'explotacion' | 'explotacion_ot' | 'bitacora'
 - active_section: str (opcional) — para sub-tabs de recon: 'dashboard' | 'scan' | 'results' | 'neo4j'
 #}
 
@@ -34,17 +34,29 @@ Variables esperadas:
         <span class="phase-tab-badge">Próx.</span>
       </span>
 
-      <span class="phase-tab phase-tab--disabled" title="En desarrollo">
+      <a href="/pentest/{{ org_name | urlencode }}/exploitation"
+        class="phase-tab {% if active_phase == 'explotacion' %}phase-tab--active phase-tab--exploit{% endif %}">
         <span class="phase-tab-icon">💣</span>
         <span class="phase-tab-label">Explotación</span>
-        <span class="phase-tab-badge">Próx.</span>
-      </span>
+      </a>
+
+      <a href="/pentest/{{ org_name | urlencode }}/exploitation-ot"
+        class="phase-tab {% if active_phase == 'explotacion_ot' %}phase-tab--active phase-tab--exploit{% endif %}">
+        <span class="phase-tab-icon">🏭</span>
+        <span class="phase-tab-label">Explotación OT</span>
+      </a>
 
       <span class="phase-tab phase-tab--disabled" title="En desarrollo">
         <span class="phase-tab-icon">📈</span>
         <span class="phase-tab-label">Post-Explotación</span>
         <span class="phase-tab-badge">Próx.</span>
       </span>
+
+      <a href="/pentest/{{ org_name | urlencode }}/bitacora"
+        class="phase-tab {% if active_phase == 'bitacora' %}phase-tab--active phase-tab--bitacora{% endif %}">
+        <span class="phase-tab-icon">📓</span>
+        <span class="phase-tab-label">Bitácora</span>
+      </a>
     </nav>
   </div>
 
@@ -66,6 +78,10 @@ Variables esperadas:
     <a href="/pentest/{{ org_name | urlencode }}/recon/neo4j"
       class="section-tab {% if active_section == 'neo4j' %}section-tab--active{% endif %}">
       <span>🕸️</span> Neo4j
+    </a>
+    <a href="/pentest/{{ org_name | urlencode }}/recon/findings"
+      class="section-tab {% if active_section == 'findings' %}section-tab--active{% endif %}">
+      <span>🐛</span> Findings
     </a>
   </nav>
   {% endif %}

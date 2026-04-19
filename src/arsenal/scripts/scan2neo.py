@@ -1,35 +1,25 @@
 #!/usr/bin/env python3
 """
-Importar resultados de escaneos desde scans.db a Neo4j
-Combina múltiples escaneos de la misma organización/ubicación
-conservando siempre la información más completa
+Importar resultados de escaneos desde scans.db a Neo4j (Versión oficial - Remodelado)
+Implementa:
+- Aislamiento por origen (DISCOVERY_SOURCE).
+- Correlación inteligente (PROBABLY_SAME_HOST).
+- Metadatos de escaneo explícitos (Escaneo_Activo_ID / Escaneo_Pasivo_ID).
+- Limpieza de nombres de subred.
+- Nodos de SERVICIO independientes.
 """
 
-from py2neo import Graph, Node, Relationship
 import argparse
 import sqlite3
 import os
+import json
 import ipaddress
+import shutil
+import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 from getpass import getpass
-
-
-def is_internal_ip(ip_str: str) -> bool:
-    """Returns True for all non-globally-routable IP addresses (loopback, private, link-local, etc.)"""
-    try:
-        ip_obj = ipaddress.ip_address(ip_str)
-        return (
-            ip_obj.is_private
-            or ip_obj.is_loopback
-            or ip_obj.is_link_local
-            or ip_obj.is_reserved
-            or ip_obj.is_unspecified
-            or ip_obj.is_multicast
-        )
-    except ValueError:
-        return False
-
+from py2neo import Graph, Node, Relationship
 
 def is_ip_in_network(ip_str: str, network_str: str) -> bool:
     """Check if an IP address belongs to a network range."""
@@ -37,7 +27,6 @@ def is_ip_in_network(ip_str: str, network_str: str) -> bool:
         if not ip_str or not network_str:
             return False
         ip = ipaddress.ip_address(ip_str)
-        # Handle cases where network_str is just an IP
         if '/' not in network_str:
             return str(ip) == network_str
         network = ipaddress.ip_network(network_str, strict=False)
@@ -45,24 +34,17 @@ def is_ip_in_network(ip_str: str, network_str: str) -> bool:
     except ValueError:
         return False
 
-
 def connect_to_neo4j(ip: str, username: str = None, password: str = None) -> Graph:
     """Conectar a la base de datos Neo4j."""
-    # Intentar usar variables de entorno primero
-    username = username or os.getenv("NEO4J_USERNAME")
-    password = password or os.getenv("NEO4J_PASSWORD")
+    username = username or os.getenv("NEO4J_USERNAME") or "neo4j"
+    password = password or os.getenv("NEO4J_PASSWORD") or "neo4j1"
     
     try:
-        if username and password:
-            graph = Graph(f"bolt://{ip}:7687", auth=(username, password))
-        else:
-            graph = Graph(f"bolt://{ip}:7687", auth=("neo4j", "neo4j1"))
-        
-        graph.run("MATCH (n) RETURN count(n)")  # Verificar la conexión
+        graph = Graph(f"bolt://{ip}:7687", auth=(username, password))
+        graph.run("RETURN 1")
         return graph
     except Exception as e:
         if "Failed to authenticate" in str(e):
-            # Si la autenticación falla, pedir credenciales al usuario
             if not username:
                 username = input("Usuario Neo4j: ")
             if not password:
@@ -70,533 +52,719 @@ def connect_to_neo4j(ip: str, username: str = None, password: str = None) -> Gra
             return Graph(f"bolt://{ip}:7687", auth=(username, password))
         raise e
 
-
-def get_info_completeness(service_name: str, product: str, version: str, 
-                         extrainfo: str, cpe: str) -> int:
-    """Calcula un score de completitud de información (mayor = más completo)."""
-    score = 0
-    if service_name:
-        score += 1
-    if product:
-        score += 2
-    if version:
-        score += 3
-    if extrainfo:
-        score += 1
-    if cpe:
-        score += 2
-    return score
-
-
-def merge_port_data(data1: Dict, data2: Dict) -> Dict:
-    """Combina dos entradas de puerto conservando la información más completa."""
-    # Calcular completitud
-    score1 = get_info_completeness(
-        data1.get('service_name', ''),
-        data1.get('product', ''),
-        data1.get('version', ''),
-        data1.get('extrainfo', ''),
-        data1.get('cpe', '')
-    )
-    score2 = get_info_completeness(
-        data2.get('service_name', ''),
-        data2.get('product', ''),
-        data2.get('version', ''),
-        data2.get('extrainfo', ''),
-        data2.get('cpe', '')
-    )
+def get_scans_data(db_path: str, org: str = None, location: str = None,
+                   scan_id: int = None) -> List[Dict]:
+    """Obtiene los datos de los escaneos de la base de datos."""
+    # Copiar la base de datos y sus archivos temporales a un directorio temporal
+    temp_dir = tempfile.mkdtemp()
+    temp_db_path = os.path.join(temp_dir, "scans.db")
     
-    # Usar el que tenga más información como base
-    base = data1 if score1 >= score2 else data2
-    other = data2 if score1 >= score2 else data1
+    # Copiar main DB
+    shutil.copy2(db_path, temp_db_path)
     
-    # Combinar campos, priorizando valores no vacíos
-    merged = base.copy()
-    for key in ['service_name', 'product', 'version', 'extrainfo', 'cpe', 'hostname']:
-        if not merged.get(key) and other.get(key):
-            merged[key] = other[key]
-        elif merged.get(key) and other.get(key) and merged[key] != other[key]:
-            # Si ambos tienen valor diferente, usar el más largo (más detallado)
-            if len(str(other[key])) > len(str(merged[key])):
-                merged[key] = other[key]
+    # Copiar WAL y SHM si existen para asegurar que leemos los datos más recientes
+    wal_path = f"{db_path}-wal"
+    shm_path = f"{db_path}-shm"
+    if os.path.exists(wal_path):
+        shutil.copy2(wal_path, f"{temp_db_path}-wal")
+    if os.path.exists(shm_path):
+        shutil.copy2(shm_path, f"{temp_db_path}-shm")
     
-    # Combinar enriquecimientos
-    if 'enrichments' not in merged:
-        merged['enrichments'] = {}
-    if 'enrichments' in other:
-        merged['enrichments'].update(other['enrichments'])
-    
-    return merged
-
-
-
-def get_combined_scans_data(db_path: str, org: str = None, location: str = None) -> Tuple[Dict, Dict, Dict, Dict]:
-    """
-    Obtiene y combina los datos de los escaneos de forma precisa siguiendo el 'flujo'.
-    """
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(temp_db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # 1. Redes conocidas (mapeo de rangos a nombres)
+    # 1. Obtener redes y dispositivos críticos
     network_names_map = {}
     try:
-        networks = cursor.execute("SELECT organization_name, network_name, network_range FROM networks").fetchall()
+        networks = cursor.execute("SELECT organization_name, network_name, network_range, system_name FROM networks").fetchall()
         for net in networks:
             o_n = net['organization_name'].upper()
             if o_n not in network_names_map: network_names_map[o_n] = {}
-            network_names_map[o_n][net['network_range']] = net['network_name']
+            network_names_map[o_n][net['network_range']] = {
+                'name': net['network_name'],
+                'system': net['system_name']
+            }
     except: pass
     
-    # 2. IPs críticas
     critical_ips_map = {}
     try:
-        crit_devs = cursor.execute("SELECT organization_name, ips FROM critical_devices").fetchall()
+        crit_devs = cursor.execute("SELECT organization_name, name, reason, ips FROM critical_devices").fetchall()
         for dev in crit_devs:
             o_n = dev['organization_name'].upper()
-            if o_n not in critical_ips_map: critical_ips_map[o_n] = set()
+            if o_n not in critical_ips_map: critical_ips_map[o_n] = {}
             for ip_a in dev['ips'].split(','):
-                if ip_a.strip(): critical_ips_map[o_n].add(ip_a.strip())
+                ip_clean = ip_a.strip()
+                if ip_clean:
+                    critical_ips_map[o_n][ip_clean] = {
+                        'name': dev['name'],
+                        'reason': dev['reason']
+                    }
     except: pass
 
-    # 3. Estructuras de retorno
-    combined_data = {}
-    location_myip_map = {}
-    
-    # Query principal: Obtener todos los resultados (incluyendo port=NULL) con su contexto de escaneo
-    query = """
-        SELECT 
-            h.ip_address, h.hostname, h.subnet as host_subnet, h.interfaces_json,
-            sr.id as scan_result_id, sr.port, sr.protocol, sr.state, sr.service_name, 
-            sr.product, sr.version, sr.extrainfo, sr.cpe, sr.reason, sr.confidence, 
-            sr.discovery_method as disc_method,
-            s.organization_name, s.location, s.target_range as scan_target, s.id as scan_id, s.myip
-        FROM scan_results sr
-        JOIN hosts h ON h.id = sr.host_id
-        JOIN scans s ON s.id = sr.scan_id
-        WHERE s.status = 'completed'
-    """
+    # 2. Filtrar escaneos (incluir pasivos aunque no estén 'completed' para mayor visibilidad)
+    query_scans = "SELECT * FROM scans WHERE (status = 'completed' OR (scan_mode IN ('passive','netexec') AND status != 'failed'))"
     params = []
     if org:
-        query += " AND s.organization_name = ?"
-        params.append(org.upper())
+        query_scans += " AND UPPER(organization_name) = UPPER(?)"
+        params.append(org)
     if location:
-        query += " AND s.location = ?"
-        params.append(location.upper())
-    
-    query += " ORDER BY s.started_at ASC" # ASC para que el Origen se procese primero y luego se priorice
-    
-    results = cursor.execute(query, params).fetchall()
-    
-    for row in results:
-        o_name = row['organization_name'].upper()
-        l_name = row['location'].upper()
-        ip = row['ip_address']
-        disc_method = row['disc_method']
+        query_scans += " AND UPPER(location) = UPPER(?)"
+        params.append(location)
+    if scan_id:
+        query_scans += " AND id = ?"
+        params.append(scan_id)
+
+    scans = cursor.execute(query_scans, params).fetchall()
+    all_data = []
+
+    for scan in scans:
+        scan_id = scan['id']
+        scan_dict = dict(scan)
+        scan_dict['hosts'] = []
+        scan_dict['passive_conversations'] = []
         
-        # Guardar myip de la ubicación
-        if row['myip']:
-            if o_name not in location_myip_map: location_myip_map[o_name] = {}
-            location_myip_map[o_name][l_name] = row['myip']
-            
-        # DETERMINAR SUBRED basada en el contexto del escaneo (Flujo)
-        subnet = None
-        if o_name in network_names_map:
-            for net_range in network_names_map[o_name].keys():
-                if is_ip_in_network(ip, net_range):
-                    subnet = net_range
-                    break
-        if not subnet and row['scan_target'] and row['scan_target'] != "0.0.0.0/0":
-            if is_ip_in_network(ip, row['scan_target']):
-                subnet = row['scan_target']
-        if not subnet:
-            subnet = row['host_subnet'] or ('.'.join(ip.split('.')[:3]) + '.0/24' if '.' in ip else "Unknown")
-
-        # Inicializar combined_data
-        if o_name not in combined_data: combined_data[o_name] = {}
-        if l_name not in combined_data[o_name]: combined_data[o_name][l_name] = {}
-        if subnet not in combined_data[o_name][l_name]: combined_data[o_name][l_name][subnet] = {}
+        o_name = scan['organization_name'].upper()
         
-        if ip not in combined_data[o_name][l_name][subnet]:
-            combined_data[o_name][l_name][subnet][ip] = {
-                '_meta': {
-                    'hostname': row['hostname'] or '',
-                    'discovery_method': disc_method or 'unknown',
-                    'interfaces': row['interfaces_json']
-                }
-            }
-        else:
-            meta = combined_data[o_name][l_name][subnet][ip]['_meta']
-            if row['hostname'] and (not meta['hostname'] or len(row['hostname']) > len(meta['hostname'])):
-                meta['hostname'] = row['hostname']
-            
-            # PRIORIDAD DE ORIGEN: Enrichment no sobrescribe métodos reales
-            if disc_method and disc_method != 'unknown':
-                if meta['discovery_method'] in ['unknown', 'enrichment'] or disc_method != 'enrichment':
-                    meta['discovery_method'] = disc_method
-            
-            if row['interfaces_json'] and not meta['interfaces']:
-                meta['interfaces'] = row['interfaces_json']
-
-        # Procesar Puerto / Servicio
-        port = row['port']
-        if port is not None:
-            proto = row['protocol']
-            port_key = f"{port}/{proto}"
-            port_data = {
-                'port': port, 'protocol': proto, 'state': row['state'],
-                'service_name': row['service_name'], 'product': row['product'],
-                'version': row['version'], 'extrainfo': row['extrainfo'],
-                'cpe': row['cpe'], 'reason': row['reason'],
-                'conf': row['confidence'] or 0, 'enrichments': {}, 'vulnerabilities': []
-            }
-
-            # Enriquecimientos
-            enrs = cursor.execute("SELECT enrichment_type, data FROM enrichments WHERE scan_result_id = ?", (row['scan_result_id'],)).fetchall()
-            for e_type, e_data in enrs: port_data['enrichments'][e_type] = e_data
-            
-            # Vulnerabilidades
-            vulns = cursor.execute("SELECT * FROM vulnerabilities WHERE scan_result_id = ?", (row['scan_result_id'],)).fetchall()
-            for v in vulns: port_data['vulnerabilities'].append(dict(v))
-
-            if port_key in combined_data[o_name][l_name][subnet][ip]:
-                port_data = merge_port_data(combined_data[o_name][l_name][subnet][ip][port_key], port_data)
-            
-            combined_data[o_name][l_name][subnet][ip][port_key] = port_data
-            
-    conn.close()
-    return combined_data, location_myip_map, network_names_map, critical_ips_map
-    
-    conn.close()
-    return combined_data, location_myip_map, network_names_map, critical_ips_map
-
-
-    return None
-
-
-def process_to_neo4j(graph: Graph, combined_data: Dict, location_myip_map: Dict, 
-                    network_names_map: Dict = None, critical_ips_map: Dict = None):
-    """Procesa los datos combinados y los importa a Neo4j."""
-    if network_names_map is None:
-        network_names_map = {}
-    if critical_ips_map is None:
-        critical_ips_map = {}
-    
-    print("   Limpiando posibles nodos duplicados antiguos...")
-    # Deduplicar nodos IP creados por el bug anterior (mismo IP/org/SEG pero diferente Subred)
-    graph.run("""
-        MATCH (i:IP)
-        WITH i.org AS org, i.SEG AS seg, i.IP AS ip, collect(i) AS nodes
-        WHERE size(nodes) > 1
-        UNWIND tail(nodes) AS duplicate
-        DETACH DELETE duplicate
-    """)
-    # Deduplicar nodos Port
-    graph.run("""
-        MATCH (p:Port)
-        WITH p.org AS org, p.SEG AS seg, p.IP AS ip, p.number AS num, collect(p) AS nodes
-        WHERE size(nodes) > 1
-        UNWIND tail(nodes) AS duplicate
-        DETACH DELETE duplicate
-    """)
-    
-    ip_ports_map = {}
-    
-    org_list = []
-    seg_list = []
-    subnet_list = []
-    ip_list = []
-    port_list = []
-    
-    # Primera pasada: Aplanar diccionarios en listas para UNWIND
-    for org, org_data in combined_data.items():
-        org_list.append({"org": org})
+        query_results = """
+            SELECT h.ip_address, h.subnet, h.first_seen, sr.*, sr.id as scan_result_id,
+                   m.hostname as isolation_hostname,
+                   m.hostnames_json as isolation_hostnames,
+                   m.mac_address as isolation_mac,
+                   m.vendor as isolation_vendor,
+                   m.os_info_json as isolation_os,
+                   m.host_scripts_json as isolation_scripts,
+                   m.interfaces_json as isolation_interfaces,
+                   h.interfaces_json as global_interfaces,
+                   m.last_seen as isolation_last_seen
+            FROM scan_results sr
+            JOIN hosts h ON h.id = sr.host_id
+            LEFT JOIN host_scan_metadata m ON m.scan_id = sr.scan_id AND m.host_id = sr.host_id
+            WHERE sr.scan_id = ?
+        """
+        results = cursor.execute(query_results, (scan_id,)).fetchall()
         
-        for location, location_data in org_data.items():
-            myip = location_myip_map.get(org, {}).get(location)
-            # Renombrar SEG para incluir myip como solicita el usuario
-            seg_full_name = f"{location} ({myip})" if myip else location
-            
-            seg_list.append({
-                "org": org,
-                "SEG": seg_full_name,
-                "myip": myip
-            })
-            
-            for subnet, subnet_data in location_data.items():
-                # Si no hay nombre asignado, usar el propio rango de la subred
-                net_name = network_names_map.get(org, {}).get(subnet) or subnet
-                subnet_list.append({
-                    "org": org,
-                    "SEG": seg_full_name,
-                    "Subred": subnet,
-                    "subnet_name": net_name,
-                    "myip": myip if myip else "N/A"
-                })
+        # Agrupar por host (Escaneos activos)
+        active_hosts_map = {}
+        for row in results:
+            ip = row['ip_address']
+            if ip not in active_hosts_map:
+                subnet = None
+                # 1. Intentar match por rango exacto si está en la DB
+                if o_name in network_names_map:
+                    # Match por network_range (más rápido)
+                    for net_range in network_names_map[o_name].keys():
+                        if is_ip_in_network(ip, net_range):
+                            subnet = net_range
+                            break
                 
-                for ip, ip_data in subnet_data.items():
-                    meta = ip_data.pop('_meta', {'hostname': '', 'discovery_method': 'unknown', 'interfaces': None})
-                    ip_list.append({
-                        "org": org,
-                        "SEG": seg_full_name,
-                        "Subred": subnet,
-                        "IP": ip,
-                        "Hostname": meta['hostname'],
-                        "Origen descubrimiento": meta['discovery_method'],
-                        "Interfaces": meta['interfaces'],
-                        "myip": myip if myip else "N/A",
-                        "Critical": ip in critical_ips_map.get(org, set())
-                    })
-                    
-                    ip_ports_map[ip] = {}
-                    
-                    for port_key, port_data in ip_data.items():
-                        if port_key == 'no_ports':
-                            # Continuamos, la información del host ya está en IP gracias al _meta
-                            continue
-                            
-                        # Limpiar propiedades de puerto que puedan ser None, y dict a JSON
-                        clean_props = {
-                            "Hostname": str(port_data.get('hostname', '')) if port_data.get('hostname') else '',
-                            "State": str(port_data.get('state', '')) if port_data.get('state') else '',
-                            "Name": str(port_data.get('service_name', '')) if port_data.get('service_name') else '',
-                            "Product": str(port_data.get('product', '')) if port_data.get('product') else '',
-                            "Version": str(port_data.get('version', '')) if port_data.get('version') else '',
-                            "Extrainfo": str(port_data.get('extrainfo', '')) if port_data.get('extrainfo') else '',
-                            "Cpe": str(port_data.get('cpe', '')) if port_data.get('cpe') else '',
-                            "Reason": str(port_data.get('reason', '')) if port_data.get('reason') else '',
-                            "Conf": str(port_data.get('conf', 0)) if port_data.get('conf') is not None else '0'
-                        }
-                        
-                        # Agregar enriquecimientos
-                        for enr_type, enr_data in port_data.get('enrichments', {}).items():
-                            clean_props[enr_type] = str(enr_data) if not isinstance(enr_data, (dict, list)) else json.dumps(enr_data)
-                        
-                        # Agregar vulnerabilidades
-                        vulnerabilities = port_data.get('vulnerabilities', [])
-                        if vulnerabilities:
-                            vuln_list = []
-                            for vuln in vulnerabilities:
-                                vuln_str = f"{vuln.get('cve_id', vuln.get('vulnerability_id', 'Unknown'))}"
-                                if vuln.get('severity'):
-                                    vuln_str += f" ({vuln['severity']})"
-                                vuln_list.append(vuln_str)
-                            clean_props['Vuln'] = ', '.join(vuln_list)
-                            
-                            for idx, vuln in enumerate(vulnerabilities, 1):
-                                if vuln.get('cve_id'):
-                                    clean_props[f'CVE_{idx}'] = str(vuln['cve_id'])
-                                if vuln.get('cvss_score'):
-                                    clean_props[f'CVSS_{idx}'] = str(vuln['cvss_score'])
-                        
-                        ip_ports_map[ip][port_key] = clean_props
-                        
-                        port_list.append({
-                            "org": org,
-                            "SEG": seg_full_name,
-                            "Subred": subnet,
-                            "IP": ip,
-                            "number": port_key,
-                            "props": clean_props
-                        })
+                # 1.5. Intentar match con el target_range del propio escaneo
+                if not subnet and scan['target_range'] and scan['target_range'] != "0.0.0.0/0":
+                    if is_ip_in_network(ip, scan['target_range']):
+                        subnet = scan['target_range']
+                
+                # 2. Si no hay match en redes conocidas, usar el registrado o Unknown
+                if not subnet:
+                    subnet = row['subnet'] or "Unknown"
+                
+                net_info = network_names_map.get(o_name, {}).get(subnet, {})
+                subnet_name = net_info.get('name') or "Unknown" if subnet != "Unknown" else "Unknown"
+                system_name = net_info.get('system') or "Internal"
 
-    print(f"   Iniciando inserción masiva (ORGS: {len(org_list)}, SEG: {len(seg_list)}, SUB: {len(subnet_list)}, IP: {len(ip_list)}, PORT: {len(port_list)})")
-    import json
+                is_crit = ip in critical_ips_map.get(o_name, {})
+                crit_info = critical_ips_map.get(o_name, {}).get(ip, {})
 
-    # 1. ORGs
-    graph.run("""
-        UNWIND $orgs AS o
-        MERGE (org:ORG {org: o.org})
-    """, orgs=org_list)
-    
-    # 2. Nodo Intermedio: Test de visibilidad
-    graph.run("""
-        UNWIND $orgs AS o
-        MATCH (org:ORG {org: o.org})
-        MERGE (test:Test_de_visibilidad {org: o.org, Nombre: 'Test de visibilidad'})
-        MERGE (org)-[:GRAPHTYPE]->(test)
-    """, orgs=org_list)
-    
-    # 3. SEGs y HAS_SEG (Ahora conectan a Test de visibilidad en vez de a ORG)
-    # myip es ahora parte de la identidad cardinal de SEG
-    seg_clean_list = []
-    for s in seg_list:
-        seg_clean_list.append({
-            "org": s["org"], 
-            "SEG": s["SEG"], 
-            "myip": s["myip"] if s["myip"] else "N/A"
+                # AISLAMIENTO ESTRICTO: Solo lo que diga el escaneo (metadata)
+                active_hosts_map[ip] = {
+                    'ip': ip,
+                    'hostname': row['isolation_hostname'] or '',
+                    'organization': o_name,
+                    'mi_ip': scan['myip'] or 'N/A',
+                    'vendor': row['isolation_vendor'] or '',
+                    'mac': row['isolation_mac'] or '',
+                    'os_info': row['isolation_os'] or '',
+                    'hostnames': ", ".join([s.strip('\x00') for s in json.loads(row['isolation_hostnames'])]) if row['isolation_hostnames'] else '',
+                    'interfaces': ", ".join([s.strip('\x00') for s in json.loads(row['isolation_interfaces'] or row['global_interfaces'])]) if (row['isolation_interfaces'] or row['global_interfaces']) else '',
+                    'scripts': row['isolation_scripts'] or '',
+                    'timestamp': row['isolation_last_seen'] or row['discovered_at'],
+                    'network_range': subnet if subnet and subnet != "Unknown" else None,
+                    'network_name': subnet_name,
+                    'network_system': system_name,
+                    'is_critical': is_crit,
+                    'critical_name': crit_info.get('name'),
+                    'critical_reason': crit_info.get('reason'),
+                    'services': []
+                }
+            
+            if row['port'] is not None:
+                enrs = cursor.execute("SELECT enrichment_type, data FROM enrichments WHERE scan_result_id = ?", (row['scan_result_id'],)).fetchall()
+                vulns = cursor.execute("SELECT * FROM vulnerabilities WHERE scan_result_id = ?", (row['scan_result_id'],)).fetchall()
+                
+                service_dict = {
+                    'port': row['port'],
+                    'protocol': row['protocol'],
+                    'name': row['service_name'],
+                    'product': row['product'],
+                    'version': row['version'],
+                    'extrainfo': row['extrainfo'] or '',
+                    'cpe': row['cpe'] or '',
+                    'reason': row['reason'] or '',
+                    'scripts': row['scripts_json'],
+                    'vulnerabilities': [dict(v) for v in vulns]
+                }
+                
+                # Procesar enriquecimientos como propiedades del servicio
+                for e in enrs:
+                    etype = e['enrichment_type']
+                    if etype == 'Screenshot':
+                        service_dict['SCREENSHOT'] = e['data']
+                    elif etype == 'Websource':
+                        service_dict['WEBSOURCE'] = e['data']
+                    elif etype == 'IOXIDResolver':
+                        service_dict['IOXID'] = e['data']
+                    else:
+                        service_dict[f'ENRICHMENT_{etype.upper()}'] = e['data']
+                
+                active_hosts_map[ip]['services'].append(service_dict)
+
+        scan_dict['hosts'] = list(active_hosts_map.values())
+        
+        # Conversaciones pasivas
+        conversations_rows = cursor.execute("SELECT * FROM passive_conversations WHERE scan_id = ?", (scan_id,)).fetchall()
+        conversations = [dict(c) for c in conversations_rows]
+        scan_dict['passive_conversations'] = conversations
+        
+        if scan['scan_mode'] == 'passive':
+            passive_ips_info = {} 
+            for conv in conversations:
+                passive_ips_info[conv['src_ip']] = conv['src_mac']
+                passive_ips_info[conv['dst_ip']] = conv['dst_mac']
+            
+            # Obtener todos los hosts en una sola consulta
+            unique_ips = list(passive_ips_info.keys())
+            h_info_map = {}
+            if unique_ips:
+                # SQLite tiene un límite de variables, pero para IPs únicas suele estar bien
+                # No obstante, por seguridad dividimos en fragmentos de 500
+                for i in range(0, len(unique_ips), 500):
+                    batch_ips = unique_ips[i:i+500]
+                    placeholders = ','.join(['?'] * len(batch_ips))
+                    # JOIN con host_scan_metadata para aislamiento
+                    query_h = f"""
+                        SELECT h.ip_address, h.subnet, h.first_seen,
+                               m.hostname as isolation_hostname,
+                               m.hostnames_json as isolation_hostnames,
+                               m.mac_address as isolation_mac,
+                               m.vendor as isolation_vendor,
+                               m.interfaces_json as isolation_interfaces,
+                               h.interfaces_json as global_interfaces,
+                               m.last_seen as isolation_last_seen
+                        FROM hosts h
+                        LEFT JOIN host_scan_metadata m ON m.host_id = h.id AND m.scan_id = ?
+                        WHERE h.ip_address IN ({placeholders})
+                    """
+                    rows = cursor.execute(query_h, [scan_id] + batch_ips).fetchall()
+                    for row in rows:
+                        h_info_map[row['ip_address']] = dict(row)
+
+            for ip, mac in passive_ips_info.items():
+                h_info = h_info_map.get(ip)
+                subnet = None
+                if o_name in network_names_map:
+                    for net_range in network_names_map[o_name].keys():
+                        if is_ip_in_network(ip, net_range):
+                            subnet = net_range
+                            break
+                if not subnet and h_info:
+                    subnet = h_info.get('subnet')
+                
+                # AISLAMIENTO ESTRICTO: No heredamos nada de la tabla global hosts
+                # Solo usamos lo que diga el escaneo actual (captura o metadata)
+                net_info = network_names_map.get(o_name, {}).get(subnet or "Unknown", {})
+                subnet_name = net_info.get('name') or "Unknown"
+                system_name = net_info.get('system') or "Internal"
+                
+                is_crit = ip in critical_ips_map.get(o_name, {})
+                crit_info = critical_ips_map.get(o_name, {}).get(ip, {})
+                
+                scan_dict['hosts'].append({
+                    'ip': ip,
+                    'hostname': h_info.get('isolation_hostname') or '',
+                    'organization': o_name,
+                    'mi_ip': scan['myip'] or 'N/A',
+                    'vendor': (h_info.get('isolation_vendor') if h_info else '') or '',
+                    'mac': mac or (h_info.get('isolation_mac') if h_info else '') or '', # Captura pcap > metadata scan
+                    'os_info': '', # Aislado
+                    'hostnames': ", ".join([s.strip('\x00') for s in json.loads(h_info.get('isolation_hostnames'))]) if h_info and h_info.get('isolation_hostnames') else '',
+                    'interfaces': ", ".join([s.strip('\x00') for s in json.loads(h_info.get('isolation_interfaces') or h_info.get('global_interfaces'))]) if h_info and (h_info.get('isolation_interfaces') or h_info.get('global_interfaces')) else '',
+                    'timestamp': h_info.get('isolation_last_seen') if h_info else None,
+                    'network_range': subnet if subnet and subnet != "Unknown" else None,
+                    'network_name': subnet_name,
+                    'network_system': system_name,
+                    'is_critical': is_crit,
+                    'critical_name': crit_info.get('name'),
+                    'critical_reason': crit_info.get('reason'),
+                    'services': [] 
+                })
+        
+        all_data.append(scan_dict)
+        
+    conn.close()
+    try: shutil.rmtree(temp_dir)
+    except: pass
+    return all_data
+
+def _duration_seconds(started_at, completed_at) -> int:
+    """Retorna la duración en segundos entre dos timestamps ISO, o 0 si no aplica."""
+    if not started_at or not completed_at:
+        return 0
+    try:
+        from datetime import datetime
+        for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S'):
+            try:
+                s = datetime.strptime(str(started_at)[:26], fmt)
+                e = datetime.strptime(str(completed_at)[:26], fmt)
+                return max(0, int((e - s).total_seconds()))
+            except ValueError:
+                continue
+    except Exception:
+        pass
+    return 0
+
+
+def compute_org_stats(all_scans: List[Dict]) -> Dict[str, Dict]:
+    """
+    Calcula estadísticas agregadas por organización a partir de los escaneos ya cargados.
+    Devuelve Dict[org_name → props dict listo para Neo4j].
+    """
+    raw: Dict[str, Dict] = {}
+
+    for scan in all_scans:
+        org = scan['organization_name'].upper()
+        if org not in raw:
+            raw[org] = {
+                'ips': set(),
+                'services': 0,
+                'vulns': 0,
+                'screenshots': 0,
+                'source_code': 0,
+                'subnets': set(),
+                'locations': set(),
+                'num_scans': 0,
+                'first_scan': None,
+                'last_scan': None,
+                'critical_ips': set(),
+            }
+        r = raw[org]
+        r['num_scans'] += 1
+
+        started = scan.get('started_at') or ''
+        completed = scan.get('completed_at') or started
+        if started:
+            if not r['first_scan'] or started < r['first_scan']:
+                r['first_scan'] = started
+            if not r['last_scan'] or completed > r['last_scan']:
+                r['last_scan'] = completed
+
+        if scan.get('location'):
+            r['locations'].add(scan['location'])
+
+        for h in scan['hosts']:
+            r['ips'].add(h['ip'])
+            if h.get('network_range'):
+                r['subnets'].add(h['network_range'])
+            if h.get('is_critical'):
+                r['critical_ips'].add(h['ip'])
+            for svc in h.get('services', []):
+                r['services'] += 1
+                r['vulns'] += len(svc.get('vulnerabilities') or [])
+                if svc.get('SCREENSHOT'):
+                    r['screenshots'] += 1
+                if svc.get('WEBSOURCE'):
+                    r['source_code'] += 1
+
+    result: Dict[str, Dict] = {}
+    for org, r in raw.items():
+        result[org] = {
+            'TOTAL_HOSTS':              len(r['ips']),
+            'TOTAL_SERVICIOS':          r['services'],
+            'TOTAL_VULNERABILIDADES':   r['vulns'],
+            'TOTAL_SCREENSHOTS':        r['screenshots'],
+            'TOTAL_CODIGO_FUENTE':      r['source_code'],
+            'TOTAL_SUBREDES':           len(r['subnets']),
+            'TOTAL_UBICACIONES':        len(r['locations']),
+            'NUM_ESCANEOS':             r['num_scans'],
+            'PRIMER_ESCANEO':           str(r['first_scan'] or ''),
+            'ULTIMO_ESCANEO':           str(r['last_scan'] or ''),
+            'NUM_DISPOSITIVOS_CRITICOS': len(r['critical_ips']),
+        }
+    return result
+
+
+def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
+    """Procesa los datos e importa a Neo4j con correlación y metadatos mejorados (OPTIMIZADO)."""
+
+    # Pre-computar estadísticas por organización a partir de todos los escaneos cargados
+    org_stats = compute_org_stats(all_scans)
+
+    # Track de hosts creados para correlación posterior (IP -> List[Node])
+    ip_nodes_map = {}
+
+    print("📊 Asegurando índices de rendimiento en Neo4j...")
+    try:
+        graph.run("CREATE INDEX host_org_ip_ds IF NOT EXISTS FOR (h:HOST) ON (h.ORGANIZACION, h.IP, h.DISCOVERY_SOURCE)")
+    except Exception as e:
+        print(f"⚠️ No se pudo crear el índice compuesto de HOST: {e}")
+
+    for scan in all_scans:
+        org_name = scan['organization_name'].upper()
+        scan_mode = scan['scan_mode'] or 'active'
+        is_active = scan_mode != 'passive'
+        is_netexec = scan_mode == 'netexec'
+
+        # 1. Nodo ORGANIZACION — incluye estadísticas agregadas de toda la org
+        org_props = {'name': org_name, **org_stats.get(org_name, {})}
+        org_node = Node("ORGANIZACION", **org_props)
+        graph.merge(org_node, "ORGANIZACION", "name")
+
+        # 2. Nodo ORIGEN — metadatos del escaneo + contadores y duración
+        myip = scan['myip'] or 'N/A'
+        duration = _duration_seconds(scan.get('started_at'), scan.get('completed_at'))
+        if is_netexec:
+            origin_name = f"NetExec import #{scan['id']}"
+        elif not is_active:
+            origin_name = "ESCANEO PASIVO"
+        else:
+            origin_name = f"Escaneo {scan['id']}"
+
+        origin_props = {
+            'NAME': origin_name,
+            'ORGANIZACION': org_name,
+            'MI_IP': myip,
+            'SCAN_ID': scan['id'],
+            'SCAN_TYPE': scan['scan_type'] or '',
+            'SCAN_MODE': scan['scan_mode'] or '',
+            'TARGET_RANGE': scan['target_range'] or '',
+            'PCAP_FILE': scan.get('pcap_file') or ('N/A' if is_active else scan.get('target_range', '')),
+            'INTERFACE': scan['interface'] or '',
+            'COMMAND': scan.get('nmap_command') or 'N/A',
+            'STARTED_AT': scan['started_at'] or '',
+            'COMPLETED_AT': scan['completed_at'] or '',
+            'DURACION_SEG': duration,
+            'STATUS': scan['status'] or '',
+            'LOCATION': scan['location'] or '',
+            'HOSTS_DESCUBIERTOS': scan.get('hosts_discovered') or 0,
+            'PUERTOS_ENCONTRADOS': scan.get('ports_found') or 0,
+        }
+
+        origin_node = Node("ORIGEN", **origin_props)
+        graph.merge(origin_node, "ORIGEN", ("ORGANIZACION", "SCAN_ID"))
+
+        # Relación ORG -> ORIGEN
+        rel_org_origin = Relationship(org_node, "HAS_SOURCE", origin_node)
+        graph.merge(rel_org_origin)
+
+        discovery_source = f"{scan['scan_mode']}:{scan['id']}"
+
+        # 3. PREPARAR DATOS PARA BULK INSERT (UNWIND)
+        hosts_data = []
+        services_data = []
+
+        for h in scan['hosts']:
+            svcs = h.get('services', [])
+            has_vulns = any(s.get('vulnerabilities') for s in svcs)
+            has_screenshots = any(s.get('SCREENSHOT') for s in svcs)
+            has_source = any(s.get('WEBSOURCE') for s in svcs)
+
+            h_props = {
+                'IP':               h['ip'],
+                'HOSTNAME':         h['hostname'] or '',
+                'ORGANIZACION':     h['organization'],
+                'CRITICO':          "SÍ" if h['is_critical'] else "NO",
+                'RAZON_CRITICO':    h.get('critical_reason') or '',
+                'NOMBRE_CRITICO':   h.get('critical_name') or '',
+                'SUBRED':           h.get('network_range') or 'Unknown',
+                'NOMBRE_SUBRED':    h.get('network_name') or 'Unknown',
+                'SISTEMA':          h.get('network_system') or 'N/A',
+                'VENDOR':           h['vendor'] or '',
+                'MAC':              h['mac'] or '',
+                'OS':               h['os_info'] or '',
+                'HOSTNAMES':        h.get('hostnames') or '',
+                'INTERFACES':       h.get('interfaces') or '',
+                'SCRIPTS_HOST':     h.get('scripts') or '',
+                'TIMESTAMP':        h.get('timestamp') or '',
+                'DISCOVERY_SOURCE': discovery_source,
+                'NUM_PUERTOS':      len(svcs),
+                'TIENE_VULNERABILIDADES': "SÍ" if has_vulns else "NO",
+                'TIENE_SCREENSHOTS':     "SÍ" if has_screenshots else "NO",
+                'TIENE_CODIGO_FUENTE':   "SÍ" if has_source else "NO",
+            }
+            hosts_data.append(h_props)
+
+            # Recolectar Servicios
+            for s in svcs:
+                vulns_list = s.get('vulnerabilities') or []
+                vuln_ids = [v.get('cve_id') or v.get('vulnerability_id') or '' for v in vulns_list]
+
+                s_props = {
+                    'host_ip':              h['ip'],
+                    'id':                   f"{h['ip']}_{s['port']}_{s['protocol']}_{discovery_source}",
+                    'port':                 s['port'],
+                    'protocol':             s['protocol'] or '',
+                    'name':                 s['name'] or 'unknown',
+                    'product':              s['product'] or '',
+                    'version':              s['version'] or '',
+                    'extrainfo':            s.get('extrainfo') or '',
+                    'cpe':                  s.get('cpe') or '',
+                    'reason':               s.get('reason') or '',
+                    'vulnerabilidades':     ", ".join(filter(None, vuln_ids)),
+                    'num_vulnerabilidades': len(vulns_list),
+                    'tiene_screenshot':     "SÍ" if s.get('SCREENSHOT') else "NO",
+                    'tiene_codigo_fuente':  "SÍ" if s.get('WEBSOURCE') else "NO",
+                }
+
+                # Añadir enriquecimientos binarios (SCREENSHOT, WEBSOURCE, IOXID…)
+                _skip = {'port', 'protocol', 'name', 'product', 'version', 'extrainfo',
+                         'cpe', 'reason', 'scripts', 'vulnerabilities', 'host_ip', 'id'}
+                for k, v in s.items():
+                    if k not in _skip and k not in s_props:
+                        s_props[k] = v
+
+                services_data.append(s_props)
+
+        # --- EJECUTAR BULK HOSTS ---
+        print(f"📦 [Scan {scan['id']}] Exportando {len(hosts_data)} hosts...")
+        # Usar UNWIND para MERGE de hosts y relaciones con ORIGEN
+        graph.run("""
+            UNWIND $data AS row
+            MERGE (h:HOST {ORGANIZACION: row.ORGANIZACION, IP: row.IP, DISCOVERY_SOURCE: row.DISCOVERY_SOURCE})
+            SET h += row
+            WITH h, row
+            MATCH (o:ORIGEN {ORGANIZACION: row.ORGANIZACION, SCAN_ID: $scan_id})
+            MERGE (o)-[:DISCOVERED_HOST]->(h)
+        """, data=hosts_data, scan_id=scan['id'])
+
+        # --- EJECUTAR BULK SERVICES ---
+        if services_data:
+            print(f"📦 [Scan {scan['id']}] Exportando {len(services_data)} servicios...")
+            graph.run("""
+                UNWIND $data AS row
+                MERGE (s:SERVICE {id: row.id})
+                SET s += row
+                WITH s, row
+                MATCH (h:HOST {ORGANIZACION: $org, IP: row.host_ip, DISCOVERY_SOURCE: $ds})
+                MERGE (h)-[:HAS_SERVICE]->(s)
+            """, data=services_data, org=org_name, ds=discovery_source)
+
+
+        # --- EJECUTAR BULK CONVERSACIONES (PASIVO) ---
+        if not is_active and scan['passive_conversations']:
+            print(f"📦 [Scan {scan['id']}] Exportando {len(scan['passive_conversations'])} conversaciones...")
+            
+            # Normalizar para evitar nulls en las propiedades del MERGE (causa SemanticError)
+            normalized_convs = []
+            for c in scan['passive_conversations']:
+                normalized_convs.append({
+                    'src_ip': c['src_ip'],
+                    'dst_ip': c['dst_ip'],
+                    'dst_port': c['dst_port'] if c['dst_port'] is not None else 0,
+                    'protocol': c['protocol'] if c['protocol'] is not None else 'N/A',
+                    'last_seen': c['last_seen']
+                })
+
+            # Fragmentar para evitar queries gigantescas
+            batch_size = 1000
+            for i in range(0, len(normalized_convs), batch_size):
+                batch = normalized_convs[i:i+batch_size]
+                graph.run("""
+                    UNWIND $data AS conv
+                    MATCH (src:HOST {ORGANIZACION: $org, IP: conv.src_ip, DISCOVERY_SOURCE: $ds})
+                    MATCH (dst:HOST {ORGANIZACION: $org, IP: conv.dst_ip, DISCOVERY_SOURCE: $ds})
+                    MERGE (src)-[r:COMMUNICATES_WITH {discovery_id: $scan_id, port: conv.dst_port, protocol: conv.protocol}]->(dst)
+                    SET r.last_seen = conv.last_seen
+                """, data=batch, org=org_name, ds=discovery_source, scan_id=scan['id'])
+
+        # Rellenar ip_nodes_map para el paso 7 (esto requiere otra query o matcheo)
+        # Como es para correlación, podemos hacerlo más eficiente después.
+        for h in scan['hosts']:
+            if h['ip'] not in ip_nodes_map: ip_nodes_map[h['ip']] = []
+            # Guardamos solo el source para correlacionar después
+            ip_nodes_map[h['ip']].append(discovery_source)
+
+def _load_netexec_data(db_path: str, scan_id: int) -> Dict:
+    """Lee enrichments NETEXEC y credenciales asociadas a un escaneo."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    out = {'hosts': {}, 'credentials': []}
+    try:
+        rows = conn.execute("""
+            SELECT h.ip_address AS ip, e.data
+            FROM enrichments e
+            JOIN scan_results sr ON sr.id = e.scan_result_id
+            JOIN hosts h ON h.id = sr.host_id
+            WHERE sr.scan_id = ? AND e.enrichment_type = 'NETEXEC'
+        """, (scan_id,)).fetchall()
+        for r in rows:
+            try:
+                payload = json.loads(r['data']) if r['data'] else {}
+            except Exception:
+                payload = {}
+            out['hosts'][r['ip']] = payload
+        cred_rows = conn.execute("""
+            SELECT domain, username, password, credtype, source_protocol, source_host_ip
+            FROM credentials WHERE scan_id = ?
+        """, (scan_id,)).fetchall()
+        out['credentials'] = [dict(r) for r in cred_rows]
+    except Exception as e:
+        print(f"⚠️  Error leyendo enriquecimientos NETEXEC: {e}")
+    finally:
+        conn.close()
+    return out
+
+
+def _push_netexec_to_neo4j(graph, org_name: str, discovery_source: str,
+                            nxc_data: Dict):
+    """Crea/actualiza nodos :CREDENCIAL y enriquece :HOST con metadatos NetExec."""
+    # 1) Enriquecer hosts con propiedades nxc-específicas
+    host_updates = []
+    for ip, payload in (nxc_data.get('hosts') or {}).items():
+        protocols = payload.get('protocols') or {}
+        smb = protocols.get('smb') or {}
+        ldap = protocols.get('ldap') or {}
+        rdp = protocols.get('rdp') or {}
+        host_updates.append({
+            'IP': ip,
+            'NXC_DOMAIN': payload.get('domain') or '',
+            'NXC_OS': payload.get('os') or '',
+            'NXC_SMB_SIGNING': str(smb.get('signing')) if smb else '',
+            'NXC_SMBV1': str(smb.get('smbv1')) if smb else '',
+            'NXC_SMB_DC': str(smb.get('dc')) if smb else '',
+            'NXC_RDP_NLA': str(rdp.get('nla')) if rdp else '',
+            'NXC_LDAP_SIGNING_REQUIRED': str(ldap.get('signing_required')) if ldap else '',
+            'NXC_SHARES': ', '.join(s.get('name', '') for s in (payload.get('shares') or [])),
+            'NXC_ADMIN_USERS': ', '.join(payload.get('admin_users') or []),
+            'NXC_LOOT_FILES': str(len(payload.get('loot_files') or [])),
+        })
+    if host_updates:
+        graph.run("""
+            UNWIND $data AS row
+            MATCH (h:HOST {ORGANIZACION: $org, IP: row.IP, DISCOVERY_SOURCE: $ds})
+            SET h += row
+        """, data=host_updates, org=org_name, ds=discovery_source)
+
+    # 2) Crear nodos :CREDENCIAL y relaciones
+    cred_rows = []
+    for c in (nxc_data.get('credentials') or []):
+        if not c.get('username'):
+            continue
+        domain = (c.get('domain') or '').strip()
+        username = c['username']
+        password = c.get('password') or ''
+        credtype = c.get('credtype') or ''
+        cred_rows.append({
+            'ID': f"{org_name}|{domain}|{username}|{credtype}|{password[:32]}",
+            'DOMINIO': domain,
+            'USUARIO': username,
+            'PASSWORD': password,
+            'TIPO': credtype,
+            'PROTOCOLO_ORIGEN': c.get('source_protocol') or '',
+            'HOST_ORIGEN': c.get('source_host_ip') or '',
+            'ORGANIZACION': org_name,
         })
 
-    graph.run("""
-        UNWIND $segs AS s
-        MATCH (test:Test_de_visibilidad {org: s.org})
-        MERGE (seg:SEG {org: s.org, SEG: s.SEG, myip: s.myip})
-        MERGE (test)-[:SCAN_FROM]->(seg)
-    """, segs=seg_clean_list)
-    
-    # 4. Subredes y SCAN_SUBNET
-    # myip se asigna y empata con el SEG de origen
-    graph.run("""
-        UNWIND $subnets AS sub
-        MATCH (seg:SEG {org: sub.org, SEG: sub.SEG, myip: sub.myip})
-        MERGE (s:Subred {org: sub.org, SEG: sub.SEG, Subred: sub.Subred, myip: sub.myip})
-        SET s.subnet_name = sub.subnet_name
-        MERGE (seg)-[:SCAN_SUBNET]->(s)
-    """, subnets=subnet_list)
-    
-    # 4. Limpiar relaciones IP huérfanas antes de asentar las nuevas (IP cambiando subred)
-    graph.run("""
-        UNWIND $ips AS i
-        MATCH (oldS:Subred)-[r:SCAN_IP]->(ip_node:IP {org: i.org, SEG: i.SEG, IP: i.IP})
-        WHERE oldS.Subred <> i.Subred
-        DELETE r
-    """, ips=ip_list)
+    if cred_rows:
+        graph.run("""
+            UNWIND $data AS row
+            MERGE (c:CREDENCIAL {ID: row.ID})
+            SET c += row
+            WITH c, row
+            MATCH (org:ORGANIZACION {name: $org})
+            MERGE (org)-[:HAS_CREDENTIAL]->(c)
+        """, data=cred_rows, org=org_name)
 
-    # 5. IPs y SCAN_IP
-    ip_clean_list = []
-    for i in ip_list:
-        sub = i.pop("Subred") 
-        myip = i.pop("myip")
-        ip_clean_list.append({"match_props": {"org": i["org"], "SEG": i["SEG"], "IP": i["IP"]}, "subnet": sub, "myip": myip, "update_props": i})
+        # Vincular credencial → host origen si aplica
+        graph.run("""
+            UNWIND $data AS row
+            WITH row WHERE row.HOST_ORIGEN <> ''
+            MATCH (c:CREDENCIAL {ID: row.ID})
+            MATCH (h:HOST {ORGANIZACION: $org, IP: row.HOST_ORIGEN, DISCOVERY_SOURCE: $ds})
+            MERGE (c)-[:PILLAGED_FROM]->(h)
+        """, data=cred_rows, org=org_name, ds=discovery_source)
 
-    graph.run("""
-        UNWIND $ips AS row
-        MATCH (sub:Subred {org: row.match_props.org, SEG: row.match_props.SEG, Subred: row.subnet, myip: row.myip})
-        MERGE (ip:IP {org: row.match_props.org, SEG: row.match_props.SEG, IP: row.match_props.IP})
-        SET ip += row.update_props, ip.Subred = row.subnet
-        MERGE (sub)-[:SCAN_IP]->(ip)
-        WITH ip, row
-        WHERE row.update_props.Critical = true
-        SET ip:Critical
-    """, ips=ip_clean_list)
+    return {
+        'hosts_updated': len(host_updates),
+        'credentials_pushed': len(cred_rows),
+    }
 
-    # 6. Ports y SCAN_PORT
-    graph.run("""
-        UNWIND $ports AS p
-        MATCH (ip:IP {org: p.org, SEG: p.SEG, IP: p.IP})
-        MERGE (port:Port {org: p.org, SEG: p.SEG, IP: p.IP, number: p.number})
-        SET port += p.props, port.Subred = p.Subred
-        MERGE (ip)-[:SCAN_PORT]->(port)
-    """, ports=port_list)
-    
-    # Limpiar nodos de Subred huérfanos (que ya no tienen IPs porque cambiaron de segmento)
-    print("   Limpiando subredes huérfanas...")
-    graph.run("""
-        MATCH (s:Subred)
-        WHERE NOT (s)-[:SCAN_IP]->(:IP)
-        DETACH DELETE s
-    """)
-    
-    # 7. Correlación de IPs descubiertas desde múltiples orígenes (PROBABLY_SAME_HOST)
-    print("   Generando vínculos de visibilidad cruzada entre orígenes...")
-    graph.run("""
-        MATCH (ip1:IP), (ip2:IP)
-        WHERE ip1.org = ip2.org AND ip1.IP = ip2.IP 
-          AND ip1.SEG < ip2.SEG
-        MERGE (ip1)-[:PROBABLY_SAME_HOST]-(ip2)
-    """)
-    
-    return ip_ports_map
+
+def export_single_scan(scan_id: int) -> Dict:
+    """Exporta un único escaneo a Neo4j. Pensado para invocarse desde el web API.
+
+    Lee la conexión de Neo4j desde variables de entorno (NEO4J_HOST, NEO4J_USERNAME,
+    NEO4J_PASSWORD).
+    """
+    db_path = os.getenv("ARSENAL_DB_PATH", "results/scans.db")
+    if not Path(db_path).exists():
+        return {'ok': False, 'error': f'BD no encontrada: {db_path}'}
+
+    host = os.getenv("NEO4J_HOST", "127.0.0.1")
+    user = os.getenv("NEO4J_USERNAME", "neo4j")
+    password = os.getenv("NEO4J_PASSWORD", "neo4j123")
+
+    try:
+        graph = connect_to_neo4j(host, user, password)
+    except Exception as e:
+        return {'ok': False, 'error': f'Neo4j: {e}'}
+
+    scans_data = get_scans_data(db_path, scan_id=scan_id)
+    if not scans_data:
+        return {'ok': False, 'error': f'Scan {scan_id} no encontrado o no completado'}
+
+    process_to_neo4j_v2(graph, scans_data)
+
+    scan = scans_data[0]
+    nxc = _load_netexec_data(db_path, scan_id)
+    nxc_stats = _push_netexec_to_neo4j(
+        graph,
+        scan['organization_name'].upper(),
+        f"{scan['scan_mode']}:{scan['id']}",
+        nxc,
+    )
+
+    return {
+        'ok': True,
+        'scan_id': scan_id,
+        'hosts_in_scan': len(scan['hosts']),
+        **nxc_stats,
+    }
 
 
 def main():
-    """Función principal para ejecutar el script."""
-    parser = argparse.ArgumentParser(
-        description='Importar resultados de escaneos desde scans.db a Neo4j'
-    )
-    parser.add_argument('-r', '--ip', type=str, required=True, 
-                       help='IP de la base de datos Neo4j')
-    parser.add_argument('-o', '--org', type=str, default=None,
-                       help='Filtrar por organización específica (opcional)')
-    parser.add_argument('-s', '--location', type=str, default=None,
-                       help='Filtrar por ubicación específica (opcional)')
-    parser.add_argument('-d', '--db', type=str, default='results/scans.db',
-                       help='Ruta a la base de datos scans.db (default: results/scans.db)')
+    parser = argparse.ArgumentParser(description='Importar resultados de escaneos a Neo4j (Consolidado - Remodelado)')
+    parser.add_argument('-r', '--ip', type=str, required=True, help='IP de Neo4j')
+    parser.add_argument('-o', '--org', type=str, default=None, help='Organización')
+    parser.add_argument('-s', '--location', type=str, default=None, help='Ubicación')
+    parser.add_argument('-d', '--db', type=str, default='results/scans.db', help='Ruta scans.db')
     args = parser.parse_args()
     
-    # Verificar que existe la BD
     db_path = Path(args.db)
     if not db_path.exists():
-        print(f"❌ Error: No se encuentra la base de datos en {db_path}")
+        print(f"❌ Error: {db_path} no existe")
         return
     
-    print(f"📁 Leyendo datos de: {db_path}")
-    
-    # Conectar a Neo4j
-    print(f"🔗 Conectando a Neo4j en {args.ip}...")
     try:
         graph = connect_to_neo4j(args.ip)
-        print("✅ Conexión exitosa a Neo4j")
+        print(f"✅ Conectado a Neo4j en {args.ip}")
     except Exception as e:
-        print(f"❌ Error conectando a Neo4j: {e}")
+        print(f"❌ Error Neo4j: {e}")
         return
     
-    # Obtener y combinar datos
-    print("\n📊 Combinando escaneos...")
-    combined_data, location_myip_map, network_names_map, critical_ips_map = get_combined_scans_data(
-        str(db_path),
-        org=args.org,
-        location=args.location
-    )
+    print("📊 Obteniendo datos enriquecidos...")
+    all_scans_data = get_scans_data(str(db_path), args.org, args.location)
     
-    if not combined_data:
-        print("⚠️  No se encontraron escaneos completados para importar.")
-        return
-    
-    # Mostrar resumen
-    total_hosts = 0
-    total_hosts_with_ports = 0
-    total_hosts_without_ports = 0
-    for org_data in combined_data.values():
-        for loc_data in org_data.values():
-            for subnet_data in loc_data.values():
-                for ip_data in subnet_data.values():
-                    total_hosts += 1
-                    if 'no_ports' in ip_data:
-                        total_hosts_without_ports += 1
-                    elif ip_data:  # Tiene al menos un puerto
-                        total_hosts_with_ports += 1
-    
-    import json
-    # Verificar organizaciones sin escaneos completados
-    conn_check = sqlite3.connect(str(db_path))
-    cursor_check = conn_check.cursor()
-    all_orgs = cursor_check.execute("SELECT DISTINCT name FROM organizations").fetchall()
-    all_orgs_set = {row[0] for row in all_orgs}
-    completed_orgs_set = set(combined_data.keys())
-    missing_orgs = all_orgs_set - completed_orgs_set
-    
-    if missing_orgs:
-        print(f"⚠️  Organizaciones sin escaneos completados (no se importarán): {', '.join(missing_orgs)}")
-        # Verificar estado de estos escaneos
-        for org in missing_orgs:
-            statuses = cursor_check.execute("""
-                SELECT status, COUNT(*) FROM scans 
-                WHERE organization_name = ? GROUP BY status
-            """, (org,)).fetchall()
-            if statuses:
-                status_str = ', '.join([f"{s[0]}: {s[1]}" for s in statuses])
-                print(f"   - {org}: {status_str}")
-    conn_check.close()
-    
-    print(f"\n✅ Datos combinados de {len(combined_data)} organización(es) con escaneos completados")
-    print(f"   Total de hosts únicos: {total_hosts}")
-    if total_hosts_without_ports > 0:
-        print(f"   - Hosts con puertos abiertos: {total_hosts_with_ports}")
-        print(f"   - Hosts sin puertos abiertos: {total_hosts_without_ports}")
-    
-    # Importar a Neo4j
-    print("\n🚀 Importando a Neo4j...")
-    try:
-        ip_ports_map = process_to_neo4j(graph, combined_data, location_myip_map, network_names_map, critical_ips_map)
-        print(f"✅ Importación completada exitosamente")
-        print(f"   Hosts procesados: {len(ip_ports_map)}")
-    except Exception as e:
-        print(f"❌ Error durante la importación: {e}")
-        import traceback
-        traceback.print_exc()
-        return
-
+    print(f"🚀 Procesando {len(all_scans_data)} escaneos con correlación inteligente...")
+    process_to_neo4j_v2(graph, all_scans_data)
+    print("✅ Exportación consolidada completada exitosamente")
 
 if __name__ == "__main__":
     main()

@@ -118,27 +118,20 @@ class DependencyChecker:
         
         return 'unknown'
     
-    def check_selenium_firefox(self):
-        """Verifica si Selenium puede usar Firefox para capturas de pantalla."""
-        try:
-            from selenium import webdriver
-            from selenium.webdriver.firefox.options import Options
-            from selenium.common.exceptions import WebDriverException
-            
-            # Intentar inicializar Firefox en modo headless
-            options = Options()
-            options.add_argument("--headless")
-            
-            try:
-                driver = webdriver.Firefox(options=options)
-                driver.quit()
+    def check_eyewitness(self):
+        """Verifica si EyeWitness está disponible para capturas de pantalla."""
+        candidates = [
+            "eyewitness",
+            "/usr/bin/eyewitness",
+            "/usr/local/bin/eyewitness",
+            "/opt/EyeWitness/Python/EyeWitness.py",
+            "/opt/eyewitness/Python/EyeWitness.py",
+            "/usr/share/eyewitness/EyeWitness.py",
+        ]
+        for path in candidates:
+            if shutil.which(path) or __import__("os").path.isfile(path):
                 return True
-            except WebDriverException as e:
-                # Firefox o geckodriver no disponible
-                return False
-        except ImportError:
-            # Selenium no instalado (debería estar en requirements.txt)
-            return False
+        return False
     
     def check_all(self, check_optional=True, check_screenshots=True):
         """Verifica todas las dependencias."""
@@ -175,37 +168,23 @@ class DependencyChecker:
         
         # Verificar dependencias para capturas de pantalla
         if check_screenshots:
-            print("\n📋 Dependencias para capturas de pantalla:")
-            # Verificar Firefox
-            firefox_found = self.check_command(
-                'firefox',
-                'Firefox',
-                'Navegador necesario para capturas de pantalla (opcional)',
+            print("\n📋 Dependencias para capturas de pantalla (EyeWitness):")
+            eyewitness_ok = self.check_eyewitness()
+            if not eyewitness_ok:
+                self.missing_optional.append({
+                    'name': 'EyeWitness',
+                    'command': 'eyewitness',
+                    'description': 'Herramienta de captura web (screenshots + código fuente)',
+                    'install_instructions': self._get_eyewitness_install()
+                })
+            # Verificar Chromium (requerido por EyeWitness)
+            self.check_command(
+                'chromium',
+                'Chromium',
+                'Navegador necesario para EyeWitness (capturas de pantalla)',
                 critical=False,
-                install_instructions=self._get_firefox_install()
+                install_instructions='sudo apt-get install -y chromium chromium-driver'
             )
-            
-            # Verificar Selenium puede usar Firefox (incluso si firefox no está en PATH)
-            selenium_ok = self.check_selenium_firefox()
-            if not selenium_ok:
-                if firefox_found:
-                    # Firefox está en PATH pero Selenium no puede usarlo
-                    print("\n⚠️  Firefox está instalado pero Selenium no puede inicializarlo.")
-                    print("   Esto puede deberse a que falta geckodriver.")
-                    print("   Selenium Manager debería instalarlo automáticamente, pero si falla:")
-                    self.missing_optional.append({
-                        'name': 'geckodriver',
-                        'command': 'geckodriver',
-                        'description': 'Driver necesario para que Selenium controle Firefox',
-                        'install_instructions': self._get_geckodriver_install()
-                    })
-                else:
-                    # Firefox no está instalado o no está en PATH
-                    # Intentar verificar si Selenium puede encontrarlo de otra manera
-                    # (Selenium Manager puede descargar Firefox automáticamente)
-                    print("\n💡 Nota: Para capturas de pantalla necesitas Firefox.")
-                    print("   Selenium Manager puede descargarlo automáticamente, pero es mejor instalarlo:")
-                    print(f"   {self._get_firefox_install()}")
         
         # Mostrar resultados
         print("\n" + "="*70)
@@ -280,43 +259,20 @@ class DependencyChecker:
         else:
             return "Instalar arp-scan según tu sistema operativo"
     
-    def _get_firefox_install(self):
-        """Instrucciones específicas para instalar Firefox."""
+    def _get_eyewitness_install(self):
+        """Instrucciones para instalar EyeWitness."""
         if self.os_type == 'linux':
             distro = self._detect_linux_distro()
             if distro in ['debian', 'ubuntu']:
-                return "sudo apt-get update && sudo apt-get install -y firefox-esr"
-            elif distro in ['redhat', 'centos', 'fedora']:
-                return "sudo yum install -y firefox"
-            elif distro == 'arch':
-                return "sudo pacman -S firefox"
+                return (
+                    "sudo apt-get install -y chromium chromium-driver && "
+                    "git clone --depth 1 https://github.com/FortyNorthSecurity/EyeWitness.git /opt/eyewitness && "
+                    "pip install -r /opt/eyewitness/requirements.txt"
+                )
             else:
-                return "Instalar firefox usando el gestor de paquetes de tu distribución"
-        elif self.os_type == 'darwin':
-            return "brew install --cask firefox"
-        elif self.os_type == 'windows':
-            return "Descargar desde https://www.mozilla.org/firefox/ o usar: choco install firefox"
+                return "git clone https://github.com/FortyNorthSecurity/EyeWitness.git /opt/eyewitness && pip install -r /opt/eyewitness/requirements.txt"
         else:
-            return "Instalar Firefox según tu sistema operativo"
-    
-    def _get_geckodriver_install(self):
-        """Instrucciones específicas para instalar geckodriver."""
-        if self.os_type == 'linux':
-            distro = self._detect_linux_distro()
-            if distro in ['debian', 'ubuntu']:
-                return "sudo apt-get update && sudo apt-get install -y firefox-geckodriver"
-            elif distro in ['redhat', 'centos', 'fedora']:
-                return "sudo yum install -y geckodriver"
-            elif distro == 'arch':
-                return "sudo pacman -S geckodriver"
-            else:
-                return "Instalar geckodriver desde https://github.com/mozilla/geckodriver/releases"
-        elif self.os_type == 'darwin':
-            return "brew install geckodriver"
-        elif self.os_type == 'windows':
-            return "Descargar desde https://github.com/mozilla/geckodriver/releases o usar: choco install geckodriver"
-        else:
-            return "Instalar geckodriver desde https://github.com/mozilla/geckodriver/releases"
+            return "Ver https://github.com/FortyNorthSecurity/EyeWitness para instrucciones de instalación"
     
     def _get_tshark_install(self):
         """Instrucciones específicas para instalar tshark (Wireshark)."""

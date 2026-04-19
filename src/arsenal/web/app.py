@@ -73,17 +73,27 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 from arsenal.web.core.models import ScanConfig, Neo4jConfig, NetworkCreateRequest
 from arsenal.web.core.websockets import ConnectionManager, manager
 
-from arsenal.web.core.deps import storage, running_scans, running_processes
+from arsenal.web.core.deps import storage, running_scans, running_processes, running_scans_lock
 from arsenal.web.routes.api import router as api_router
 from arsenal.web.routes import scans as scans_module
 from arsenal.web.routes.scans import router as scans_router
 from arsenal.web.routes.export_import import router as export_import_router
+from arsenal.web.routes.exploitation import (
+    router as exploitation_router,
+    nxc_router as exploitation_nxc_router,
+)
+from arsenal.web.routes.bitacora import router as bitacora_router
+from arsenal.web.routes.pwndoc import router as pwndoc_router
 
 # Registrar Routers
 app.include_router(pages_router)
 app.include_router(api_router)
 app.include_router(scans_router)
 app.include_router(export_import_router)
+app.include_router(exploitation_router)
+app.include_router(exploitation_nxc_router)
+app.include_router(bitacora_router)
+app.include_router(pwndoc_router)
 
 @app.post("/api/scans/cleanup-zombies")
 async def cleanup_zombie_scans_endpoint(max_hours: float = 2.0):
@@ -104,33 +114,50 @@ async def cleanup_zombie_scans_endpoint(max_hours: float = 2.0):
     cleaned = 0
     for zombie in zombies:
         scan_id = zombie['id']
+        scan_id_str = str(scan_id)
+
+        # Terminar proceso/hilo si aún está vivo
+        with running_scans_lock:
+            proc = running_processes.pop(scan_id_str, None)
+            running_scans.pop(scan_id_str, None)
+        if proc:
+            try:
+                if proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=3)
+                    except Exception:
+                        proc.kill()
+            except Exception:
+                pass
+
         hosts_count = cursor.execute("""
             SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
         """, (scan_id,)).fetchone()[0]
-        
+
         ports_count = cursor.execute("""
             SELECT COUNT(*) FROM scan_results WHERE scan_id = ?
         """, (scan_id,)).fetchone()[0]
-        
+
         if hosts_count > 0 or ports_count > 0:
             status = 'completed'
             error_message = None
         else:
             status = 'failed'
             error_message = f"Escaneo zombie limpiado manualmente (más de {max_hours}h sin actualizar)."
-        
+
         cursor.execute("""
             UPDATE scans
             SET status = ?, completed_at = ?, hosts_discovered = ?,
                 ports_found = ?, error_message = ?
             WHERE id = ?
-        """, (status, datetime.now().isoformat(), hosts_count, ports_count, 
+        """, (status, datetime.now().isoformat(), hosts_count, ports_count,
               error_message, scan_id))
         cleaned += 1
-    
+
     conn.commit()
     conn.close()
-    
+
     return {"cleaned": cleaned, "message": f"Se limpiaron {cleaned} escaneo(s) zombie"}
 
 @app.get("/api/scan/{scan_id}/status")
@@ -222,25 +249,29 @@ async def get_scan_info(scan_id: int):
 
 @app.post("/api/scan/start")
 async def start_scan(config: ScanConfig):
-    """Inicia un nuevo escaneo (activo o pasivo)."""
+    """Inicia un nuevo escaneo (activo, pasivo o específico)."""
     # Validar scan_mode
-    if config.scan_mode not in ["active", "passive"]:
+    if config.scan_mode not in ["active", "passive", "specific"]:
         raise HTTPException(
             status_code=400, 
-            detail=f"Modo de escaneo inválido: '{config.scan_mode}'. Debe ser 'active' o 'passive'"
+            detail=f"Modo de escaneo inválido: '{config.scan_mode}'. Debe ser 'active', 'passive' o 'specific'"
         )
     
-    # Validar target_range para escaneos activos
-    if config.scan_mode == "active":
+    # Validar target_range para escaneos activos o específicos
+    if config.scan_mode in ["active", "specific"]:
         if not config.target_range or config.target_range.strip() == "":
-            raise HTTPException(status_code=400, detail="target_range es requerido para escaneos activos")
-        if not check_dependencies(check_optional=False, check_screenshots=config.screenshots):
-            raise HTTPException(status_code=400, detail="Dependencias críticas faltantes")
+            raise HTTPException(status_code=400, detail="target_range es requerido para escaneos activos o específicos")
+        
+        # Verificar dependencias si se requieren capturas
+        if config.screenshots or config.source_code:
+            if not check_dependencies(check_optional=False, check_screenshots=config.screenshots):
+                raise HTTPException(status_code=400, detail="Dependencias críticas faltantes para capturas")
+                
     elif config.scan_mode == "passive":
         # Para escaneos pasivos, target_range no es crítico (usar por defecto si no se proporciona)
         if not config.target_range or config.target_range.strip() == "":
             config.target_range = "0.0.0.0/0"
-        # Verificar que tshark esté disponible usando el sistema de verificación de dependencias
+        # Verificar que tshark esté disponible
         from arsenal.scripts.check_env import DependencyChecker
         checker = DependencyChecker()
         tshark_found = checker.check_command(
@@ -258,11 +289,19 @@ async def start_scan(config: ScanConfig):
             )
     
     # Determinar scan_type según el modo
-    scan_type = "passive" if config.scan_mode == "passive" else config.nmap_speed
+    if config.scan_mode == "active":
+        scan_type = config.nmap_speed
+    elif config.scan_mode == "specific":
+        scan_type = "specific"
+    else:
+        scan_type = "passive"
     
     # Crear escaneo en BD
     # Determinar myip usando la interfaz pasada
     myip = config.myip if config.myip else get_interface_ip(config.interface)
+    
+    # Forzar desactivación de ciertos flags si no es modo activo
+    is_active = config.scan_mode == "active"
     
     scan_id = storage.start_scan(
         organization=config.organization,
@@ -271,10 +310,10 @@ async def start_scan(config: ScanConfig):
         target_range=config.target_range,
         interface=config.interface,
         myip=myip,
-        enable_version_detection=config.nmap_versions if config.scan_mode == "active" else False,
-        enable_vulnerability_scan=config.nmap_vulns if config.scan_mode == "active" else False,
-        enable_screenshots=config.screenshots if config.scan_mode == "active" else False,
-        enable_source_code=config.source_code if config.scan_mode == "active" else False,
+        enable_version_detection=config.nmap_versions if is_active else False,
+        enable_vulnerability_scan=config.nmap_vulns if is_active else False,
+        enable_screenshots=config.screenshots, # Permitir en specific
+        enable_source_code=config.source_code, # Permitir en specific
         scan_mode=config.scan_mode
     )
     
@@ -282,6 +321,7 @@ async def start_scan(config: ScanConfig):
     if config.scan_mode == "passive":
         target_func = scans_module.run_passive_scan_background
     else:
+        # Modo 'active' y 'specific' usan run_scan_background
         target_func = scans_module.run_scan_background
 
     scan_thread = threading.Thread(
@@ -290,55 +330,48 @@ async def start_scan(config: ScanConfig):
         daemon=True
     )
     scan_thread.start()
-    running_scans[str(scan_id)] = scan_thread
+    with running_scans_lock:
+        running_scans[str(scan_id)] = scan_thread
     
     return {"scan_id": scan_id, "status": "started", "mode": config.scan_mode}
 
 
 @app.post("/api/scan/{scan_id}/stop")
 async def stop_scan(scan_id: int):
-    """Detiene un escaneo en ejecución sin borrarlo."""
+    """Detiene un escaneo en ejecución sin borrarlo (conserva los datos recogidos)."""
     scan_id_str = str(scan_id)
-    
-    # Verificar si el escaneo está en ejecución
-    if scan_id_str not in running_processes:
-        # Verificar en la BD si está running
-        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        scan = cursor.execute("SELECT status FROM scans WHERE id = ?", (scan_id,)).fetchone()
-        conn.close()
-        
-        if not scan:
-            raise HTTPException(status_code=404, detail="Escaneo no encontrado")
-        if scan['status'] != 'running':
-            raise HTTPException(status_code=400, detail=f"El escaneo no está en ejecución (estado: {scan['status']})")
-        
-        # Si no está en running_processes pero está running, marcar como detenido
-        storage.complete_scan(scan_id, error_message="Escaneo detenido por el usuario")
-        return {"status": "success", "message": "Escaneo detenido"}
-    
-    # Obtener el proceso
-    process = running_processes[scan_id_str]
-    
+
+    # Verificar que el escaneo existe y está en ejecución
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    scan = conn.execute("SELECT status FROM scans WHERE id = ?", (scan_id,)).fetchone()
+    conn.close()
+
+    if not scan:
+        raise HTTPException(status_code=404, detail="Escaneo no encontrado")
+    if scan['status'] != 'running':
+        raise HTTPException(status_code=400, detail=f"El escaneo no está en ejecución (estado: {scan['status']})")
+
     try:
-        # Terminar el proceso
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except:
-            process.kill()
-        
-        # Marcar como detenido en la BD
+        # Terminar subproceso si existe (thread-safe)
+        with running_scans_lock:
+            process = running_processes.pop(scan_id_str, None)
+            running_scans.pop(scan_id_str, None)
+        if process:
+            try:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except Exception:
+                        process.kill()
+            except Exception:
+                pass
+
+        # Marcar como detenido en la BD — el hilo detectará status != 'running' y parará
         storage.complete_scan(scan_id, error_message="Escaneo detenido por el usuario")
-        
-        # Limpiar de los diccionarios
-        if scan_id_str in running_processes:
-            del running_processes[scan_id_str]
-        if scan_id_str in running_scans:
-            del running_scans[scan_id_str]
-        
-        return {"status": "success", "message": "Escaneo detenido correctamente"}
+
+        return {"status": "success", "message": "Escaneo detenido correctamente (datos conservados)"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deteniendo escaneo: {str(e)}")
 
@@ -347,24 +380,19 @@ async def cancel_scan(scan_id: int):
     """Cancela un escaneo en ejecución y lo borra completamente."""
     scan_id_str = str(scan_id)
     
-    # Detener el proceso si está en ejecución
-    if scan_id_str in running_processes:
-        process = running_processes[scan_id_str]
+    # Detener el proceso si está en ejecución (thread-safe)
+    with running_scans_lock:
+        process = running_processes.pop(scan_id_str, None)
+        running_scans.pop(scan_id_str, None)
+    if process:
         try:
             process.terminate()
             try:
                 process.wait(timeout=5)
-            except:
+            except Exception:
                 process.kill()
-        except:
+        except Exception:
             pass
-        
-        # Limpiar de los diccionarios
-        if scan_id_str in running_processes:
-            del running_processes[scan_id_str]
-        
-    if scan_id_str in running_scans:
-        del running_scans[scan_id_str]
         
     try:
         # Borrar el escaneo completamente
@@ -428,323 +456,267 @@ async def download_pcap(scan_id: int):
 
 @app.post("/api/scan/import-xml")
 async def import_nmap_xml(
-    xml_file: UploadFile = File(...),
+    xml_file: List[UploadFile] = File(...),
     organization: str = Form(...),
     location: str = Form(...),
-    myip: Optional[str] = Form(None)
+    myip: Optional[str] = Form(None),
+    interface: Optional[str] = Form(None)
 ):
-    """Importa un escaneo Nmap desde un archivo XML."""
-    try:
-        # Validar que el archivo es XML
-        if not xml_file.filename.endswith('.xml'):
-            raise HTTPException(status_code=400, detail="El archivo debe ser un XML de Nmap")
-        
-        # Guardar temporalmente el archivo para parsearlo primero
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xml') as tmp_file:
-            shutil.copyfileobj(xml_file.file, tmp_file)
-            tmp_xml_path = tmp_file.name
-        
-        # Parsear XML para extraer información del escaneo
-        parser = NmapXMLParser(tmp_xml_path)
-        parsed_data = parser.parse()
-        scan_info = parsed_data.get('scan_info', {})
-        
-        # Extraer el rango/target del escaneo
-        target_range = 'imported_from_xml'
-        nmap_args = scan_info.get('args', '')
-        
-        # Intentar extraer el target de los argumentos del comando Nmap
-        # El target suele ser el último argumento que no es una opción
-        if nmap_args:
-            # Buscar IPs o rangos en los argumentos
-            ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?\b'
-            ip_ranges = re.findall(ip_pattern, nmap_args)
-            if ip_ranges:
-                # Usar el primer rango encontrado, o todos si hay múltiples
-                if len(ip_ranges) == 1:
-                    target_range = ip_ranges[0]
-                else:
-                    # Si hay múltiples, usar el primero o combinarlos
-                    target_range = ip_ranges[0] if len(ip_ranges[0]) <= 20 else ', '.join(ip_ranges[:3])
-        
-        # Si no se encontró en args, intentar construir un rango desde los hosts encontrados
-        if target_range == 'imported_from_xml' and parsed_data.get('hosts'):
-            hosts = list(parsed_data['hosts'].keys())
-            if hosts:
-                if len(hosts) == 1:
-                    target_range = hosts[0]
-                elif len(hosts) <= 5:
-                    target_range = ', '.join(hosts)
-                else:
-                    # Si hay muchos hosts, usar el primero y último
-                    sorted_hosts = sorted(hosts, key=lambda x: ipaddress.ip_address(x) if '.' in x else x)
-                    target_range = f"{sorted_hosts[0]} - {sorted_hosts[-1]} ({len(hosts)} hosts)"
-        
-        # Construir el nombre del escaneo con el rango
-        scan_name = f"imported ({target_range})"
-        
-        # Crear escaneo en BD con el rango extraído
-        scan_id = storage.start_scan(
-            organization=organization,
-            location=location,
-            scan_type='imported',
-            target_range=target_range,
-            interface='N/A',
-            myip=myip,
-            nmap_command=scan_name,
-            enable_version_detection=True,
-            enable_vulnerability_scan=False,
-            enable_screenshots=False,
-            enable_source_code=False
-        )
-        
-        # Obtener directorio del escaneo
-        scan_dir = storage.get_scan_directory(organization, location, scan_id)
-        evidence_dir = scan_dir / "evidence"
-        evidence_dir.mkdir(parents=True, exist_ok=True)
-        nmap_xml_path = evidence_dir / "nmap_scan.xml"
-        
-        # Copiar el archivo XML al directorio del escaneo
-        shutil.copy2(tmp_xml_path, nmap_xml_path)
-        os.unlink(tmp_xml_path)  # Eliminar archivo temporal
-        
-        # Procesar hosts
-        total_hosts = len(parsed_data['hosts'])
-        hosts_processed = 0
-        ports_processed = 0
-        
-        # Subredes internas para determinar subnet
-        private_subnets = [
-            ipaddress.ip_network(s) for s in [
-                '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16',
-                '169.254.0.0/16', '127.0.0.0/8', '::1/128', 'fc00::/7', 'fe80::/10'
-            ]
-        ]
-
-        def get_subnet_label(ip_str):
-            try:
-                ip_o = ipaddress.ip_address(ip_str)
-                for net in private_subnets:
-                    if ip_o in net:
-                        return str(net)
-                return "Public IP"
-            except ValueError:
-                return "Unknown"
-
-        for host_ip, host_data in parsed_data['hosts'].items():
-            try:
-                # Determinar subred
-                subnet = get_subnet_label(host_ip)
-                
-                # Obtener hostname
-                hostname = host_data.get('hostname') or None
-                
-                # Preparar datos adicionales del host
-                host_additional_data = {
-                    'hostnames': host_data.get('hostnames', []),
-                    'mac_address': host_data.get('mac_address'),
-                    'vendor': host_data.get('vendor'),
-                    'os': host_data.get('os', {}),
-                    'host_scripts': host_data.get('host_scripts', {})
-                }
-                
-                # Si no hay puertos abiertos, registrar el host de todas formas
-                if not host_data.get('ports'):
-                    storage.save_host_result(
-                        scan_id=scan_id,
-                        host_ip=host_ip,
-                        port=None,
-                        protocol=None,
-                        state=host_data.get('status', 'up'),
-                        service_data={},
-                        subnet=subnet,
-                        hostname=hostname,
-                        host_data=host_additional_data,
-                        discovery_method='nmap'
-                    )
-                    hosts_processed += 1
-                    continue
-                
-                # Procesar puertos
-                for port_key, port_data in host_data['ports'].items():
-                    # Extraer número de puerto y protocolo
-                    if isinstance(port_key, str) and '/' in port_key:
-                        port_num_str, proto = port_key.split('/', 1)
-                        port_num = int(port_num_str)
-                    else:
-                        port_num = int(port_key) if isinstance(port_key, str) else port_key
-                        proto = port_data.get('protocol', 'tcp')
-                    
-                    # Preparar datos del servicio
-                    service_data = {
-                        'name': port_data.get('name', ''),
-                        'product': port_data.get('product', ''),
-                        'version': port_data.get('version', ''),
-                        'extrainfo': port_data.get('extrainfo', ''),
-                        'cpe': port_data.get('cpe', ''),
-                        'reason': port_data.get('reason', ''),
-                        'reason_ttl': port_data.get('reason_ttl', ''),
-                        'conf': port_data.get('conf', 0),
-                        'scripts': port_data.get('scripts', {})
-                    }
-                    
-                    # Guardar resultado en base de datos
-                    storage.save_host_result(
-                        scan_id=scan_id,
-                        host_ip=host_ip,
-                        port=port_num,
-                        protocol=proto,
-                        state=port_data['state'],
-                        service_data=service_data,
-                        subnet=subnet,
-                        hostname=hostname,
-                        host_data=host_additional_data,
-                        discovery_method='nmap'
-                    )
-                    ports_processed += 1
-                    
-                    # Procesar vulnerabilidades de scripts NSE
-                    scripts = port_data.get('scripts', {})
-                    for script_id, script_output in scripts.items():
-                        if isinstance(script_output, dict):
-                            output_text = script_output.get('output', '')
-                            script_data = script_output
-                        else:
-                            output_text = str(script_output)
-                            script_data = {}
-                        
-                        # Extraer vulnerabilidades
-                        vulnerabilities = VulnerabilityParser.extract_vulnerabilities(
-                            script_id, output_text, script_data
-                        )
-                        
-                        # Guardar cada vulnerabilidad
-                        for vuln in vulnerabilities:
-                            storage.save_vulnerability(
-                                scan_id=scan_id,
-                                host_ip=host_ip,
-                                port=port_num,
-                                protocol=proto,
-                                vulnerability_type=vuln.get('type', 'unknown'),
-                                title=vuln.get('title', ''),
-                                description=vuln.get('description', ''),
-                                severity=vuln.get('severity', 'info'),
-                                cvss_score=vuln.get('cvss', None),
-                                references=vuln.get('references', ''),
-                                script_id=script_id,
-                                script_output=output_text
-                            )
-                
-                hosts_processed += 1
-            except Exception as e:
-                print(f"Error procesando host {host_ip}: {e}")
+    """Importa uno o varios escaneos Nmap desde archivos XML."""
+    import_results = []
+    
+    for x_file in xml_file:
+        try:
+            # Validar que el archivo es XML
+            if not x_file.filename.endswith('.xml'):
+                import_results.append({
+                    "filename": x_file.filename,
+                    "status": "error",
+                    "message": "El archivo debe ser un XML de Nmap"
+                })
                 continue
-        
-        
-        # Marcar escaneo como completado
-        storage.complete_scan(scan_id)
-        
-        return {
-            "status": "success",
-            "scan_id": scan_id,
-            "message": f"Escaneo importado exitosamente",
-            "stats": {
-                "hosts_processed": hosts_processed,
-                "ports_processed": ports_processed,
-                "total_hosts": total_hosts
-            }
-        }
-    except Exception as e:
-        # Si hay error, marcar el escaneo como fallido
-        if 'scan_id' in locals():
-            storage.complete_scan(scan_id, error_message=str(e))
-        raise HTTPException(status_code=500, detail=f"Error importando XML: {str(e)}")
+            
+            # Guardar temporalmente el archivo para parsearlo primero
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xml') as tmp_file:
+                shutil.copyfileobj(x_file.file, tmp_file)
+                tmp_xml_path = tmp_file.name
+            
+            try:
+                # Parsear XML para extraer información del escaneo
+                parser = NmapXMLParser(tmp_xml_path)
+                parsed_data = parser.parse()
+                scan_info = parsed_data.get('scan_info', {})
+                
+                # Extraer el rango/target del escaneo
+                target_range = 'imported_from_xml'
+                nmap_args = scan_info.get('args', '')
+                
+                # Intentar extraer el target
+                if nmap_args:
+                    ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?\b'
+                    ip_ranges = re.findall(ip_pattern, nmap_args)
+                    if ip_ranges:
+                        target_range = ip_ranges[0]
+                
+                if target_range == 'imported_from_xml' and parsed_data.get('hosts'):
+                    hosts = list(parsed_data['hosts'].keys())
+                    if hosts:
+                        target_range = hosts[0] if len(hosts) == 1 else f"{hosts[0]} - {hosts[-1]} ({len(hosts)} hosts)"
+                
+                # Obtener tiempos reales del XML
+                scan_info = parsed_data.get('scan_info', {})
+                nmap_start = None
+                nmap_end = None
+                
+                try:
+                    if scan_info.get('start'):
+                        nmap_start = datetime.fromtimestamp(float(scan_info['start']))
+                    if scan_info.get('finished'):
+                        nmap_end = datetime.fromtimestamp(float(scan_info['finished']))
+                except (ValueError, TypeError):
+                    pass
+
+                # Crear escaneo en BD con tiempos reales
+                scan_id = storage.start_scan(
+                    organization=organization,
+                    location=location,
+                    scan_type='imported',
+                    target_range=target_range,
+                    interface=interface or 'N/A',
+                    myip=myip,
+                    nmap_command=f"nmap {nmap_args}" if nmap_args else "imported_xml",
+                    enable_version_detection=True,
+                    enable_vulnerability_scan=False,
+                    enable_screenshots=False,
+                    enable_source_code=False,
+                    started_at=nmap_start
+                )
+                
+                # Guardar el archivo en el directorio del escaneo para referencia
+                scan_dir = storage.get_scan_directory(organization, location, scan_id)
+                evidence_dir = scan_dir / "evidence"
+                evidence_dir.mkdir(parents=True, exist_ok=True)
+                final_xml_path = evidence_dir / "nmap_import.xml"
+                shutil.copy2(tmp_xml_path, final_xml_path)
+                
+                # Procesar hosts y puertos
+                hosts_count = 0
+                ports_count = 0
+                results_batch = []
+                
+                for ip, host_data in parsed_data.get('hosts', {}).items():
+                    hosts_count += 1
+                    
+                    # Si no hay puertos, igual queremos registrar el host
+                    ports = host_data.get('ports', {})
+                    if not ports:
+                        results_batch.append({
+                            'host_ip': ip,
+                            'port': None,
+                            'protocol': None,
+                            'state': 'up',
+                            'service_data': {},
+                            'discovery_method': 'nmap_import',
+                            'host_data': host_data,
+                            'timestamp': host_data.get('endtime') or host_data.get('starttime') or nmap_end
+                        })
+                    else:
+                        for port_key, service_data in ports.items():
+                            ports_count += 1
+                            results_batch.append({
+                                'host_ip': ip,
+                                'port': service_data.get('port'),
+                                'protocol': service_data.get('protocol', 'tcp'),
+                                'state': 'open',
+                                'service_data': service_data,
+                                'discovery_method': 'nmap_import',
+                                'host_data': host_data,
+                                'timestamp': host_data.get('endtime') or host_data.get('starttime') or nmap_end
+                            })
+                
+                # Guardar todo por lotes para evitar bloqueos de DB
+                if results_batch:
+                    storage.save_host_results_bulk(scan_id, results_batch)
+                
+                # Marcar escaneo como completado con tiempo real
+                storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count, completed_at=nmap_end)
+                
+                import_results.append({
+                    "filename": x_file.filename,
+                    "status": "success",
+                    "scan_id": scan_id,
+                    "stats": {
+                        "hosts_processed": hosts_count,
+                        "ports_processed": ports_count
+                    }
+                })
+            except Exception as parse_error:
+                # Error específico al parsear este XML
+                import_results.append({
+                    "filename": x_file.filename,
+                    "status": "error",
+                    "message": f"Error al parsear XML: {str(parse_error)}"
+                })
+            finally:
+                if 'tmp_xml_path' in locals() and os.path.exists(tmp_xml_path):
+                    os.unlink(tmp_xml_path)
+                    
+        except Exception as e:
+            import_results.append({
+                "filename": x_file.filename,
+                "status": "error",
+                "message": str(e)
+            })
+
+    return {
+        "status": "success" if any(r["status"] == "success" for r in import_results) else "error",
+        "results": import_results,
+        "message": f"Se procesaron {len(xml_file)} archivos."
+    }
 
 @app.post("/api/scan/import-pcap")
 async def import_pcap(
-    pcap_file: UploadFile = File(...),
+    pcap_file: List[UploadFile] = File(...),
     organization: str = Form(...),
-    location: str = Form(...)
+    location: str = Form(...),
+    myip: Optional[str] = Form(None),
+    interface: Optional[str] = Form(None)
 ):
-    """Importa un escaneo pasivo desde un archivo PCAP."""
-    try:
-        # Validar que el archivo es PCAP
-        filename_lower = pcap_file.filename.lower()
-        if not (filename_lower.endswith('.pcap') or filename_lower.endswith('.pcapng')):
-            raise HTTPException(status_code=400, detail="El archivo debe ser un PCAP o PCAPNG")
-        
-        # Crear escaneo en BD con modo pasivo
-        scan_id = storage.start_scan(
-            organization=organization,
-            location=location,
-            scan_type='imported',
-            target_range='0.0.0.0/0',  # Pasivo, no hay target específico
-            interface='N/A',
-            nmap_command='imported_pcap',
-            enable_version_detection=False,
-            enable_vulnerability_scan=False,
-            enable_screenshots=False,
-            enable_source_code=False,
-            scan_mode='passive',
-            pcap_file=None  # Se actualizará después de guardar el archivo
-        )
-        
-        # Obtener directorio del escaneo
-        scan_dir = storage.get_scan_directory(organization, location, scan_id)
-        evidence_dir = scan_dir / "evidence"
-        evidence_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Determinar extensión del archivo
-        file_ext = '.pcap' if filename_lower.endswith('.pcap') else '.pcapng'
-        pcap_path = evidence_dir / f"capture{file_ext}"
-        
-        # Guardar el archivo PCAP
-        with open(pcap_path, 'wb') as f:
-            shutil.copyfileobj(pcap_file.file, f)
-        
-        # Actualizar el registro del scan con la ruta del PCAP
-        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-        conn.execute("PRAGMA journal_mode=WAL")
-        cursor = conn.cursor()
-        cursor.execute("UPDATE scans SET pcap_file = ? WHERE id = ?", (str(pcap_path), scan_id))
-        conn.commit()
-        conn.close()
-        
-        # Procesar el PCAP usando la misma función que se usa en escaneos pasivos
-        scans_module.process_pcap_file(scan_id, str(pcap_path), organization, location)
-        
-        # Contar hosts y puertos finales
-        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-        conn.execute("PRAGMA journal_mode=WAL")
-        cursor = conn.cursor()
-        
-        hosts_count = cursor.execute("""
-            SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
-        """, (scan_id,)).fetchone()[0]
-        
-        ports_count = cursor.execute("""
-            SELECT COUNT(*) FROM scan_results WHERE scan_id = ? AND port IS NOT NULL
-        """, (scan_id,)).fetchone()[0]
-        
-        conn.close()
-        
-        # Marcar escaneo como completado
-        storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count)
-        
-        return {
-            "status": "success",
-            "scan_id": scan_id,
-            "message": f"PCAP importado y procesado exitosamente",
-            "stats": {
-                "hosts_processed": hosts_count,
-                "ports_processed": ports_count
-            }
-        }
-    except Exception as e:
-        # Si hay error, marcar el escaneo como fallido
-        if 'scan_id' in locals():
-            storage.complete_scan(scan_id, error_message=str(e))
-        raise HTTPException(status_code=500, detail=f"Error importando PCAP: {str(e)}")
+    """Importa uno o varios escaneos pasivos desde archivos PCAP."""
+    import_results = []
+    
+    for p_file in pcap_file:
+        try:
+            # Validar que el archivo es PCAP
+            filename_lower = p_file.filename.lower()
+            if not (filename_lower.endswith('.pcap') or filename_lower.endswith('.pcapng')):
+                import_results.append({
+                    "filename": p_file.filename,
+                    "status": "error",
+                    "message": "El archivo debe ser un PCAP o PCAPNG"
+                })
+                continue
+            
+            # Crear escaneo en BD con modo pasivo
+            scan_id = storage.start_scan(
+                organization=organization,
+                location=location,
+                scan_type='imported',
+                target_range='0.0.0.0/0',
+                interface=interface or 'N/A',
+                myip=myip,
+                nmap_command='imported_pcap',
+                enable_version_detection=False,
+                enable_vulnerability_scan=False,
+                enable_screenshots=False,
+                enable_source_code=False,
+                scan_mode='passive',
+                pcap_file=None
+            )
+            
+            # Obtener directorio del escaneo
+            scan_dir = storage.get_scan_directory(organization, location, scan_id)
+            evidence_dir = scan_dir / "evidence"
+            evidence_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Determinar extensión del archivo
+            file_ext = '.pcap' if filename_lower.endswith('.pcap') else '.pcapng'
+            pcap_path = evidence_dir / f"capture{file_ext}"
+            
+            # Guardar el archivo PCAP
+            with open(pcap_path, 'wb') as f:
+                shutil.copyfileobj(p_file.file, f)
+            
+            # Actualizar el registro del scan
+            conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+            conn.execute("PRAGMA journal_mode=WAL")
+            cursor = conn.cursor()
+            cursor.execute("UPDATE scans SET pcap_file = ? WHERE id = ?", (str(pcap_path), scan_id))
+            conn.commit()
+            conn.close()
+            
+            # Procesar el PCAP
+            scans_module.process_pcap_file(scan_id, str(pcap_path), organization, location)
+            
+            # Contar hosts y puertos finales
+            conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+            conn.execute("PRAGMA journal_mode=WAL")
+            cursor = conn.cursor()
+            
+            hosts_count = cursor.execute("""
+                SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
+            """, (scan_id,)).fetchone()[0]
+            
+            ports_count = cursor.execute("""
+                SELECT COUNT(*) FROM scan_results WHERE scan_id = ? AND port IS NOT NULL
+            """, (scan_id,)).fetchone()[0]
+            
+            conn.close()
+            
+            # Marcar escaneo como completado
+            storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count)
+            
+            import_results.append({
+                "filename": p_file.filename,
+                "status": "success",
+                "scan_id": scan_id,
+                "stats": {
+                    "hosts_processed": hosts_count,
+                    "ports_processed": ports_count
+                }
+            })
+        except Exception as e:
+            import_results.append({
+                "filename": p_file.filename,
+                "status": "error",
+                "message": str(e)
+            })
+
+    return {
+        "status": "success" if any(r["status"] == "success" for r in import_results) else "error",
+        "results": import_results,
+        "message": f"Se procesaron {len(pcap_file)} archivos."
+    }
 
 @app.get("/api/scan/{scan_id}/results/live")
 async def get_scan_results_live(scan_id: int):
@@ -754,15 +726,18 @@ async def get_scan_results_live(scan_id: int):
     cursor = conn.cursor()
     
     # Verificar que el escaneo existe y obtener metadata necesaria
-    scan = cursor.execute("SELECT id, status, error_message, organization_name FROM scans WHERE id = ?", (scan_id,)).fetchone()
+    scan = cursor.execute("SELECT id, status, error_message, organization_name, location, scan_mode FROM scans WHERE id = ?", (scan_id,)).fetchone()
     if not scan:
         conn.close()
         raise HTTPException(status_code=404, detail="Escaneo no encontrado")
     
     query = """
-        SELECT 
+        SELECT
             h.ip_address,
-            h.hostname,
+            COALESCE(m.hostname, h.hostname) as hostname,
+            COALESCE(m.mac_address, h.mac_address) as mac_address,
+            COALESCE(m.vendor, h.vendor) as vendor,
+            m.os_info_json,
             sr.port,
             sr.protocol,
             sr.service_name,
@@ -778,6 +753,7 @@ async def get_scan_results_live(scan_id: int):
         FROM scan_results sr
         JOIN hosts h ON h.id = sr.host_id
         JOIN scans s ON s.id = sr.scan_id
+        LEFT JOIN host_scan_metadata m ON m.scan_id = sr.scan_id AND m.host_id = sr.host_id
         WHERE s.id = ?
         ORDER BY h.ip_address, COALESCE(sr.port, 0)
         LIMIT 5000
@@ -788,32 +764,45 @@ async def get_scan_results_live(scan_id: int):
     # Obtener el estado del escaneo para devolverlo también
     scan_status = scan['status']
     
-    # Obtener información de enrichments (screenshots y source code) para cada resultado
-    enriched_results = []
+    # Inicializar variables para evitar UnboundLocalError
+    active_results = []
+    passive_results = []
+    stats = None
+    
+    # Determinar si el escaneo tiene modo pasivo habilitado
+    # Un escaneo puede tener ambos si se implementa en el futuro, pero por ahora suele ser uno u otro
+    is_passive_mode = scan['scan_mode'] == 'passive'
+    
+    # 1. Obtener resultados activos (de la tabla scan_results)
+    results = cursor.execute(query, (scan_id,)).fetchall()
     for row in results:
         result_dict = dict(row)
-        
-        # Buscar screenshots y source code para este scan_result
-        enrichments = cursor.execute("""
-            SELECT enrichment_type, file_path
-            FROM enrichments
-            WHERE scan_result_id = ?
-        """, (result_dict['scan_result_id'],)).fetchall()
-        
+        enrichments = cursor.execute("SELECT enrichment_type FROM enrichments WHERE scan_result_id = ?", (result_dict['scan_result_id'],)).fetchall()
         result_dict['has_screenshot'] = any(e['enrichment_type'] == 'Screenshot' for e in enrichments)
         result_dict['has_source_code'] = any(e['enrichment_type'] == 'Websource' for e in enrichments)
-        
-        enriched_results.append(result_dict)
+        active_results.append(result_dict)
     
-    # Obtener estadísticas actualizadas
-    stats = cursor.execute("""
-        SELECT 
-            COUNT(DISTINCT h.id) as hosts_count,
-            COUNT(sr.id) as ports_count
-        FROM scan_results sr
-        JOIN hosts h ON h.id = sr.host_id
-        WHERE sr.scan_id = ?
-    """, (scan_id,)).fetchone()
+    # 2. Obtener resultados pasivos (si aplica o si hay datos)
+    raw_passive = storage.get_passive_results(scan_id=scan_id)
+    if raw_passive:
+        passive_results = raw_passive
+    
+    # 3. Estadísticas
+    hosts_count = 0
+    ports_count = 0
+    if is_passive_mode:
+        stats_data = storage.get_passive_stats(scan_id)
+        hosts_count = stats_data.get('hosts_count', 0)
+        ports_count = stats_data.get('conversations_count', 0)
+    else:
+        stats_row = cursor.execute("""
+            SELECT COUNT(DISTINCT h.id) as hosts_count, COUNT(sr.id) as ports_count
+            FROM scan_results sr JOIN hosts h ON h.id = sr.host_id
+            WHERE sr.scan_id = ?
+        """, (scan_id,)).fetchone()
+        if stats_row:
+            hosts_count = stats_row['hosts_count']
+            ports_count = stats_row['ports_count']
 
     # Identificar IPs críticas de la organización para marcar los resultados
     critical_ips = set()
@@ -830,8 +819,12 @@ async def get_scan_results_live(scan_id: int):
         print(f"⚠️  Error cargando IPs críticas en live results: {e}")
     
     # Enriquecer con flag is_critical
-    for res in enriched_results:
-        res['is_critical'] = res['ip_address'] in critical_ips
+    for res in active_results:
+        res['is_critical'] = res.get('ip_address') in critical_ips
+        
+    for res in passive_results:
+        res['src_is_critical'] = res.get('src_ip') in critical_ips
+        res['dst_is_critical'] = res.get('dst_ip') in critical_ips
     
     conn.close()
     
@@ -842,10 +835,11 @@ async def get_scan_results_live(scan_id: int):
         "scan_id": scan_id,
         "status": scan["status"],
         "error_message": error_message,
-        "results": enriched_results,
+        "active": active_results,
+        "passive": passive_results,
         "stats": {
-            "hosts": stats["hosts_count"] if stats else 0,
-            "ports": stats["ports_count"] if stats else 0
+            "hosts": hosts_count,
+            "ports": ports_count
         }
     }
 
@@ -861,9 +855,12 @@ async def get_results(
     cursor = conn.cursor()
     
     query = """
-        SELECT 
+        SELECT
             h.ip_address,
-            h.hostname,
+            COALESCE(m.hostname, h.hostname) as hostname,
+            COALESCE(m.mac_address, h.mac_address) as mac_address,
+            COALESCE(m.vendor, h.vendor) as vendor,
+            m.os_info_json,
             sr.port,
             sr.protocol,
             sr.service_name,
@@ -879,17 +876,19 @@ async def get_results(
         FROM scan_results sr
         JOIN hosts h ON h.id = sr.host_id
         JOIN scans s ON s.id = sr.scan_id
+        LEFT JOIN host_scan_metadata m ON m.scan_id = sr.scan_id AND m.host_id = sr.host_id
         WHERE 1=1
+        AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'
     """
     params = []
     
     if organization:
-        query += " AND s.organization_name = ?"
-        params.append(organization.upper())
-    
+        query += " AND UPPER(s.organization_name) = UPPER(?)"
+        params.append(organization)
+
     if location:
-        query += " AND s.location = ?"
-        params.append(location.upper())
+        query += " AND UPPER(s.location) = UPPER(?)"
+        params.append(location)
     
     if scan_id:
         query += " AND s.id = ?"
@@ -897,31 +896,44 @@ async def get_results(
     
     query += " ORDER BY s.started_at DESC, h.ip_address, COALESCE(sr.port, 0) LIMIT 1000"
     
+    # 1. Obtener resultados activos
     results = cursor.execute(query, params).fetchall()
-    
-    # Obtener información de enrichments (screenshots y source code) para cada resultado
     enriched_results = []
     for row in results:
         result_dict = dict(row)
-        
-        # Buscar screenshots y source code para este scan_result
         enrichments = cursor.execute("""
-            SELECT enrichment_type, file_path
-            FROM enrichments
-            WHERE scan_result_id = ?
+            SELECT enrichment_type, file_path FROM enrichments WHERE scan_result_id = ?
         """, (result_dict['scan_result_id'],)).fetchall()
         
         result_dict['has_screenshot'] = any(e['enrichment_type'] == 'Screenshot' for e in enrichments)
         result_dict['has_source_code'] = any(e['enrichment_type'] == 'Websource' for e in enrichments)
-        
-        # Obtener rutas de archivos
-        screenshot_path = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Screenshot'), None)
-        source_path = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Websource'), None)
-        
-        result_dict['screenshot_path'] = screenshot_path
-        result_dict['source_code_path'] = source_path
-        
+        result_dict['screenshot_path'] = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Screenshot'), None)
+        result_dict['source_code_path'] = next((e['file_path'] for e in enrichments if e['enrichment_type'] == 'Websource'), None)
+
+        # Adjuntar enriquecimiento NetExec más reciente para esta IP, sea cual
+        # sea el escaneo de origen. Limita a la misma org para no mezclar datos.
+        nxc_row = cursor.execute("""
+            SELECT e.data
+            FROM enrichments e
+            JOIN scan_results sr2 ON sr2.id = e.scan_result_id
+            JOIN scans s2 ON s2.id = sr2.scan_id
+            WHERE e.enrichment_type = 'NETEXEC'
+              AND sr2.host_id = (SELECT host_id FROM scan_results WHERE id = ?)
+              AND UPPER(s2.organization_name) = UPPER(?)
+            ORDER BY e.id DESC LIMIT 1
+        """, (result_dict['scan_result_id'], result_dict.get('organization_name') or '')).fetchone()
+        if nxc_row and nxc_row['data']:
+            try:
+                result_dict['netexec'] = json.loads(nxc_row['data'])
+            except Exception:
+                result_dict['netexec'] = None
+        else:
+            result_dict['netexec'] = None
+
         enriched_results.append(result_dict)
+
+    # 2. Si pedimos un scan específico, no mezclamos pasivos aquí (se hará en otro endpoint)
+    # Anteriormente se mezclaban aquí, pero causaba confusión en la UI.
     
     # Enriquecer con flag is_critical si se filtró por organización
     if organization:
@@ -946,6 +958,20 @@ async def get_results(
     conn.close()
     
     return enriched_results
+
+@app.get("/api/results/passive")
+async def get_passive_results_api(
+    organization: Optional[str] = None,
+    location: Optional[str] = None,
+    scan_id: Optional[int] = None
+):
+    """Obtiene resultados de conversaciones pasivas directamente."""
+    try:
+        passive_data = storage.get_passive_results(scan_id=scan_id, organization=organization, location=location)
+        return passive_data
+    except Exception as e:
+        print(f"Error obteniendo resultados pasivos: {e}")
+        return []
 
 @app.delete("/api/scan/{scan_id}")
 async def delete_scan(scan_id: int):
@@ -976,7 +1002,9 @@ async def delete_location(organization: str, location: str):
 async def delete_organization(organization: str):
     """Elimina una organización completa y todos sus datos."""
     try:
+        # Llamar a storage (que ya se encarga de archivos locales y Neo4j)
         result = storage.delete_organization(organization)
+        
         return {
             "status": "success",
             "message": f"Organización '{organization}' eliminada correctamente",
@@ -1458,66 +1486,8 @@ async def clear_neo4j_database(config: Neo4jConfig):
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 # ============================================================================
-# NEO4J & NEODASH LOCAL DOCKER MANAGEMENT
+# NEO4J UTILS
 # ============================================================================
-
-def _get_compose_base() -> list:
-    """Returns the base docker compose command, preferring the plugin syntax."""
-    compose_file = Path.cwd() / "docker-compose.neo4j.yml"
-    return ["docker", "compose", "-f", str(compose_file)]
-
-def get_docker_compose_cmd(service: str, action: str) -> list:
-    compose_base = _get_compose_base()
-    if action == "up":
-        return compose_base + ["up", "-d", service]
-    elif action == "stop":
-        return compose_base + ["stop", service]
-    elif action == "status":
-        return ["docker", "ps", "--format", "{{.Names}}", "--filter", f"name={service}"]
-    return []
-
-@app.post("/api/docker/{service}/start")
-async def start_local_service(service: str):
-    """Inicia un servicio local usando docker-compose."""
-    if service not in ["neo4j", "neodash"]:
-        raise HTTPException(status_code=400, detail="Servicio no válido")
-    try:
-        cmd = get_docker_compose_cmd(service, "up")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if result.returncode == 0:
-            return {"status": "success", "message": f"Servicio {service} iniciado"}
-        else:
-            return {"status": "error", "message": result.stderr or result.stdout}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error iniciando {service}: {str(e)}")
-
-@app.post("/api/docker/{service}/stop")
-async def stop_local_service(service: str):
-    """Detiene un servicio local usando docker-compose."""
-    if service not in ["neo4j", "neodash"]:
-        raise HTTPException(status_code=400, detail="Servicio no válido")
-    try:
-        cmd = get_docker_compose_cmd(service, "stop")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        if result.returncode == 0:
-            return {"status": "success", "message": f"Servicio {service} detenido"}
-        else:
-            return {"status": "error", "message": result.stderr or result.stdout}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deteniendo {service}: {str(e)}")
-
-@app.get("/api/docker/{service}/status")
-async def status_local_service(service: str):
-    """Comprueba el estado de un servicio local."""
-    if service not in ["neo4j", "neodash"]:
-        raise HTTPException(status_code=400, detail="Servicio no válido")
-    try:
-        cmd = get_docker_compose_cmd(service, "status")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        is_running = f"arsenalot_{service}" in result.stdout
-        return {"status": "success", "running": is_running}
-    except Exception as e:
-        return {"status": "error", "running": False, "message": str(e)}
 
 class Neo4jQueryRequest(BaseModel):
     ip: str
@@ -1561,8 +1531,13 @@ async def get_neo4j_organizations(request: Neo4jQueryRequest):
     graph = get_neo4j_graph(request.ip, request.username, request.password)
     
     try:
-        query = "MATCH (o:ORG) RETURN DISTINCT o.org as org ORDER BY o.org"
+        query = "MATCH (o:ORGANIZACION) RETURN DISTINCT o.name as org ORDER BY org"
         result = graph.run(query).data()
+        
+        # Fallback a (o:ORG) si no hay resultados
+        if not result:
+            query = "MATCH (o:ORG) RETURN DISTINCT o.org as org ORDER BY o.org"
+            result = graph.run(query).data()
         
         if not result:
             return []
@@ -1581,38 +1556,37 @@ async def get_neo4j_dashboard_stats(request: Neo4jQueryRequest):
     params = {}
     if request.organization:
         params["org"] = request.organization
-        org_filter = "WHERE o.org = $org"
-        ip_filter = "WHERE ip.org = $org"
-        port_filter = "WHERE p.org = $org"
+        org_filter = "WHERE o.name = $org"
+        host_filter = "WHERE h.ORGANIZACION = $org"
+        service_where = "WHERE h.ORGANIZACION = $org"
         seg_filter = "WHERE s.org = $org"
     else:
         org_filter = ""
-        ip_filter = ""
-        port_filter = ""
+        host_filter = ""
+        service_where = ""
         seg_filter = ""
     
     queries = {
-        "organizations": f"MATCH (o:ORG) {org_filter} RETURN count(DISTINCT o.org) as count",
+        "organizations": f"MATCH (o:ORGANIZACION) {org_filter} RETURN count(DISTINCT o.name) as count",
         "hosts": f"""
-            MATCH (ip:IP) 
-            {ip_filter}
-            RETURN count(DISTINCT ip.IP) as count
+            MATCH (h:HOST) 
+            {host_filter}
+            RETURN count(DISTINCT h.IP) as count
         """,
         "ports": f"""
-            MATCH (p:Port) 
-            {port_filter}
-            RETURN count(p) as count
+            MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE) 
+            {service_where}
+            RETURN count(s) as count
         """,
         "vulnerabilities": f"""
-            MATCH (p:Port) 
-            {port_filter}
-            WHERE p.Vuln IS NOT NULL AND p.Vuln <> ''
-            RETURN count(p) as count
+            MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE)
+            {"WHERE" if not service_where else service_where + " AND"} s.vulnerabilities <> ""
+            RETURN count(s) as count
         """,
         "locations": f"""
-            MATCH (s:SEG) 
-            {seg_filter}
-            RETURN count(DISTINCT s.SEG) as count
+            MATCH (h:HOST)
+            {"WHERE" if not host_filter else host_filter + " AND"} h.SUBRED IS NOT NULL AND h.SUBRED <> 'Unknown'
+            RETURN count(DISTINCT h.SUBRED) as count
         """
     }
     
@@ -1634,8 +1608,8 @@ async def get_neo4j_hosts_by_org(request: Neo4jQueryRequest):
     
     try:
         query = """
-            MATCH (ip:IP)
-            RETURN ip.org as org, count(DISTINCT ip.IP) as count
+            MATCH (h:HOST)
+            RETURN h.ORGANIZACION as org, count(DISTINCT h.IP) as count
             ORDER BY count DESC
             LIMIT 20
         """
@@ -1657,14 +1631,14 @@ async def get_neo4j_top_ports(request: Neo4jQueryRequest):
     params = {}
     if request.organization:
         params["org"] = request.organization
-        org_filter = "WHERE p.org = $org"
+        org_filter = "WHERE h.ORGANIZACION = $org"
     else:
         org_filter = ""
     
     query = f"""
-        MATCH (p:Port)
+        MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE)
         {org_filter}
-        RETURN p.number as port, count(p) as count
+        RETURN s.port as port, count(s) as count
         ORDER BY count DESC
         LIMIT 15
     """
@@ -1686,14 +1660,14 @@ async def get_neo4j_vulnerabilities_by_severity(request: Neo4jQueryRequest):
     params = {}
     if request.organization:
         params["org"] = request.organization
-        org_condition = "p.org = $org AND"
+        org_condition = "h.ORGANIZACION = $org AND"
     else:
         org_condition = ""
     
     query = f"""
-        MATCH (p:Port)
-        WHERE {org_condition} p.Vuln IS NOT NULL AND p.Vuln <> ''
-        UNWIND split(p.Vuln, ',') as vuln
+        MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE)
+        WHERE {org_condition} s.vulnerabilities <> ""
+        UNWIND split(s.vulnerabilities, ',') as vuln
         WITH CASE 
             WHEN vuln CONTAINS 'CRITICAL' OR vuln CONTAINS 'Critical' THEN 'CRITICAL'
             WHEN vuln CONTAINS 'HIGH' OR vuln CONTAINS 'High' THEN 'HIGH'
@@ -1729,14 +1703,14 @@ async def get_neo4j_top_services(request: Neo4jQueryRequest):
     params = {}
     if request.organization:
         params["org"] = request.organization
-        org_condition = "p.org = $org AND"
+        org_condition = "h.ORGANIZACION = $org AND"
     else:
         org_condition = ""
     
     query = f"""
-        MATCH (p:Port)
-        WHERE {org_condition} p.Name IS NOT NULL AND p.Name <> ''
-        RETURN p.Name as service, count(p) as count
+        MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE)
+        WHERE {org_condition} s.name IS NOT NULL AND s.name <> ''
+        RETURN s.name as service, count(s) as count
         ORDER BY count DESC
         LIMIT 15
     """
@@ -1758,8 +1732,8 @@ async def get_neo4j_network_graph(request: Neo4jQueryRequest):
     params = {}
     if request.organization:
         params["org"] = request.organization
-        org_where = "WHERE n.org = $org"
-        rel_where = "WHERE a.org = $org AND b.org = $org"
+        org_where = "WHERE (n.org = $org OR n.ORGANIZACION = $org OR n.name = $org)"
+        rel_where = "WHERE (a.org = $org OR a.ORGANIZACION = $org OR a.name = $org) AND (b.org = $org OR b.ORGANIZACION = $org OR b.name = $org)"
     else:
         org_where = ""
         rel_where = ""
@@ -1773,18 +1747,16 @@ async def get_neo4j_network_graph(request: Neo4jQueryRequest):
             node_id as id,
             labels[0] as label,
             CASE labels[0]
-                WHEN 'ORG' THEN COALESCE(n.org, 'Unknown')
+                WHEN 'ORG' THEN COALESCE(n.name, n.org, 'Unknown')
                 WHEN 'SEG' THEN COALESCE(n.SEG, 'Unknown')
-                WHEN 'Subred' THEN COALESCE(n.Subred, 'Unknown')
-                WHEN 'IP' THEN COALESCE(n.IP, 'Unknown')
+                WHEN 'HOST' THEN COALESCE(n.IP, 'Unknown')
                 WHEN 'Port' THEN COALESCE(toString(n.number), 'Unknown')
                 ELSE 'Unknown'
             END as name,
             CASE labels[0]
                 WHEN 'ORG' THEN '#00BFFF'
                 WHEN 'SEG' THEN '#4ECDC4'
-                WHEN 'Subred' THEN '#9B59B6'
-                WHEN 'IP' THEN '#F38181'
+                WHEN 'HOST' THEN '#F38181'
                 WHEN 'Port' THEN '#FFE66D'
                 ELSE '#CCCCCC'
             END as color
@@ -1825,7 +1797,7 @@ async def get_similar_devices(request: Neo4jQueryRequest):
     params = {}
     if request.organization:
         params["org"] = request.organization
-        org_where = "WHERE ip.org = $org"
+        org_where = "WHERE h.ORGANIZACION = $org"
     else:
         org_where = ""
     
@@ -1833,14 +1805,14 @@ async def get_similar_devices(request: Neo4jQueryRequest):
         # Consulta mejorada para encontrar IPs con puertos similares
         # Primero, obtener todas las IPs con sus puertos y servicios (solo IPs que tienen puertos)
         query_base = f"""
-            MATCH (ip:IP)-[:HAS_PORT]->(p:Port)
+            MATCH (h:HOST)-[:HAS_SERVICE]->(s:SERVICE)
             {org_where}
-            WHERE ip.IP IS NOT NULL AND ip.IP <> '' AND p.number IS NOT NULL
-            WITH ip.IP as ip_addr, 
-                 collect(DISTINCT p.number) as ports, 
-                 collect(DISTINCT CASE WHEN p.Name IS NOT NULL AND p.Name <> '' THEN p.Name ELSE null END) as services
+            WHERE h.IP IS NOT NULL AND h.IP <> '' AND s.port IS NOT NULL
+            WITH h.IP as ip_addr, 
+                 collect(DISTINCT s.port) as ports, 
+                 collect(DISTINCT CASE WHEN s.name IS NOT NULL AND s.name <> '' THEN s.name ELSE null END) as services
             WHERE size(ports) > 0
-            WITH ip_addr, ports, [s IN services WHERE s IS NOT NULL] as clean_services
+            WITH ip_addr, ports, [serv IN services WHERE serv IS NOT NULL] as clean_services
             RETURN ip_addr, ports, clean_services
         """
         
@@ -2001,17 +1973,19 @@ async def run_post_intelligence(org_name: str):
 
         summary = []
         
-        # Conectar a Neo4j (local por defecto como definimos en el HTML)
-        # Usaremos credenciales por defecto neo4j/password o sin auth
-        graph = get_neo4j_graph("127.0.0.1", "neo4j", "neo4j1")
+        # Conectar a Neo4j usando variables de entorno (definidas en .env / docker-compose)
+        _neo4j_host = os.getenv("NEO4J_HOST", "127.0.0.1")
+        _neo4j_user = os.getenv("NEO4J_USERNAME", "neo4j")
+        _neo4j_pass = os.getenv("NEO4J_PASSWORD", "neo4j123")
+        graph = get_neo4j_graph(_neo4j_host, _neo4j_user, _neo4j_pass)
 
         networks_created = 0
         ips_linked_to_nets = 0
 
         # --- FASE 1: Redes Customizadas ---
         if networks_db:
-            # Obtener todas las IPs de la organizacion desde Neo4j
-            query_ips = "MATCH (ip:IP {org: $org}) RETURN ip.IP as ip_addr, ip.SEG as seg, id(ip) as node_id"
+            # Obtener todas los HOST de la organizacion desde Neo4j
+            query_ips = "MATCH (h:HOST {ORGANIZACION: $org}) RETURN h.IP as ip_addr, id(h) as node_id"
             neo_ips = graph.run(query_ips, org=org_name).data()
 
             for net_row in networks_db:
@@ -2038,20 +2012,14 @@ async def run_post_intelligence(org_name: str):
                     # Crear el nodo Network y conectarlo a las IPs correspondientes
                     # Además conectarlo al segmento donde se descubrió la IP y a la organización
                     for m_ip in matching_ips:
-                        query_create_link = """
-                        MATCH (ip:IP) WHERE id(ip) = $node_id
-                        MATCH (org:ORG {org: $org})
-                        MATCH (seg:SEG {SEG: $seg, org: $org})
-                        MERGE (net:Network {name: $net_name, range: $net_range, org: $org})
-                        ON CREATE SET net.system = $sys_name
-                        MERGE (ip)-[:BELONGS_TO_NETWORK]->(net)
-                        MERGE (seg)-[:HAS_NETWORK]->(net)
-                        MERGE (org)-[:HAS_NETWORK]->(net)
+                        query_update_host = """
+                        MATCH (h:HOST) WHERE id(h) = $node_id
+                        SET h.SUBRED = $net_range,
+                            h.NOMBRE_SUBRED = $net_name,
+                            h.SISTEMA = $sys_name
                         """
-                        graph.run(query_create_link, 
+                        graph.run(query_update_host, 
                                   node_id=m_ip["node_id"], 
-                                  org=org_name, 
-                                  seg=m_ip["seg"],
                                   net_name=net_name, 
                                   net_range=net_range, 
                                   sys_name=sys_name)
@@ -2066,9 +2034,9 @@ async def run_post_intelligence(org_name: str):
 
         # --- FASE 2: Dispositivos Multi-Segmento ---
         query_cross_segment = """
-        MATCH (ip1:IP {org: $org}), (ip2:IP {org: $org})
-        WHERE ip1.IP = ip2.IP AND id(ip1) < id(ip2) AND ip1.SEG <> ip2.SEG
-        MERGE (ip1)-[r:SAME_DEVICE {reason: 'Misma IP en distintos segmentos'}]-(ip2)
+        MATCH (h1:HOST {ORGANIZACION: $org}), (h2:HOST {ORGANIZACION: $org})
+        WHERE h1.IP = h2.IP AND id(h1) < id(h2) AND h1.DISCOVERY_SOURCE <> h2.DISCOVERY_SOURCE
+        MERGE (h1)-[r:SAME_DEVICE {reason: 'Misma IP detectada en distintos escaneos'}]-(h2)
         RETURN count(r) as cross_links
         """
         result_cross = graph.run(query_cross_segment, org=org_name).data()
@@ -2098,10 +2066,10 @@ async def get_duplicate_ips(request: Neo4jQueryRequest):
         # Consulta mejorada para encontrar IPs duplicadas
         # Primero verificar que el filtro esté bien aplicado
         query = f"""
-            MATCH (ip:IP)
-            {org_where}
-            WHERE ip.IP IS NOT NULL AND ip.IP <> '' AND ip.SEG IS NOT NULL AND ip.SEG <> ''
-            WITH ip.IP as ip_address, ip.org as org, collect(DISTINCT ip.SEG) as locations
+            MATCH (h:HOST)
+            {org_where.replace('ip.org', 'h.ORGANIZACION')}
+            WHERE h.IP IS NOT NULL AND h.IP <> '' AND h.DISCOVERY_SOURCE IS NOT NULL
+            WITH h.IP as ip_address, h.ORGANIZACION as org, collect(DISTINCT h.DISCOVERY_SOURCE) as locations
             WHERE size(locations) > 1
             WITH ip_address, org, [loc IN locations WHERE loc IS NOT NULL AND loc <> ''] as clean_locations
             WHERE size(clean_locations) > 1

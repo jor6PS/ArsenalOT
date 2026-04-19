@@ -124,6 +124,8 @@
                 <option value="">Filtrar por columna...</option>
                 <option value="ip_address">IP</option>
                 <option value="hostname">Hostname</option>
+                <option value="mac_address">MAC</option>
+                <option value="vendor">Fabricante</option>
                 <option value="port">Puerto</option>
                 <option value="protocol">Protocolo</option>
                 <option value="service_name">Servicio</option>
@@ -143,503 +145,746 @@
             </button>
         </div>
 
-        <table id="resultsTable">
-            <thead>
-                <tr>
-                    <th class="sortable" data-column="ip_address">IP <span class="sort-indicator">⇅</span></th>
-                    <th class="sortable" data-column="hostname">Hostname <span class="sort-indicator">⇅</span></th>
-                    <th class="sortable" data-column="port">Puerto <span class="sort-indicator">⇅</span></th>
-                    <th class="sortable" data-column="protocol">Protocolo <span class="sort-indicator">⇅</span></th>
-                    <th class="sortable" data-column="service_name">Servicio <span class="sort-indicator">⇅</span></th>
-                    <th class="sortable" data-column="product">Producto <span class="sort-indicator">⇅</span></th>
-                    <th class="sortable" data-column="version">Versión <span class="sort-indicator">⇅</span></th>
-                    <th class="sortable" data-column="organization_name">Organización <span
-                            class="sort-indicator">⇅</span></th>
-                    <th class="sortable" data-column="location">Ubicación <span class="sort-indicator">⇅</span></th>
-                    <th class="sortable" data-column="discovery_method">Origen Descubrimiento <span
-                            class="sort-indicator">⇅</span></th>
-                    <th class="sortable" data-column="has_screenshot">Screenshot <span class="sort-indicator">⇅</span>
-                    </th>
-                    <th class="sortable" data-column="has_source_code">Web Source <span class="sort-indicator">⇅</span>
-                    </th>
-                    <th>Interfaces</th>
-                    <th class="sortable" data-column="is_critical">Crítico <span class="sort-indicator">⇅</span></th>
-                </tr>
-            </thead>
-            <tbody id="resultsBody">
-                <tr>
-                    <td colspan="12" class="loading">Cargando resultados...</td>
-                </tr>
-            </tbody>
-        </table>
+        <div id="activeResultsContainer">
+            <h3 id="activeTitle"
+                style="margin-top: 1.5rem; margin-bottom: 1rem; color: #1e293b; display: flex; align-items: center; gap: 0.5rem;">
+                🔌 Resultados Activos <span id="activeCount"
+                    style="font-size: 0.9rem; font-weight: normal; color: #64748b;"></span>
+            </h3>
+            <div class="table-container">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-column="ip_address">IP <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="hostname">Hostname <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="mac_address">MAC <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="vendor">Fabricante <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="port">Puertos <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="protocol">Protocolos <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="service_name">Servicios <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="product">Productos <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="version">Versiones <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="organization_name">Organización <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="location">Ubicación <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="discovery_method">Origen <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="has_screenshot">Screenshot <span class="sort-indicator">⇅</span></th>
+                            <th class="sortable" data-column="has_source_code">Web Source <span class="sort-indicator">⇅</span></th>
+                            <th>Interfaces</th>
+                            <th class="sortable" data-column="is_critical">Crítico <span class="sort-indicator">⇅</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody">
+                        <tr>
+                            <td colspan="16" class="loading">Cargando resultados activos...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="passiveResultsContainer" style="margin-top: 2.5rem; display: none;">
+            <h3 id="passiveTitle"
+                style="margin-top: 1.5rem; margin-bottom: 1rem; color: #1e293b; display: flex; align-items: center; gap: 0.5rem;">
+                🎧 Resultados Pasivos (Conversaciones) <span id="passiveCount"
+                    style="font-size: 0.9rem; font-weight: normal; color: #64748b;"></span>
+            </h3>
+            <div class="table-container">
+                <table id="passiveResultsTable">
+                    <thead>
+                        <tr>
+                            <th class="sortable-passive" data-column="src_ip">IP Origen <span
+                                    class="sort-indicator-passive">⇅</span></th>
+                            <th class="sortable-passive" data-column="src_mac">MAC Origen <span
+                                    class="sort-indicator-passive">⇅</span></th>
+                            <th class="sortable-passive" data-column="src_port">Puertos Or. <span
+                                    class="sort-indicator-passive">⇅</span></th>
+                            <th class="sortable-passive" data-column="dst_ip">IPs Destino <span
+                                    class="sort-indicator-passive">⇅</span></th>
+                            <th class="sortable-passive" data-column="dst_mac">MACs Destino <span
+                                    class="sort-indicator-passive">⇅</span></th>
+                            <th class="sortable-passive" data-column="dst_port">Puertos Des. <span
+                                    class="sort-indicator-passive">⇅</span></th>
+                            <th class="sortable-passive" data-column="protocol">Protocolos <span
+                                    class="sort-indicator-passive">⇅</span></th>
+                            <th class="sortable-passive" data-column="last_seen">Última Vez <span
+                                    class="sort-indicator-passive">⇅</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="passiveResultsBody">
+                        <tr>
+                            <td colspan="8" class="loading">Cargando resultados pasivos...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
-</div>
 
-<script>
-    // Set of critical IPs loaded once from API
-    let criticalIps = new Set();
+    <script>
+        // Set of critical IPs loaded once from API
+        let criticalIps = new Set();
 
-    async function loadCriticalIps() {
-        const org = "{{ org_name | default('') }}";
-        if (!org) return;
-        try {
-            const resp = await fetch(`/api/critical-devices?organization=${encodeURIComponent(org)}`);
-            const devices = await resp.json();
-            criticalIps = new Set();
-            devices.forEach(d => {
-                d.ips.split(',').forEach(ip => {
-                    const t = ip.trim();
-                    if (t) criticalIps.add(t);
+        async function loadCriticalIps() {
+            const org = "{{ org_name | default('') }}";
+            if (!org) return;
+            try {
+                const resp = await fetch(`/api/critical-devices?organization=${encodeURIComponent(org)}`);
+                const devices = await resp.json();
+                criticalIps = new Set();
+                devices.forEach(d => {
+                    d.ips.split(',').forEach(ip => {
+                        const t = ip.trim();
+                        if (t) criticalIps.add(t);
+                    });
                 });
-            });
-        } catch (e) { console.error('Error cargando IPs críticas:', e); }
-    }
+            } catch (e) { console.error('Error cargando IPs críticas:', e); }
+        }
 
-    function exportCSV() {
-        const org = document.getElementById('filterOrg').value;
-        const loc = document.getElementById('filterLocation') ? document.getElementById('filterLocation').value : '';
-        const scan = document.getElementById('filterScan').value;
-        const params = new URLSearchParams();
-        if (org) params.append('organization', org);
-        if (loc) params.append('location', loc);
-        if (scan) params.append('scan_id', scan);
-        window.location.href = `/api/results/export-csv?${params}`;
-    }
+        function exportCSV() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const columnFilter = document.getElementById('columnFilter').value;
+            const columnValue = document.getElementById('columnFilterValue').value.toLowerCase();
 
-    async function loadOrganizations() {
-        try {
-            const orgNameContext = "{{ org_name | default('') }}";
-            const select = document.getElementById('filterOrg');
-
-            if (orgNameContext) {
-                select.innerHTML = `<option value="${orgNameContext}" selected>${orgNameContext}</option>`;
-                select.disabled = true;
-            } else {
-                const response = await fetch('/api/organizations');
-                const orgs = await response.json();
-                select.innerHTML = '<option value="">Todas</option>' +
-                    orgs.map(org => `<option value="${org.name}">${org.name}</option>`).join('');
+            // Get currently visible filtered data
+            let filteredActive = [...allResults];
+            if (searchTerm) {
+                filteredActive = filteredActive.filter(r =>
+                    Object.values(r).some(val => val && val.toString().toLowerCase().includes(searchTerm))
+                );
             }
-        } catch (error) {
-            console.error('Error cargando organizaciones:', error);
+            if (columnFilter && columnValue) {
+                filteredActive = filteredActive.filter(r => {
+                    let val = r[columnFilter];
+                    if (columnFilter === 'has_screenshot' || columnFilter === 'has_source_code') {
+                        return (val === true) ? ['true', 'yes', 'sí', '1', 'si'].includes(columnValue) : ['false', 'no', '0'].includes(columnValue);
+                    }
+                    return val && val.toString().toLowerCase().includes(columnValue);
+                });
+            }
+
+            const consolidated = consolidateByIp(filteredActive);
+            const passiveConsolidated = consolidatePassiveByIp([...allPassiveResults]);
+
+            const escCsv = v => `"${String(v || '').replace(/"/g, '""')}"`;
+
+            // Active section
+            const activeHeaders = ['IP', 'Hostname', 'MAC', 'Fabricante', 'Puertos', 'Protocolos', 'Servicios', 'Productos', 'Versiones', 'Organización', 'Ubicación', 'Origen Descubrimiento', 'Screenshot', 'Web Source', 'Crítico'];
+            const activeRows = consolidated.map(row => {
+                const portNums = row.ports.map(p => p.port).filter(Boolean);
+                const protos = [...new Set(row.ports.map(p => p.protocol).filter(Boolean))];
+                const svcs = [...new Set(row.ports.map(p => p.service_name).filter(Boolean))];
+                const prods = [...new Set(row.ports.map(p => p.product).filter(Boolean))];
+                const vers = [...new Set(row.ports.map(p => p.version).filter(Boolean))];
+                const hasShot = row.ports.some(p => p.has_screenshot) ? 'Sí' : 'No';
+                const hasSrc = row.ports.some(p => p.has_source_code) ? 'Sí' : 'No';
+                return [
+                    escCsv(row.ip_address), escCsv(row.hostname),
+                    escCsv(row.mac_address), escCsv(row.vendor),
+                    escCsv(portNums.join(';')),
+                    escCsv(protos.join(';')), escCsv(svcs.join(';')), escCsv(prods.join(';')),
+                    escCsv(vers.join(';')), escCsv(row.organization_name), escCsv(row.location),
+                    escCsv(row.discovery_method), escCsv(hasShot), escCsv(hasSrc),
+                    escCsv(row.is_critical ? 'SÍ' : 'No')
+                ].join(',');
+            });
+
+            // Passive section
+            const passiveHeaders = ['IP Origen', 'MAC Origen', 'Puertos Origen', 'IPs Destino', 'MACs Destino', 'Puertos Destino', 'Protocolos', 'Última Vez'];
+            const passiveRows = passiveConsolidated.map(row => [
+                escCsv(row.src_ip), escCsv(row.src_mac), escCsv(row.src_ports.join(';')),
+                escCsv(row.dst_ips.join(';')), escCsv(row.dst_macs.join(';')),
+                escCsv(row.dst_ports.join(';')), escCsv(row.protocols.join(';')), escCsv(row.last_seen)
+            ].join(','));
+
+            let csvContent = 'sep=,\r\n';
+            csvContent += '=== RESULTADOS ACTIVOS ===\r\n';
+            csvContent += activeHeaders.map(escCsv).join(',') + '\r\n';
+            csvContent += activeRows.join('\r\n');
+            if (passiveRows.length > 0) {
+                csvContent += '\r\n\r\n=== RESULTADOS PASIVOS ===\r\n';
+                csvContent += passiveHeaders.map(escCsv).join(',') + '\r\n';
+                csvContent += passiveRows.join('\r\n');
+            }
+
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `resultados_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
         }
-    }
 
-    async function loadLocations(organization = null) {
-        try {
-            const url = organization
-                ? `/api/locations?organization=${encodeURIComponent(organization)}`
-                : '/api/locations';
-            const response = await fetch(url);
-            const locations = await response.json();
-            const select = document.getElementById('filterLocation');
-            select.innerHTML = '<option value="">Todas</option>' +
-                locations.map(loc => `<option value="${loc.location}">${loc.location}</option>`).join('');
-        } catch (error) {
-            console.error('Error:', error);
+        async function loadOrganizations() {
+            try {
+                const orgNameContext = "{{ org_name | default('') }}";
+                const select = document.getElementById('filterOrg');
+
+                if (orgNameContext) {
+                    select.innerHTML = `<option value="${orgNameContext}" selected>${orgNameContext}</option>`;
+                    select.disabled = true;
+                } else {
+                    const response = await fetch('/api/organizations');
+                    const orgs = await response.json();
+                    select.innerHTML = '<option value="">Todas</option>' +
+                        orgs.map(org => `<option value="${org.name}">${org.name}</option>`).join('');
+                }
+            } catch (error) {
+                console.error('Error cargando organizaciones:', error);
+            }
         }
-    }
 
-    async function loadScans(organization = null, location = null) {
-        try {
-            const params = new URLSearchParams();
-            if (organization) params.append('organization', organization);
-            if (location) params.append('location', location);
-
-            const response = await fetch(`/api/scans/list?${params}`);
-            const scans = await response.json();
-            const select = document.getElementById('filterScan');
-            select.innerHTML = '<option value="">Todos</option>' +
-                scans.map(scan => `<option value="${scan.id}">#${scan.id} - ${scan.organization}/${scan.location} (${scan.target})</option>`).join('');
-        } catch (error) {
-            console.error('Error:', error);
+        async function loadLocations(organization = null) {
+            try {
+                const url = organization
+                    ? `/api/locations?organization=${encodeURIComponent(organization)}`
+                    : '/api/locations';
+                const response = await fetch(url);
+                const locations = await response.json();
+                const select = document.getElementById('filterLocation');
+                select.innerHTML = '<option value="">Todas</option>' +
+                    locations.map(loc => `<option value="${loc.location}">${loc.location}</option>`).join('');
+            } catch (error) {
+                console.error('Error:', error);
+            }
         }
-    }
 
-    // Variables para ordenamiento y filtrado
-    let allResults = [];
-    let currentSortColumn = null;
-    let currentSortDirection = 'asc';
+        async function loadScans(organization = null, location = null) {
+            try {
+                const params = new URLSearchParams();
+                if (organization) params.append('organization', organization);
+                if (location) params.append('location', location);
 
-    async function loadStats(org, location, scanId) {
-        try {
+                const response = await fetch(`/api/scans/list?${params}`);
+                const scans = await response.json();
+                const select = document.getElementById('filterScan');
+                select.innerHTML = '<option value="">Todos</option>' +
+                    scans.map(scan => `<option value="${scan.id}">#${scan.id} - ${scan.organization}/${scan.location} (${scan.target})</option>`).join('');
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Variables para ordenamiento y filtrado
+        let allResults = [];
+        let allPassiveResults = []; // Nuevos resultados pasivos
+        let currentSortColumn = null;
+        let currentSortDirection = 'asc';
+        let currentSortColumnPassive = null;
+        let currentSortDirectionPassive = 'asc';
+
+        // Consolida resultados activos por IP — una fila por host
+        function consolidateByIp(results) {
+            const map = new Map();
+            for (const r of results) {
+                const ip = r.ip_address;
+                if (!map.has(ip)) {
+                    map.set(ip, {
+                        ip_address: ip,
+                        hostname: r.hostname || null,
+                        mac_address: r.mac_address || null,
+                        vendor: r.vendor || null,
+                        organization_name: r.organization_name,
+                        location: r.location,
+                        interfaces_json: r.interfaces_json,
+                        is_critical: !!r.is_critical,
+                        discovery_method: r.discovery_method,
+                        netexec: r.netexec || null,
+                        ports: []
+                    });
+                }
+                const host = map.get(ip);
+                if (!host.hostname && r.hostname) host.hostname = r.hostname;
+                if (!host.mac_address && r.mac_address) host.mac_address = r.mac_address;
+                if (!host.vendor && r.vendor) host.vendor = r.vendor;
+                if (r.is_critical) host.is_critical = true;
+                if (r.interfaces_json && !host.interfaces_json) host.interfaces_json = r.interfaces_json;
+                if (r.netexec && !host.netexec) host.netexec = r.netexec;
+                if (r.port) {
+                    host.ports.push({
+                        port: r.port,
+                        protocol: r.protocol,
+                        service_name: r.service_name,
+                        product: r.product,
+                        version: r.version,
+                        scan_id: r.scan_id,
+                        has_screenshot: !!r.has_screenshot,
+                        has_source_code: !!r.has_source_code
+                    });
+                }
+            }
+            return [...map.values()];
+        }
+
+        // Consolida resultados pasivos por IP origen — una fila por host origen
+        function consolidatePassiveByIp(results) {
+            const map = new Map();
+            for (const r of results) {
+                const ip = r.src_ip;
+                if (!map.has(ip)) {
+                    map.set(ip, {
+                        src_ip: ip,
+                        src_mac: r.src_mac || null,
+                        src_ports: new Set(),
+                        dst_ips: new Set(),
+                        dst_macs: new Set(),
+                        dst_ports: new Set(),
+                        protocols: new Set(),
+                        last_seen: r.last_seen || ''
+                    });
+                }
+                const host = map.get(ip);
+                if (!host.src_mac && r.src_mac) host.src_mac = r.src_mac;
+                if (r.src_port) host.src_ports.add(r.src_port);
+                if (r.dst_ip) host.dst_ips.add(r.dst_ip);
+                if (r.dst_mac) host.dst_macs.add(r.dst_mac);
+                if (r.dst_port) host.dst_ports.add(r.dst_port);
+                if (r.protocol) host.protocols.add(r.protocol);
+                if (r.last_seen && r.last_seen > host.last_seen) host.last_seen = r.last_seen;
+            }
+            return [...map.values()].map(h => ({
+                ...h,
+                src_ports: [...h.src_ports].sort((a, b) => a - b),
+                dst_ips: [...h.dst_ips],
+                dst_macs: [...h.dst_macs],
+                dst_ports: [...h.dst_ports].sort((a, b) => a - b),
+                protocols: [...h.protocols]
+            }));
+        }
+
+        async function loadStats(org, location, scanId) {
+            try {
+                const params = new URLSearchParams();
+                if (org) params.append('organization', org);
+                if (location) params.append('location', location);
+                if (scanId) params.append('scan_id', scanId);
+
+                const response = await fetch(`/api/stats?${params}`);
+                const stats = await response.json();
+
+                document.getElementById('statsHosts').textContent = stats.hosts || 0;
+                document.getElementById('statsPorts').textContent = stats.ports || 0;
+                document.getElementById('statsVulns').textContent = stats.vulnerabilities || 0;
+                document.getElementById('statsScreenshots').textContent = stats.screenshots || 0;
+                document.getElementById('statsSources').textContent = stats.sources || 0;
+            } catch (error) {
+                console.error('Error cargando estadísticas:', error);
+            }
+        }
+
+        async function loadResults() {
+            const org = document.getElementById('filterOrg').value;
+            const location = document.getElementById('filterLocation').value;
+            const scanId = document.getElementById('filterScan').value;
+
             const params = new URLSearchParams();
             if (org) params.append('organization', org);
             if (location) params.append('location', location);
             if (scanId) params.append('scan_id', scanId);
 
-            const response = await fetch(`/api/stats?${params}`);
-            const stats = await response.json();
-
-            document.getElementById('statsHosts').textContent = stats.hosts || 0;
-            document.getElementById('statsPorts').textContent = stats.ports || 0;
-            document.getElementById('statsVulns').textContent = stats.vulnerabilities || 0;
-            document.getElementById('statsScreenshots').textContent = stats.screenshots || 0;
-            document.getElementById('statsSources').textContent = stats.sources || 0;
-        } catch (error) {
-            console.error('Error cargando estadísticas:', error);
-        }
-    }
-
-    async function loadResults() {
-        const org = document.getElementById('filterOrg').value;
-        const location = document.getElementById('filterLocation').value;
-        const scanId = document.getElementById('filterScan').value;
-
-        const params = new URLSearchParams();
-        if (org) params.append('organization', org);
-        if (location) params.append('location', location);
-        if (scanId) params.append('scan_id', scanId);
-
-        try {
-            // Cargar IPs críticas primero para el marcado de filas
-            await loadCriticalIps();
-
-            const response = await fetch(`/api/results?${params}`);
-            allResults = await response.json();
-
-            // Cargar estadísticas
-            await loadStats(org, location, scanId);
-
-            // Aplicar filtros y ordenamiento
-            applyFiltersAndSort();
-        } catch (error) {
-            console.error('Error:', error);
-        }
-    }
-
-    function applyFiltersAndSort() {
-        let filtered = [...allResults];
-
-        // Aplicar búsqueda general
-        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-        if (searchTerm) {
-            filtered = filtered.filter(r => {
-                return Object.values(r).some(val =>
-                    val && val.toString().toLowerCase().includes(searchTerm)
-                );
-            });
-        }
-
-        // Aplicar filtro de columna específica
-        const columnFilter = document.getElementById('columnFilter').value;
-        const columnValue = document.getElementById('columnFilterValue').value.toLowerCase();
-        if (columnFilter && columnValue) {
-            filtered = filtered.filter(r => {
-                let val = r[columnFilter];
-
-                // Para columnas booleanas (has_screenshot, has_source_code), buscar por "true", "yes", "sí", "1" o "false", "no", "0"
-                if (columnFilter === 'has_screenshot' || columnFilter === 'has_source_code') {
-                    if (val === true) {
-                        return ['true', 'yes', 'sí', '1', 'si'].includes(columnValue);
-                    } else {
-                        return ['false', 'no', '0'].includes(columnValue);
-                    }
-                }
-
-                // Para otras columnas, búsqueda normal
-                return val && val.toString().toLowerCase().includes(columnValue);
-            });
-        }
-
-        // Aplicar ordenamiento
-        if (currentSortColumn) {
-            filtered.sort((a, b) => {
-                let aVal = a[currentSortColumn];
-                let bVal = b[currentSortColumn];
-
-                // Manejar valores booleanos (para has_screenshot y has_source_code)
-                if (currentSortColumn === 'has_screenshot' || currentSortColumn === 'has_source_code') {
-                    // Convertir booleanos a números para comparación (true = 1, false = 0)
-                    aVal = aVal === true ? 1 : 0;
-                    bVal = bVal === true ? 1 : 0;
-                } else {
-                    // Para otros tipos, usar el valor o string vacío
-                    aVal = aVal || '';
-                    bVal = bVal || '';
-
-                    // Convertir a string para comparación
-                    aVal = aVal.toString();
-                    bVal = bVal.toString();
-
-                    // Intentar comparación numérica si es posible
-                    if (!isNaN(aVal) && !isNaN(bVal) && aVal !== '' && bVal !== '') {
-                        aVal = parseFloat(aVal);
-                        bVal = parseFloat(bVal);
-                    }
-                }
-
-                if (currentSortDirection === 'asc') {
-                    return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-                } else {
-                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-                }
-            });
-        }
-
-        // Renderizar resultados con scroll infinito o paginación si es necesario, pero aquí es tabla simple
-        const tbody = document.getElementById('resultsBody');
-        if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="13" class="empty">No hay resultados</td></tr>';
-        } else {
-            tbody.innerHTML = filtered.map(r => {
-                // Formatear Interfaces
-                let interfacesHtml = '-';
-                if (r.interfaces_json) {
-                    try {
-                        const interfaces = JSON.parse(r.interfaces_json);
-                        if (Array.isArray(interfaces) && interfaces.length > 0) {
-                            interfacesHtml = `<div class="interfaces-list">${interfaces.map(ip => `<span class="interface-badge">${ip}</span>`).join('')}</div>`;
-                        }
-                    } catch (e) { console.error('Error parsing interfaces_json:', e); }
-                }
-                // Botón de screenshot (solo si hay puerto)
-                let screenshotButton = '-';
-                if (r.has_screenshot && r.port) {
-                    screenshotButton = `<button class="btn-evidence" onclick="showScreenshot(${r.scan_id}, '${r.ip_address}', ${r.port})" title="Ver captura de pantalla">📸</button>`;
-                }
-
-                // Botón de source code (solo si hay puerto)
-                let sourceButton = '-';
-                if (r.has_source_code && r.port) {
-                    sourceButton = `<button class="btn-evidence" onclick="showSourceCode(${r.scan_id}, '${r.ip_address}', ${r.port})" title="Ver código fuente">📄</button>`;
-                }
-
-                // Mostrar "-" para puerto/protocolo si es NULL (host sin puertos)
-                const portDisplay = r.port ? r.port : '-';
-                const protocolDisplay = r.protocol ? r.protocol : '-';
-                const serviceDisplay = r.service_name || (r.port ? '-' : 'Host activo (sin puertos)');
-
-                // Formatear discovery_method
-                let discoveryMethodDisplay = '-';
-                if (r.discovery_method) {
-                    const methodLabels = {
-                        'nmap': '🔌 Nmap',
-                        'passive_capture': '🎧 Captura Pasiva',
-                        'host_discovery': '🔍 Descubrimiento de Hosts',
-                        'arp_scan': '🔍 ARP Scan',
-                        'icmp_ping': '🔍 ICMP Ping',
-                        'syn_scan': '🔍 SYN Scan'
-                    };
-                    discoveryMethodDisplay = methodLabels[r.discovery_method] || r.discovery_method;
-                }
-
-                // Dispositivo crítico (priorizar flag de la API, fallback a local)
-                const isCritical = r.is_critical || criticalIps.has(r.ip_address);
-                const rowStyle = isCritical ? ' style="border-left: 3px solid #ef4444; background: rgba(239,68,68,0.05);"' : '';
-                const criticalBadge = isCritical ? ' <span title="Dispositivo Crítico" style="color:#ef4444;font-size:0.9rem;">🚨</span>' : '';
-
-                return `
-                    <tr${rowStyle}>
-                        <td>${r.ip_address || '-'}${criticalBadge}</td>
-                        <td>${r.hostname || '-'}</td>
-                        <td>${portDisplay}</td>
-                        <td>${protocolDisplay}</td>
-                        <td>${serviceDisplay}</td>
-                        <td>${r.product || '-'}</td>
-                        <td>${r.version || '-'}</td>
-                        <td>${r.organization_name || '-'}</td>
-                        <td>${r.location || '-'}</td>
-                        <td>${discoveryMethodDisplay}</td>
-                        <td style="text-align: center;">${screenshotButton}</td>
-                        <td style="text-align: center;">${sourceButton}</td>
-                        <td style="font-size: 0.85rem;">${interfacesHtml}</td>
-                        <td style="text-align: center;">${r.is_critical ? '🚨 SÍ' : 'No'}</td>
-                    </tr>
-                `;
-            }).join('');
-        }
-    }
-
-    function sortTable(column) {
-        if (currentSortColumn === column) {
-            // Cambiar dirección si es la misma columna
-            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            // Nueva columna, ordenar ascendente
-            currentSortColumn = column;
-            currentSortDirection = 'asc';
-        }
-
-        // Actualizar indicadores visuales
-        document.querySelectorAll('.sort-indicator').forEach(ind => {
-            ind.textContent = '⇅';
-        });
-
-        const currentHeader = document.querySelector(`th[data-column="${column}"]`);
-        if (currentHeader) {
-            const indicator = currentHeader.querySelector('.sort-indicator');
-            indicator.textContent = currentSortDirection === 'asc' ? '↑' : '↓';
-        }
-
-        applyFiltersAndSort();
-    }
-
-    // Event listeners para búsqueda y filtrado
-    document.getElementById('searchInput').addEventListener('input', applyFiltersAndSort);
-    document.getElementById('columnFilter').addEventListener('change', function () {
-        document.getElementById('columnFilterValue').value = '';
-        applyFiltersAndSort();
-    });
-    document.getElementById('columnFilterValue').addEventListener('input', applyFiltersAndSort);
-
-    // Event listeners para ordenamiento
-    document.querySelectorAll('.sortable').forEach(header => {
-        header.style.cursor = 'pointer';
-        header.addEventListener('click', function () {
-            sortTable(this.dataset.column);
-        });
-    });
-
-    // Cargar datos iniciales
-    loadOrganizations();
-    loadLocations();
-    loadScans();
-
-    // Verificar si hay parámetros en la URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlScanId = urlParams.get('scan_id');
-    const urlOrg = urlParams.get('organization');
-    const urlLocation = urlParams.get('location');
-
-    if (urlScanId) {
-        // Si hay scan_id en la URL, cargar ese escaneo específico
-        document.getElementById('filterScan').value = urlScanId;
-        // Cargar información del escaneo para pre-seleccionar org y location
-        fetch(`/api/scans/list`)
-            .then(response => response.json())
-            .then(scans => {
-                const scan = scans.find(s => s.id == urlScanId);
-                if (scan) {
-                    document.getElementById('filterOrg').value = scan.organization;
-                    loadLocations(scan.organization);
-                    loadScans(scan.organization, null);
-                    // Esperar un momento para que se carguen los dropdowns
-                    setTimeout(() => {
-                        document.getElementById('filterLocation').value = scan.location;
-                        document.getElementById('filterScan').value = urlScanId;
-                        loadResults();
-                        updateDeleteButtons();
-                    }, 500);
-                } else {
-                    loadResults();
-                }
-            })
-            .catch(() => loadResults());
-    } else if (urlOrg) {
-        // Si hay organización en la URL
-        document.getElementById('filterOrg').value = urlOrg;
-        loadLocations(urlOrg);
-        if (urlLocation) {
-            setTimeout(() => {
-                document.getElementById('filterLocation').value = urlLocation;
-                loadScans(urlOrg, urlLocation);
-                setTimeout(() => loadResults(), 500);
-            }, 500);
-        } else {
-            loadScans(urlOrg, null);
-            setTimeout(() => loadResults(), 500);
-        }
-    } else {
-        loadResults();
-    }
-
-    // Llamar a updateDeleteButtons después de cargar los datos iniciales
-    setTimeout(() => updateDeleteButtons(), 1000);
-
-    // Actualizar ubicaciones cuando cambia la organización
-    document.getElementById('filterOrg').addEventListener('change', function () {
-        const org = this.value;
-        loadLocations(org || null);
-        loadScans(org || null, null);
-        loadResults();
-    });
-
-    // Actualizar escaneos cuando cambia la ubicación
-    document.getElementById('filterLocation').addEventListener('change', function () {
-        const org = document.getElementById('filterOrg').value;
-        const location = this.value;
-        loadScans(org || null, location || null);
-        loadResults();
-    });
-
-    // Actualizar resultados cuando cambia el escaneo
-    document.getElementById('filterScan').addEventListener('change', function () {
-        loadResults();
-        updateDeleteButtons();
-    });
-
-    // Actualizar visibilidad de botones de eliminación y Nmap
-    async function updateDeleteButtons() {
-        const org = document.getElementById('filterOrg').value;
-        const location = document.getElementById('filterLocation').value;
-        const scanId = document.getElementById('filterScan').value;
-
-        document.getElementById('deleteOrgBtn').style.display = org ? 'inline-block' : 'none';
-        document.getElementById('deleteLocationBtn').style.display = (org && location) ? 'inline-block' : 'none';
-        document.getElementById('deleteScanBtn').style.display = scanId ? 'inline-block' : 'none';
-
-        // Ocultar todos los botones de descarga inicialmente
-        document.getElementById('downloadNmapBtn').style.display = 'none';
-        document.getElementById('viewNmapBtn').style.display = 'none';
-        document.getElementById('downloadPcapBtn').style.display = 'none';
-
-        // Si hay un escaneo seleccionado, verificar qué archivos tiene disponibles
-        if (scanId && scanId !== '') {
             try {
-                const response = await fetch(`/api/scan/${scanId}/info`);
-                const scanInfo = await response.json();
+                // Cargar IPs críticas primero para el marcado de filas
+                await loadCriticalIps();
 
-                // Mostrar botones de Nmap solo si el escaneo tiene archivo XML
-                if (scanInfo.has_nmap) {
-                    document.getElementById('downloadNmapBtn').style.display = 'inline-block';
-                    document.getElementById('viewNmapBtn').style.display = 'inline-block';
-                }
+                // 1. Cargar resultados activos
+                const response = await fetch(`/api/results?${params}`);
+                allResults = await response.json();
 
-                // Mostrar botón de PCAP solo si el escaneo tiene archivo PCAP
-                if (scanInfo.has_pcap) {
-                    document.getElementById('downloadPcapBtn').style.display = 'inline-block';
-                }
+                // 2. Cargar resultados pasivos
+                const pResponse = await fetch(`/api/results/passive?${params}`);
+                allPassiveResults = await pResponse.json();
+
+                // 3. Cargar estadísticas
+                await loadStats(org, location, scanId);
+
+                // 4. Aplicar filtros y ordenamiento
+                applyFiltersAndSort();
             } catch (error) {
-                console.error('Error obteniendo información del escaneo:', error);
+                console.error('Error cargando resultados:', error);
             }
         }
-    }
 
-    // Descargar XML de Nmap
-    function downloadNmapXML() {
-        const scanId = document.getElementById('filterScan').value;
-        if (!scanId) {
-            alert('Por favor, selecciona un escaneo primero');
-            return;
+        function applyFiltersAndSort() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const columnFilter = document.getElementById('columnFilter').value;
+            const columnValue = document.getElementById('columnFilterValue').value.toLowerCase();
+            const scanId = document.getElementById('filterScan').value;
+
+            // --- 1. PROCESAR RESULTADOS ACTIVOS ---
+            let filteredActive = [...allResults];
+            if (searchTerm) {
+                filteredActive = filteredActive.filter(r =>
+                    Object.values(r).some(val => val && val.toString().toLowerCase().includes(searchTerm))
+                );
+            }
+            if (columnFilter && columnValue) {
+                filteredActive = filteredActive.filter(r => {
+                    let val = r[columnFilter];
+                    if (columnFilter === 'has_screenshot' || columnFilter === 'has_source_code') {
+                        return (val === true) ? ['true', 'yes', 'sí', '1', 'si'].includes(columnValue) : ['false', 'no', '0'].includes(columnValue);
+                    }
+                    return val && val.toString().toLowerCase().includes(columnValue);
+                });
+            }
+            if (currentSortColumn) {
+                filteredActive.sort((a, b) => {
+                    let aVal = (currentSortColumn === 'has_screenshot' || currentSortColumn === 'has_source_code') ? (a[currentSortColumn] ? 1 : 0) : (a[currentSortColumn] || '').toString();
+                    let bVal = (currentSortColumn === 'has_screenshot' || currentSortColumn === 'has_source_code') ? (b[currentSortColumn] ? 1 : 0) : (b[currentSortColumn] || '').toString();
+                    if (!isNaN(aVal) && !isNaN(bVal) && aVal !== '' && bVal !== '') { aVal = parseFloat(aVal); bVal = parseFloat(bVal); }
+                    return currentSortDirection === 'asc' ? (aVal > bVal ? 1 : aVal < bVal ? -1 : 0) : (aVal < bVal ? 1 : aVal > bVal ? -1 : 0);
+                });
+            }
+
+            // --- 2. PROCESAR RESULTADOS PASIVOS ---
+            let filteredPassive = [...allPassiveResults];
+            if (searchTerm) {
+                filteredPassive = filteredPassive.filter(r =>
+                    Object.values(r).some(val => val && val.toString().toLowerCase().includes(searchTerm))
+                );
+            }
+            // Mapeo simple de filtros de columna para pasivo
+            if (columnValue) {
+                if (columnFilter === 'ip_address') {
+                    filteredPassive = filteredPassive.filter(r => r.src_ip.toLowerCase().includes(columnValue) || r.dst_ip.toLowerCase().includes(columnValue));
+                } else if (columnFilter === 'port') {
+                    filteredPassive = filteredPassive.filter(r => (r.src_port || '').toString().includes(columnValue) || (r.dst_port || '').toString().includes(columnValue));
+                } else if (columnFilter === 'protocol') {
+                    filteredPassive = filteredPassive.filter(r => (r.protocol || '').toLowerCase().includes(columnValue));
+                }
+            }
+
+            if (currentSortColumnPassive) {
+                filteredPassive.sort((a, b) => {
+                    let aVal = (a[currentSortColumnPassive] || '').toString();
+                    let bVal = (b[currentSortColumnPassive] || '').toString();
+                    if (!isNaN(aVal) && !isNaN(bVal) && aVal !== '' && bVal !== '') { aVal = parseFloat(aVal); bVal = parseFloat(bVal); }
+                    return currentSortDirectionPassive === 'asc' ? (aVal > bVal ? 1 : aVal < bVal ? -1 : 0) : (aVal < bVal ? 1 : aVal > bVal ? -1 : 0);
+                });
+            }
+
+            // --- 3. RENDERIZAR TABLA ACTIVA (consolidada por IP) ---
+            const activeTbody = document.getElementById('resultsBody');
+            const consolidatedActive = consolidateByIp(filteredActive);
+            document.getElementById('activeCount').textContent = `(${consolidatedActive.length} hosts, ${filteredActive.length} puertos)`;
+            if (consolidatedActive.length === 0) {
+                activeTbody.innerHTML = '<tr><td colspan="16" class="empty">No hay resultados activos</td></tr>';
+            } else {
+                const methodLabels = { 'nmap': '🔌 Nmap', 'passive_capture': '🎧 Captura Pasiva', 'host_discovery': '🔍 Host Discovery', 'arp_scan': '🔍 ARP Scan', 'icmp_ping': '🔍 ICMP Ping', 'syn_scan': '🔍 SYN Scan', 'netexec': '🔓 NetExec' };
+                activeTbody.innerHTML = consolidatedActive.map(row => {
+                    // Interfaces
+                    let interfacesHtml = '-';
+                    if (row.interfaces_json) {
+                        try {
+                            const ifaces = JSON.parse(row.interfaces_json);
+                            if (Array.isArray(ifaces) && ifaces.length > 0) {
+                                interfacesHtml = `<div class="interfaces-list">${ifaces.map(ip => `<span class="interface-badge">${ip}</span>`).join('')}</div>`;
+                            }
+                        } catch (e) { }
+                    }
+
+                    // Ports badges
+                    const portBadges = row.ports.length > 0
+                        ? row.ports.map(p => `<span class="port-badge">${p.port}${p.protocol ? '/' + p.protocol : ''}</span>`).join('')
+                        : '<span style="color:#94a3b8">-</span>';
+
+                    // Unique values for other columns
+                    const protos = [...new Set(row.ports.map(p => p.protocol).filter(Boolean))].join(', ') || '-';
+                    const svcs = [...new Set(row.ports.map(p => p.service_name).filter(Boolean))].join(', ') || (row.ports.length === 0 ? 'Host activo' : '-');
+                    const prods = [...new Set(row.ports.map(p => p.product).filter(Boolean))].join(', ') || '-';
+                    const vers = [...new Set(row.ports.map(p => p.version).filter(Boolean))].join(', ') || '-';
+
+                    // Evidence buttons per port
+                    const shotButtons = row.ports.filter(p => p.has_screenshot).map(p =>
+                        `<button class="btn-evidence" onclick="showScreenshot(${p.scan_id}, '${row.ip_address}', ${p.port})" title="Captura puerto ${p.port}">📸<small>${p.port}</small></button>`
+                    ).join('') || '-';
+                    const srcButtons = row.ports.filter(p => p.has_source_code).map(p =>
+                        `<button class="btn-evidence" onclick="showSourceCode(${p.scan_id}, '${row.ip_address}', ${p.port})" title="Código fuente puerto ${p.port}">📄<small>${p.port}</small></button>`
+                    ).join('') || '-';
+
+                    const isCritical = row.is_critical || criticalIps.has(row.ip_address);
+                    const rowStyle = isCritical ? ' style="border-left: 3px solid #ef4444; background: rgba(239,68,68,0.05);"' : '';
+                    const criticalBadge = isCritical ? ' <span title="Dispositivo Crítico" style="color:#ef4444;font-size:0.9rem;">🚨</span>' : '';
+                    let discoveryDisplay = methodLabels[row.discovery_method] || row.discovery_method || '-';
+                    if (row.netexec) {
+                        const nxcKey = `nxc_${row.ip_address}`;
+                        window.__nxcCache = window.__nxcCache || {};
+                        window.__nxcCache[nxcKey] = { ip: row.ip_address, hostname: row.hostname, data: row.netexec };
+                        discoveryDisplay += ` <button class="btn-evidence" style="margin-left:.4rem;" title="Datos NetExec" onclick="showNetexec('${nxcKey}')">🔓 NX</button>`;
+                    }
+
+                    return `<tr${rowStyle}>
+                        <td>${row.ip_address || '-'}${criticalBadge}</td>
+                        <td>${row.hostname || '-'}</td>
+                        <td style="font-family: monospace; font-size: 0.85rem;">${row.mac_address || '-'}</td>
+                        <td>${row.vendor || '-'}</td>
+                        <td><div class="port-badges">${portBadges}</div></td>
+                        <td>${protos}</td>
+                        <td>${svcs}</td>
+                        <td>${prods}</td>
+                        <td>${vers}</td>
+                        <td>${row.organization_name || '-'}</td>
+                        <td>${row.location || '-'}</td>
+                        <td>${discoveryDisplay}</td>
+                        <td style="text-align: center;"><div class="evidence-buttons">${shotButtons}</div></td>
+                        <td style="text-align: center;"><div class="evidence-buttons">${srcButtons}</div></td>
+                        <td style="font-size: 0.85rem;">${interfacesHtml}</td>
+                        <td style="text-align: center;">${isCritical ? '🚨 SÍ' : 'No'}</td>
+                    </tr>`;
+                }).join('');
+            }
+
+            // --- 4. RENDERIZAR TABLA PASIVA (consolidada por IP origen) ---
+            const passiveTbody = document.getElementById('passiveResultsBody');
+            const consolidatedPassive = consolidatePassiveByIp(filteredPassive);
+            document.getElementById('passiveCount').textContent = `(${consolidatedPassive.length} hosts, ${filteredPassive.length} conversaciones)`;
+            if (consolidatedPassive.length === 0) {
+                if (scanId) {
+                    passiveTbody.innerHTML = '<tr><td colspan="8" class="empty">No hay conversaciones detectadas en este escaneo pasivo</td></tr>';
+                } else {
+                    passiveTbody.innerHTML = '<tr><td colspan="8" class="empty">No hay conversaciones pasivas</td></tr>';
+                }
+            } else {
+                passiveTbody.innerHTML = consolidatedPassive.map(row => {
+                    const srcPorts = row.src_ports.length > 0 ? row.src_ports.map(p => `<span class="port-badge">${p}</span>`).join('') : '-';
+                    const dstPorts = row.dst_ports.length > 0 ? row.dst_ports.map(p => `<span class="port-badge">${p}</span>`).join('') : '-';
+                    const dstIps = row.dst_ips.length > 0 ? row.dst_ips.map(ip => `<span class="interface-badge">${ip}</span>`).join('') : '-';
+                    const dstMacs = row.dst_macs.length > 0 ? row.dst_macs.join(', ') : '-';
+                    const protocols = row.protocols.length > 0 ? row.protocols.join(', ') : '-';
+                    return `<tr>
+                        <td>${row.src_ip}</td>
+                        <td>${row.src_mac || '-'}</td>
+                        <td><div class="port-badges">${srcPorts}</div></td>
+                        <td><div class="interfaces-list">${dstIps}</div></td>
+                        <td style="font-size:0.8rem">${dstMacs}</td>
+                        <td><div class="port-badges">${dstPorts}</div></td>
+                        <td>${protocols}</td>
+                        <td>${row.last_seen}</td>
+                    </tr>`;
+                }).join('');
+            }
+
+            // --- 5. CONTROL DE VISIBILIDAD ---
+            if (!scanId) {
+                document.getElementById('activeResultsContainer').style.display = 'block';
+                document.getElementById('passiveResultsContainer').style.display = allPassiveResults.length > 0 ? 'block' : 'none';
+            } else {
+                // Determinar si el escaneo seleccionado es pasivo basándonos en el dropdown (o en los datos)
+                const scanSelect = document.getElementById('filterScan');
+                const selectedText = scanSelect.options[scanSelect.selectedIndex].text;
+                const isPassiveScan = selectedText.includes('🎧');
+
+                if (isPassiveScan) {
+                    document.getElementById('activeResultsContainer').style.display = 'none';
+                    document.getElementById('passiveResultsContainer').style.display = 'block';
+                } else {
+                    const hasActive = allResults.length > 0;
+                    const hasPassive = allPassiveResults.length > 0;
+                    document.getElementById('activeResultsContainer').style.display = hasActive ? 'block' : 'none';
+                    document.getElementById('passiveResultsContainer').style.display = hasPassive ? 'block' : 'none';
+                    
+                    if (!hasActive && !hasPassive) {
+                        document.getElementById('activeResultsContainer').style.display = 'block';
+                    }
+                }
+            }
         }
 
-        window.location.href = `/api/evidence/nmap/${scanId}`;
-    }
-
-    // Descargar PCAP
-    function downloadPcap() {
-        const scanId = document.getElementById('filterScan').value;
-        if (!scanId) {
-            alert('Por favor, selecciona un escaneo primero');
-            return;
+        function sortTable(column, isPassive = false) {
+            if (isPassive) {
+                if (currentSortColumnPassive === column) {
+                    currentSortDirectionPassive = currentSortDirectionPassive === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSortColumnPassive = column;
+                    currentSortDirectionPassive = 'asc';
+                }
+                // Actualizar indicadores visuales de pasivo
+                document.querySelectorAll('.sort-indicator-passive').forEach(ind => ind.textContent = '⇅');
+                const header = document.querySelector(`th.sortable-passive[data-column="${column}"]`);
+                if (header) {
+                    header.querySelector('.sort-indicator-passive').textContent = currentSortDirectionPassive === 'asc' ? '↑' : '↓';
+                }
+            } else {
+                if (currentSortColumn === column) {
+                    currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSortColumn = column;
+                    currentSortDirection = 'asc';
+                }
+                // Actualizar indicadores visuales de activo
+                document.querySelectorAll('.sort-indicator').forEach(ind => ind.textContent = '⇅');
+                const header = document.querySelector(`th.sortable[data-column="${column}"]`);
+                if (header) {
+                    header.querySelector('.sort-indicator').textContent = currentSortDirection === 'asc' ? '↑' : '↓';
+                }
+            }
+            applyFiltersAndSort();
         }
 
-        window.location.href = `/api/scan/${scanId}/pcap`;
-    }
+        // Event listeners para búsqueda y filtrado
+        document.getElementById('searchInput').addEventListener('input', applyFiltersAndSort);
+        document.getElementById('columnFilter').addEventListener('change', function () {
+            document.getElementById('columnFilterValue').value = '';
+            applyFiltersAndSort();
+        });
+        document.getElementById('columnFilterValue').addEventListener('input', applyFiltersAndSort);
 
-    // Visualizar XML de Nmap
-    function viewNmapXML() {
-        const scanId = document.getElementById('filterScan').value;
-        if (!scanId) {
-            alert('Por favor, selecciona un escaneo primero');
-            return;
+        // Event listeners para ordenamiento ACTIVO
+        document.querySelectorAll('.sortable').forEach(header => {
+            header.style.cursor = 'pointer';
+            header.addEventListener('click', function () {
+                sortTable(header.dataset.column, false);
+            });
+        });
+
+        // Event listeners para ordenamiento PASIVO
+        document.querySelectorAll('.sortable-passive').forEach(header => {
+            header.style.cursor = 'pointer';
+            header.addEventListener('click', function () {
+                sortTable(header.dataset.column, true);
+            });
+        });
+
+        // --- INICIALIZACIÓN ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            const orgNameContext = "{{ org_name | default('') }}";
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlScanId = urlParams.get('scan_id');
+            const urlOrg = urlParams.get('organization') || orgNameContext;
+            const urlLocation = urlParams.get('location');
+
+            // 1. Cargar Organizaciones (siempre necesario para el dropdown si no está bloqueado)
+            await loadOrganizations();
+
+            if (urlScanId) {
+                // Escaneo específico por URL
+                const response = await fetch(`/api/scans/list`);
+                const scans = await response.json();
+                const scan = scans.find(s => s.id == urlScanId);
+                
+                if (scan) {
+                    document.getElementById('filterOrg').value = scan.organization;
+                    await loadLocations(scan.organization);
+                    document.getElementById('filterLocation').value = scan.location;
+                    await loadScans(scan.organization, scan.location);
+                    document.getElementById('filterScan').value = urlScanId;
+                }
+                loadResults();
+            } else if (urlOrg) {
+                // Organización específica (por contexto o URL)
+                document.getElementById('filterOrg').value = urlOrg;
+                await loadLocations(urlOrg);
+                
+                if (urlLocation) {
+                    document.getElementById('filterLocation').value = urlLocation;
+                    await loadScans(urlOrg, urlLocation);
+                } else {
+                    await loadScans(urlOrg, null);
+                }
+                loadResults();
+            } else {
+                // Carga global por defecto
+                await loadLocations();
+                await loadScans();
+                loadResults();
+            }
+
+            // Actualizar botones después de la carga inicial
+            updateDeleteButtons();
+        });
+
+        // Actualizar ubicaciones cuando cambia la organización
+        document.getElementById('filterOrg').addEventListener('change', function () {
+            const org = this.value;
+            loadLocations(org || null);
+            loadScans(org || null, null);
+            loadResults();
+        });
+
+        // Actualizar escaneos cuando cambia la ubicación
+        document.getElementById('filterLocation').addEventListener('change', function () {
+            const org = document.getElementById('filterOrg').value;
+            const location = this.value;
+            loadScans(org || null, location || null);
+            loadResults();
+        });
+
+        // Actualizar resultados cuando cambia el escaneo
+        document.getElementById('filterScan').addEventListener('change', function () {
+            loadResults();
+            updateDeleteButtons();
+        });
+
+        // Actualizar visibilidad de botones de eliminación y Nmap
+        async function updateDeleteButtons() {
+            const org = document.getElementById('filterOrg').value;
+            const location = document.getElementById('filterLocation').value;
+            const scanId = document.getElementById('filterScan').value;
+
+            document.getElementById('deleteOrgBtn').style.display = org ? 'inline-block' : 'none';
+            document.getElementById('deleteLocationBtn').style.display = (org && location) ? 'inline-block' : 'none';
+            document.getElementById('deleteScanBtn').style.display = scanId ? 'inline-block' : 'none';
+
+            // Ocultar todos los botones de descarga inicialmente
+            document.getElementById('downloadNmapBtn').style.display = 'none';
+            document.getElementById('viewNmapBtn').style.display = 'none';
+            document.getElementById('downloadPcapBtn').style.display = 'none';
+
+            // Si hay un escaneo seleccionado, verificar qué archivos tiene disponibles
+            if (scanId && scanId !== '') {
+                try {
+                    const response = await fetch(`/api/scan/${scanId}/info`);
+                    const scanInfo = await response.json();
+
+                    // Mostrar botones de Nmap solo si el escaneo tiene archivo XML
+                    if (scanInfo.has_nmap) {
+                        document.getElementById('downloadNmapBtn').style.display = 'inline-block';
+                        document.getElementById('viewNmapBtn').style.display = 'inline-block';
+                    }
+
+                    // Mostrar botón de PCAP solo si el escaneo tiene archivo PCAP
+                    if (scanInfo.has_pcap) {
+                        document.getElementById('downloadPcapBtn').style.display = 'inline-block';
+                    }
+                } catch (error) {
+                    console.error('Error obteniendo información del escaneo:', error);
+                }
+            }
         }
 
-        // Crear modal
-        const modal = document.createElement('div');
-        modal.id = 'nmapXmlModal';
-        modal.style.cssText = `
+        // Descargar XML de Nmap
+        function downloadNmapXML() {
+            const scanId = document.getElementById('filterScan').value;
+            if (!scanId) {
+                alert('Por favor, selecciona un escaneo primero');
+                return;
+            }
+
+            window.location.href = `/api/evidence/nmap/${scanId}`;
+        }
+
+        // Descargar PCAP
+        function downloadPcap() {
+            const scanId = document.getElementById('filterScan').value;
+            if (!scanId) {
+                alert('Por favor, selecciona un escaneo primero');
+                return;
+            }
+
+            window.location.href = `/api/scan/${scanId}/pcap`;
+        }
+
+        // Visualizar XML de Nmap
+        function viewNmapXML() {
+            const scanId = document.getElementById('filterScan').value;
+            if (!scanId) {
+                alert('Por favor, selecciona un escaneo primero');
+                return;
+            }
+
+            // Crear modal
+            const modal = document.createElement('div');
+            modal.id = 'nmapXmlModal';
+            modal.style.cssText = `
             position: fixed;
             top: 0;
             left: 0;
@@ -652,8 +897,8 @@
             z-index: 10000;
         `;
 
-        const content = document.createElement('div');
-        content.style.cssText = `
+            const content = document.createElement('div');
+            content.style.cssText = `
             background: white;
             padding: 2rem;
             border-radius: 8px;
@@ -665,40 +910,40 @@
             flex-direction: column;
         `;
 
-        const header = document.createElement('div');
-        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-shrink: 0;';
+            const header = document.createElement('div');
+            header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-shrink: 0;';
 
-        const title = document.createElement('h2');
-        title.style.cssText = 'margin: 0; font-size: 1.5rem;';
-        title.textContent = `📄 XML de Nmap - Escaneo #${scanId}`;
+            const title = document.createElement('h2');
+            title.style.cssText = 'margin: 0; font-size: 1.5rem;';
+            title.textContent = `📄 XML de Nmap - Escaneo #${scanId}`;
 
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.cssText = 'display: flex; gap: 0.5rem;';
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.cssText = 'display: flex; gap: 0.5rem;';
 
-        const downloadBtn = document.createElement('button');
-        downloadBtn.textContent = '📥 Descargar';
-        downloadBtn.style.cssText = 'background: #3b82f6; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem;';
-        downloadBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            window.location.href = `/api/evidence/nmap/${scanId}`;
-        });
+            const downloadBtn = document.createElement('button');
+            downloadBtn.textContent = '📥 Descargar';
+            downloadBtn.style.cssText = 'background: #3b82f6; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem;';
+            downloadBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                window.location.href = `/api/evidence/nmap/${scanId}`;
+            });
 
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = '✕ Cerrar';
-        closeBtn.style.cssText = 'background: #ef4444; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem;';
-        closeBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            modal.remove();
-        });
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '✕ Cerrar';
+            closeBtn.style.cssText = 'background: #ef4444; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem;';
+            closeBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                modal.remove();
+            });
 
-        buttonContainer.appendChild(downloadBtn);
-        buttonContainer.appendChild(closeBtn);
-        header.appendChild(title);
-        header.appendChild(buttonContainer);
+            buttonContainer.appendChild(downloadBtn);
+            buttonContainer.appendChild(closeBtn);
+            header.appendChild(title);
+            header.appendChild(buttonContainer);
 
-        const xmlContent = document.createElement('pre');
-        xmlContent.id = 'nmapXmlContent';
-        xmlContent.style.cssText = `
+            const xmlContent = document.createElement('pre');
+            xmlContent.id = 'nmapXmlContent';
+            xmlContent.style.cssText = `
             background: #1e293b;
             color: #e2e8f0;
             padding: 1rem;
@@ -713,175 +958,156 @@
             margin: 0;
             flex: 1;
         `;
-        xmlContent.textContent = 'Cargando XML...';
+            xmlContent.textContent = 'Cargando XML...';
 
-        content.appendChild(header);
-        content.appendChild(xmlContent);
-        modal.appendChild(content);
-        document.body.appendChild(modal);
+            content.appendChild(header);
+            content.appendChild(xmlContent);
+            modal.appendChild(content);
+            document.body.appendChild(modal);
 
-        // Cargar XML
-        fetch(`/api/evidence/nmap/${scanId}/view`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Error ${response.status}: ${response.statusText}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.xml) {
-                    // Escapar el XML para evitar problemas con caracteres especiales
-                    xmlContent.textContent = data.xml;
-                } else {
-                    xmlContent.textContent = 'No se pudo cargar el XML';
+            // Cargar XML
+            fetch(`/api/evidence/nmap/${scanId}/view`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Error ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.xml) {
+                        // Escapar el XML para evitar problemas con caracteres especiales
+                        xmlContent.textContent = data.xml;
+                    } else {
+                        xmlContent.textContent = 'No se pudo cargar el XML';
+                        xmlContent.style.color = '#ef4444';
+                    }
+                })
+                .catch(error => {
+                    xmlContent.textContent = `Error cargando XML: ${error.message}`;
                     xmlContent.style.color = '#ef4444';
+                });
+
+            // Cerrar al hacer clic fuera del modal
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) {
+                    modal.remove();
                 }
-            })
-            .catch(error => {
-                xmlContent.textContent = `Error cargando XML: ${error.message}`;
-                xmlContent.style.color = '#ef4444';
             });
 
-        // Cerrar al hacer clic fuera del modal
-        modal.addEventListener('click', function (e) {
-            if (e.target === modal) {
-                modal.remove();
-            }
+            // Cerrar con ESC
+            const escHandler = function (e) {
+                if (e.key === 'Escape' && document.getElementById('nmapXmlModal')) {
+                    document.getElementById('nmapXmlModal').remove();
+                    document.removeEventListener('keydown', escHandler);
+                }
+            };
+            document.addEventListener('keydown', escHandler);
+        }
+
+        // Actualizar botones cuando cambian los filtros
+        document.getElementById('filterOrg').addEventListener('change', function () {
+            updateDeleteButtons();
+        });
+        document.getElementById('filterLocation').addEventListener('change', function () {
+            updateDeleteButtons();
         });
 
-        // Cerrar con ESC
-        const escHandler = function (e) {
-            if (e.key === 'Escape' && document.getElementById('nmapXmlModal')) {
-                document.getElementById('nmapXmlModal').remove();
-                document.removeEventListener('keydown', escHandler);
+        async function deleteScan() {
+            const scanId = document.getElementById('filterScan').value;
+            if (!scanId) return;
+
+            if (!confirm(`¿Estás seguro de que quieres eliminar el escaneo #${scanId}?\n\nEsto eliminará:\n- Todos los resultados del escaneo\n- Todos los archivos relacionados\n- Esta acción NO se puede deshacer`)) {
+                return;
             }
-        };
-        document.addEventListener('keydown', escHandler);
-    }
 
-    // Actualizar botones cuando cambian los filtros
-    document.getElementById('filterOrg').addEventListener('change', function () {
-        updateDeleteButtons();
-    });
-    document.getElementById('filterLocation').addEventListener('change', function () {
-        updateDeleteButtons();
-    });
+            try {
+                const response = await fetch(`/api/scan/${scanId}`, {
+                    method: 'DELETE'
+                });
 
-    async function deleteScan() {
-        const scanId = document.getElementById('filterScan').value;
-        if (!scanId) return;
+                const result = await response.json();
 
-        if (!confirm(`¿Estás seguro de que quieres eliminar el escaneo #${scanId}?\n\nEsto eliminará:\n- Todos los resultados del escaneo\n- Todos los archivos relacionados\n- Esta acción NO se puede deshacer`)) {
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/scan/${scanId}`, {
-                method: 'DELETE'
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                alert(`✅ ${result.message}`);
-                // Recargar datos
-                document.getElementById('filterScan').value = '';
-                loadScans();
-                loadResults();
-                updateDeleteButtons();
-            } else {
-                alert(`❌ Error: ${result.detail || result.message}`);
+                if (response.ok) {
+                    alert(`✅ ${result.message}`);
+                    // Recargar datos
+                    document.getElementById('filterScan').value = '';
+                    loadScans();
+                    loadResults();
+                    updateDeleteButtons();
+                } else {
+                    alert(`❌ Error: ${result.detail || result.message}`);
+                }
+            } catch (error) {
+                alert(`❌ Error eliminando escaneo: ${error.message}`);
             }
-        } catch (error) {
-            alert(`❌ Error eliminando escaneo: ${error.message}`);
-        }
-    }
-
-    async function deleteLocation() {
-        const org = document.getElementById('filterOrg').value;
-        const location = document.getElementById('filterLocation').value;
-
-        if (!org || !location) return;
-
-        if (!confirm(`¿Estás seguro de que quieres eliminar la ubicación "${location}" de "${org}"?\n\nEsto eliminará:\n- Todos los escaneos de esta ubicación\n- Todos los resultados\n- Todos los archivos relacionados\n- Esta acción NO se puede deshacer`)) {
-            return;
         }
 
-        try {
-            const response = await fetch(`/api/location?organization=${encodeURIComponent(org)}&location=${encodeURIComponent(location)}`, {
-                method: 'DELETE'
-            });
+        async function deleteLocation() {
+            const org = document.getElementById('filterOrg').value;
+            const location = document.getElementById('filterLocation').value;
 
-            const result = await response.json();
+            if (!org || !location) return;
 
-            if (response.ok) {
-                alert(`✅ ${result.message}\nEscaneos eliminados: ${result.scans_deleted}`);
-                // Recargar datos
-                document.getElementById('filterLocation').value = '';
-                document.getElementById('filterScan').value = '';
-                loadLocations(org);
-                loadScans(org, null);
-                loadResults();
-                updateDeleteButtons();
-            } else {
-                alert(`❌ Error: ${result.detail || result.message}`);
+            if (!confirm(`¿Estás seguro de que quieres eliminar la ubicación "${location}" de "${org}"?\n\nEsto eliminará:\n- Todos los escaneos de esta ubicación\n- Todos los resultados\n- Todos los archivos relacionados\n- Esta acción NO se puede deshacer`)) {
+                return;
             }
-        } catch (error) {
-            alert(`❌ Error eliminando ubicación: ${error.message}`);
-        }
-    }
 
-    async function deleteOrganization() {
-        const org = document.getElementById('filterOrg').value;
-        if (!org) return;
+            try {
+                const response = await fetch(`/api/location?organization=${encodeURIComponent(org)}&location=${encodeURIComponent(location)}`, {
+                    method: 'DELETE'
+                });
 
-        if (!confirm(`¿Estás seguro de que quieres eliminar la organización "${org}"?\n\nEsto eliminará:\n- Toda la organización\n- Todas las ubicaciones\n- Todos los escaneos\n- Todos los resultados\n- Todos los archivos relacionados\n- Esta acción NO se puede deshacer`)) {
-            return;
-        }
+                const result = await response.json();
 
-        try {
-            const response = await fetch(`/api/organization/${encodeURIComponent(org)}`, {
-                method: 'DELETE'
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                alert(`✅ ${result.message}\nEscaneos eliminados: ${result.scans_deleted}\nUbicaciones eliminadas: ${result.locations_deleted}`);
-                // Recargar datos
-                document.getElementById('filterOrg').value = '';
-                document.getElementById('filterLocation').value = '';
-                // Carga inicial
-                document.addEventListener('DOMContentLoaded', () => {
-                    loadOrganizations().then(() => {
-                        const orgNameContext = "{{ org_name | default('') }}";
-                        if (orgNameContext) {
-                            loadLocations(orgNameContext);
-                            loadScans(orgNameContext, '');
-                            loadStats(orgNameContext, '', '');
-                            loadResults();
-                        } else {
-                            loadLocations();
-                            loadScans();
-                            loadStats();
-                            loadResults();
-                        }
-                    });
-                }); updateDeleteButtons();
-            } else {
-                alert(`❌ Error: ${result.detail || result.message}`);
+                if (response.ok) {
+                    alert(`✅ ${result.message}\nEscaneos eliminados: ${result.scans_deleted}`);
+                    // Recargar datos
+                    document.getElementById('filterLocation').value = '';
+                    document.getElementById('filterScan').value = '';
+                    loadLocations(org);
+                    loadScans(org, null);
+                    loadResults();
+                    updateDeleteButtons();
+                } else {
+                    alert(`❌ Error: ${result.detail || result.message}`);
+                }
+            } catch (error) {
+                alert(`❌ Error eliminando ubicación: ${error.message}`);
             }
-        } catch (error) {
-            alert(`❌ Error eliminando organización: ${error.message}`);
         }
-    }
 
-    // Funciones para mostrar evidencias
-    function showScreenshot(scanId, ip, port) {
-        const url = `/api/evidence/screenshot/${scanId}/${ip}/${port}`;
-        const modal = document.createElement('div');
-        modal.className = 'evidence-modal';
-        modal.innerHTML = `
+        async function deleteOrganization() {
+            const org = document.getElementById('filterOrg').value;
+            if (!org) return;
+
+            if (!confirm(`¿Estás seguro de que quieres eliminar la organización "${org}"?\n\nEsto eliminará:\n- Toda la organización\n- Todas las ubicaciones\n- Todos los escaneos\n- Todos los resultados\n- Todos los archivos relacionados\n- Esta acción NO se puede deshacer`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/organization/${encodeURIComponent(org)}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert(`✅ ${result.message}\nEscaneos eliminados: ${result.scans_deleted}\nUbicaciones eliminadas: ${result.locations_deleted}`);
+                    updateDeleteButtons();
+                } else {
+                    alert(`❌ Error: ${result.detail || result.message}`);
+                }
+            } catch (error) {
+                alert(`❌ Error eliminando organización: ${error.message}`);
+            }
+        }
+
+        // Funciones para mostrar evidencias
+        function showScreenshot(scanId, ip, port) {
+            const url = `/api/evidence/screenshot/${scanId}/${ip}/${port}`;
+            const modal = document.createElement('div');
+            modal.className = 'evidence-modal';
+            modal.innerHTML = `
             <div class="modal-content">
                 <div class="modal-header">
                     <h3>📸 Captura de Pantalla - ${ip}:${port}</h3>
@@ -892,19 +1118,19 @@
                 </div>
             </div>
         `;
-        document.body.appendChild(modal);
-        modal.addEventListener('click', function (e) {
-            if (e.target === modal) {
-                modal.remove();
-            }
-        });
-    }
+            document.body.appendChild(modal);
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+        }
 
-    function showSourceCode(scanId, ip, port) {
-        const url = `/api/evidence/source/${scanId}/${ip}/${port}`;
-        const modal = document.createElement('div');
-        modal.className = 'evidence-modal';
-        modal.innerHTML = `
+        function showSourceCode(scanId, ip, port) {
+            const url = `/api/evidence/source/${scanId}/${ip}/${port}`;
+            const modal = document.createElement('div');
+            modal.className = 'evidence-modal';
+            modal.innerHTML = `
             <div class="modal-content">
                 <div class="modal-header">
                     <h3>📄 Código Fuente - ${ip}:${port}</h3>
@@ -915,143 +1141,245 @@
                 </div>
             </div>
         `;
-        document.body.appendChild(modal);
+            document.body.appendChild(modal);
 
-        // Cargar el contenido
-        fetch(url)
-            .then(response => {
-                if (response.headers.get('content-type')?.includes('application/json')) {
-                    return response.json();
-                } else {
-                    return response.text().then(text => ({ content: text }));
+            // Cargar el contenido
+            fetch(url)
+                .then(response => {
+                    if (response.headers.get('content-type')?.includes('application/json')) {
+                        return response.json();
+                    } else {
+                        return response.text().then(text => ({ content: text }));
+                    }
+                })
+                .then(data => {
+                    const contentDiv = document.getElementById('sourceCodeContent');
+                    if (data.content) {
+                        contentDiv.textContent = data.content;
+                    } else {
+                        contentDiv.textContent = 'No se pudo cargar el código fuente';
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('sourceCodeContent').textContent = `Error cargando código fuente: ${error.message}`;
+                });
+
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) {
+                    modal.remove();
                 }
-            })
-            .then(data => {
-                const contentDiv = document.getElementById('sourceCodeContent');
-                if (data.content) {
-                    contentDiv.textContent = data.content;
-                } else {
-                    contentDiv.textContent = 'No se pudo cargar el código fuente';
-                }
-            })
-            .catch(error => {
-                document.getElementById('sourceCodeContent').textContent = `Error cargando código fuente: ${error.message}`;
             });
+        }
 
-        modal.addEventListener('click', function (e) {
-            if (e.target === modal) {
-                modal.remove();
-            }
-        });
-    }
-</script>
+        function showNetexec(cacheKey) {
+            const entry = (window.__nxcCache || {})[cacheKey];
+            if (!entry) return;
+            const { ip, hostname, data } = entry;
 
-<style>
-    .btn-evidence {
-        background: #3b82f6;
-        color: white;
-        border: none;
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 1rem;
-        transition: background 0.2s;
-    }
+            const escape = (s) => String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-    .btn-evidence:hover {
-        background: #2563eb;
-    }
+            // Protocols block
+            const protoRows = Object.entries(data.protocols || {}).map(([proto, info]) => {
+                const props = Object.entries(info)
+                    .filter(([k]) => k !== 'port')
+                    .map(([k, v]) => `<span style="margin-right:.6rem;"><b>${escape(k)}</b>=${escape(v)}</span>`)
+                    .join(' ');
+                return `<tr><td style="padding:.25rem .6rem;"><b>${escape(proto.toUpperCase())}</b></td>
+                        <td style="padding:.25rem .6rem;">:${escape(info.port || '?')}</td>
+                        <td style="padding:.25rem .6rem;font-size:.82rem;">${props}</td></tr>`;
+            }).join('') || '<tr><td colspan="3" style="color:#94a3b8;padding:.4rem;">—</td></tr>';
 
-    .sortable {
-        cursor: pointer;
-        user-select: none;
-        position: relative;
-    }
+            // Shares
+            const sharesRows = (data.shares || []).map(s =>
+                `<tr><td style="padding:.2rem .6rem;font-family:monospace;">${escape(s.name)}</td>
+                     <td style="padding:.2rem .6rem;">${s.read ? '✅R' : '·'} ${s.write ? '✏️W' : '·'}</td>
+                     <td style="padding:.2rem .6rem;font-size:.78rem;color:#94a3b8;">${escape(s.remark || '')}</td>
+                     <td style="padding:.2rem .6rem;font-size:.78rem;">${escape(s.user || '')}</td></tr>`
+            ).join('') || '<tr><td colspan="4" style="color:#94a3b8;padding:.4rem;">—</td></tr>';
 
-    .sortable:hover {
-        background-color: #f1f5f9;
-    }
+            // Loot files
+            const lootRows = (data.loot_files || []).map(l =>
+                `<tr><td style="padding:.2rem .6rem;"><span class="port-badge">${escape(l.kind)}</span></td>
+                     <td style="padding:.2rem .6rem;font-size:.78rem;">${escape(l.timestamp)}</td>
+                     <td style="padding:.2rem .6rem;font-family:monospace;font-size:.78rem;">${escape(l.path)}</td></tr>`
+            ).join('') || '<tr><td colspan="3" style="color:#94a3b8;padding:.4rem;">—</td></tr>';
 
-    .sort-indicator {
-        margin-left: 0.5rem;
-        font-size: 0.8rem;
-        color: #64748b;
-    }
+            const adminPills = (data.admin_users || []).map(u =>
+                `<span class="port-badge" style="background:#dc2626;color:#fff;">${escape(u)}</span>`).join(' ') || '—';
+            const loggedInPills = (data.loggedin_users || []).map(u =>
+                `<span class="port-badge">${escape(u)}</span>`).join(' ') || '—';
 
-    .evidence-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.7);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 1000;
-    }
+            const modal = document.createElement('div');
+            modal.className = 'evidence-modal';
+            modal.innerHTML = `
+            <div class="modal-content" style="max-width: 900px;">
+                <div class="modal-header">
+                    <h3>🔓 NetExec — ${escape(ip)} ${hostname ? '· ' + escape(hostname) : ''}</h3>
+                    <button class="modal-close" onclick="this.closest('.evidence-modal').remove()">×</button>
+                </div>
+                <div class="modal-body" style="max-height:75vh;overflow:auto;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem;">
+                        <div><b>Dominio:</b> ${escape(data.domain || '—')}</div>
+                        <div><b>SO:</b> ${escape(data.os || '—')}</div>
+                    </div>
 
-    .modal-content {
-        background: white;
-        border-radius: 8px;
-        max-width: 90%;
-        max-height: 90%;
-        overflow: auto;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
+                    <h4 style="margin:.6rem 0 .3rem;">Protocolos</h4>
+                    <table style="width:100%;border-collapse:collapse;"><tbody>${protoRows}</tbody></table>
 
-    .modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem;
-        border-bottom: 1px solid #e5e7eb;
-        background: #f9fafb;
-    }
+                    <h4 style="margin:1rem 0 .3rem;">Recursos compartidos (${(data.shares||[]).length})</h4>
+                    <table style="width:100%;border-collapse:collapse;"><tbody>${sharesRows}</tbody></table>
 
-    .modal-header h3 {
-        margin: 0;
-        color: #1f2937;
-    }
+                    <h4 style="margin:1rem 0 .3rem;">Usuarios admin / Logged-in</h4>
+                    <div style="margin-bottom:.5rem;"><b>Admin:</b> ${adminPills}</div>
+                    <div><b>Logged-in:</b> ${loggedInPills}</div>
 
-    .modal-close {
-        background: none;
-        border: none;
-        font-size: 2rem;
-        cursor: pointer;
-        color: #6b7280;
-        padding: 0;
-        width: 2rem;
-        height: 2rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-    }
+                    <h4 style="margin:1rem 0 .3rem;">Loot files (${(data.loot_files||[]).length})</h4>
+                    <table style="width:100%;border-collapse:collapse;"><tbody>${lootRows}</tbody></table>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+        }
+    </script>
 
-    .modal-close:hover {
-        background: #e5e7eb;
-        color: #1f2937;
-    }
+    <style>
+        .btn-evidence {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
 
-    .modal-body {
-        padding: 1rem;
-    }
+        .btn-evidence:hover {
+            background: #2563eb;
+        }
 
-    .interfaces-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.25rem;
-        max-width: 250px;
-    }
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
 
-    .interface-badge {
-        background: #1e293b;
-        color: #60a5fa;
-        padding: 0.1rem 0.4rem;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        border: 1px solid #334155;
-    }
-</style>
-{% endblock %}
+        .sortable:hover {
+            background-color: #f1f5f9;
+        }
+
+        .sort-indicator {
+            margin-left: 0.5rem;
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        .evidence-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #1f2937;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 2rem;
+            cursor: pointer;
+            color: #6b7280;
+            padding: 0;
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .modal-close:hover {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .modal-body {
+            padding: 1rem;
+        }
+
+        .interfaces-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+            max-width: 250px;
+        }
+
+        .interface-badge {
+            background: #1e293b;
+            color: #60a5fa;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            border: 1px solid #334155;
+        }
+
+        .port-badge {
+            background: #0f172a;
+            color: #34d399;
+            padding: 0.1rem 0.45rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: 'Courier New', monospace;
+            border: 1px solid #1e3a2e;
+            white-space: nowrap;
+        }
+
+        .port-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem;
+            max-width: 220px;
+        }
+
+        .evidence-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem;
+            justify-content: center;
+        }
+
+        .btn-evidence small {
+            display: block;
+            font-size: 0.6rem;
+            line-height: 1;
+        }
+    </style>
+    {% endblock %}

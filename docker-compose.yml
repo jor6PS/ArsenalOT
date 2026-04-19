@@ -1,0 +1,101 @@
+services:
+
+  # ── ArsenalOT ───────────────────────────────────────────────
+  arsenalot:
+    build: .
+    container_name: arsenalot-app
+    # network_mode: host es necesario para que nmap y tshark vean las interfaces reales
+    network_mode: host
+    privileged: true
+    volumes:
+      - ./results:/app/results
+      # Mount host's NetExec workspaces read-only so the exploitation tab can
+      # import nxcdb data. When launched with `sudo docker-compose up`, $HOME
+      # resolves to /root (usually empty), so prefer SUDO_USER's home and fall
+      # back to $HOME. Override explicitly with ARSENAL_NXC_HOST_PATH in .env.
+      - ${ARSENAL_NXC_HOST_PATH:-/home/${SUDO_USER:-${USER}}/.nxc}:/root/.nxc:ro
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - neo4j
+
+  # ── Neo4j ────────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:ubi9
+    container_name: arsenalot-neo4j
+    ports:
+      - "7474:7474"   # Browser UI
+      - "7687:7687"   # Bolt protocol
+    environment:
+      - NEO4J_AUTH=${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD}
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    restart: unless-stopped
+
+  # ── Neo4j Graph Viewer ───────────────────────────────────────
+  # BloodHound-style graph explorer: http://localhost:7777
+  neo4j-graph-viewer:
+    build: ./neo4j-graph-viewer
+    container_name: arsenalot-graph-viewer
+    ports:
+      - "7777:80"
+    environment:
+      # The browser JS connects to Neo4j via HTTP REST API (no WebSocket)
+      - NEO4J_HTTP_URL=http://localhost:7474
+      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+    restart: unless-stopped
+
+  # ── PwnDoc ───────────────────────────────────────────────────
+  # Acceso web: https://localhost:8443
+  # Primera vez: docker-compose up -d --build  (tarda ~3-5 min compilando frontend)
+  pwndoc-mongo:
+    image: mongo:4.2.15
+    container_name: pwndoc-mongo
+    restart: unless-stopped
+    volumes:
+      - pwndoc_mongo_data:/data/db
+    networks:
+      - pwndoc-net
+    # Limitar caché WiredTiger en entornos con poca RAM
+    command: --wiredTigerCacheSizeGB 0.5
+
+  pwndoc-backend:
+    image: ghcr.io/pwndoc/pwndoc-backend:latest
+    container_name: pwndoc-backend
+    restart: unless-stopped
+    depends_on:
+      - pwndoc-mongo
+    environment:
+      - DB_SERVER=pwndoc-mongo
+      - DB_NAME=pwndoc
+    ports:
+      - "127.0.0.1:4242:4242"   # API accesible desde arsenalot (network_mode: host)
+    networks:
+      - pwndoc-net
+
+  pwndoc-frontend:
+    build:
+      # #main:frontend → clona el repo y usa frontend/ como contexto de build
+      # (el Dockerfile de producción está en frontend/Dockerfile)
+      context: "https://github.com/pwndoc/pwndoc.git#main:frontend"
+    container_name: pwndoc-frontend
+    restart: unless-stopped
+    ports:
+      - "8443:8443"   # UI: https://localhost:8443
+    depends_on:
+      - pwndoc-backend
+    networks:
+      - pwndoc-net
+
+networks:
+  pwndoc-net:
+    driver: bridge
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  pwndoc_mongo_data:

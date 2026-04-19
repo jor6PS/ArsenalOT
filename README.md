@@ -12,101 +12,59 @@ Esta herramienta permite no solo obtener información detallada sobre los puerto
 
 ---
 
-## Requisitos e Instalación
+## 🚀 Instalación y Ejecución Rápida (Docker - Recomendado)
 
-### 1. Dependencias del Sistema (Linux)
-ArsenalOT requiere varias herramientas del sistema para funcionar al 100%. Ejecuta los siguientes comandos en tu terminal Linux:
+La forma más sencilla y robusta de ejecutar ArsenalOT junto con Neo4j es utilizando **Docker Compose**. Esto evita conflictos de dependencias y configura todo el entorno automáticamente.
 
-**Instalación unificada:**
+### 1. Requisitos
+*   Docker y Docker Compose instalado.
+
+### 2. Inicio
+Desde la carpeta raíz del proyecto, ejecuta:
+```bash
+docker-compose up -d --build
+```
+
+### 3. Acceso
+*   **ArsenalOT Web**: [http://localhost:8000](http://localhost:8000)
+*   **Neo4j Browser**: [http://localhost:7474](http://localhost:7474)
+
+> [!TIP]
+> Para una guía detallada sobre persistencia de datos y gestión de contenedores, consulta la **[Guía de Inicio con Docker](.system/brain/docker_guide.md)** (o similar en la carpeta de documentación).
+
+---
+
+## 🔧 Instalación Manual (Alternativa)
+
+Si prefieres no usar Docker, puedes realizar una instalación tradicional en tu sistema Linux:
+
+### 1. Dependencias del Sistema
 ```bash
 sudo apt-get update
 sudo apt-get install -y nmap tshark arp-scan firefox-esr
-# Software capturas de pantalla
-wget https://github.com/mozilla/geckodriver/releases/download/v0.36.0/geckodriver-v0.36.0-linux64.tar.gz
-tar -xvzf geckodriver-v0.36.0-linux64.tar.gz
-sudo mv geckodriver /usr/local/bin/
-sudo chmod +x /usr/local/bin/geckodriver
+# Instalación de geckodriver... (ver scripts de ayuda)
 ```
 
-**Herramientas incluidas:**
-- **`nmap`** (Crítico): Escaneo de puertos y servicios.
-- **`tshark`** (Opcional): Captura pasiva de tráfico.
-- **`arp-scan`** (Opcional): Descubrimiento rápido en red local.
-- **`firefox-esr`** (Opcional): Navegador para capturas de pantalla.
-- **`geckodriver`** (Opcional): Driver para Selenium (necesario para las capturas).
-
-**Configuración de permisos para tshark:**
-Durante la instalación de `tshark`, selecciona **SÍ** cuando pregunte si los usuarios sin privilegios pueden capturar paquetes. Luego añade tu usuario al grupo:
+### 2. Entorno Python
 ```bash
-sudo usermod -a -G wireshark $USER
-```
-*(Es posible que sea necesario cerrar sesión y volver a entrar para que el cambio de grupo surta efecto).*
-
-Puedes validar el estado de tus dependencias ejecutando:
-```bash
-python3 check_dependencies.py
-```
-
-### 2. Entorno y Dependencias de Python
-
-Para instalar la aplicación, sigue estos pasos desde la consola:
-
-```bash
-# 1. Clona el repositorio (Si no lo has hecho ya)
-# git clone <URL_DEL_REPO>
-# cd ArsenalOT
-
-# 2. Crea tu entorno virtual (¡Git lo ignorará de tus commits automáticamente!)
 python3 -m venv venv
-
-# 3. Activa el entorno virtual. Tienes que realizar este paso cada vez que abras una nueva terminal
 source venv/bin/activate
-
-# 4. Instala las dependencias de Python necesarias para hacer volar ArsenalOT
 pip install -r requirements.txt
 ```
 
----
-
-## Ejecución y Modo de Uso
-
-### Iniciar la Plataforma (Interfaz Web)
-El método principal e ideal para utilizar ArsenalOT es a través de su interfaz web.
-Asegúrate de que estás en la carpeta raíz (`ArsenalOT`) y ejecuta nuestro lanzador unificado:
-
+### 3. Ejecución
 ```bash
 ./start.sh
 ```
-El script detectará tu entorno de Python local para aislar la ejecución, verificará que estés con un usuario con ciertos privilegios y lanzará todo el motor que da vida a este software (FastAPI en entorno productivo Gunicorn / Uvicorn).
-
-A continuación, abre un navegador web en: **`http://localhost:8000`** para iniciar y gestionar tus escaneos.
 
 ---
 
-### Visualización Avanzada (Importar resultados en Neo4j)
+## 📊 Visualización Avanzada (Neo4j)
 
-ArsenalOT permite llevar los resultados encontrados (hosts, puertos vulnerables, subredes enteras, etc.) hacia **Neo4j** para generar el mapa completo de tu organización en una base de datos grafo. Aunque desde la web es posible elvantar los servicios de Neo4j y NeoDash ttambién se puede levantar en local con docker de la sigueinte manera:
+ArsenalOT permite representar los activos detectados en una base de datos de grafos. Si usas la versión Docker, Neo4j ya estará corriendo.
 
-**1. Preparar la Base de Datos Neo4j y NeoDash:**
-En una consola secundaria, si tienes Neo4J de forma nativa:
-```bash
-sudo neo4j console
-```
-
-Para dotar a los resultados de pantallas preconstruidas por nosotros, usamos el cliente NeoDash como frontend conectándose a nuestra BBDD Neo4j:
-```bash
-sudo docker run -it --rm -p 5005:5005 neo4jlabs/neodash
-```
-
-**2. Importar los Resultados de ArsenalOT a Neo4j:**
-Podemos instruirle desde el sistema ArsenalOT a enviar todo lo analizado a Neo4J:
-```bash
-python3 src/arsenal/scripts/scan2neo.py -r <IP_Neo4j>
-```
-
-Podrás acceder a dashboards en NeoDash entrando a `http://localhost:5005` y cargando o importando el archivo de configuración **`dashboard.json`**. 
-
-Tus mapas de red empezarán a visualizarse orgánicamente, creando relaciones, marcando servicios críticos descubiertos e incorporándose al grafo total de la organización.
+*   **Exportación**: Desde la interfaz web de ArsenalOT, puedes enviar los resultados directamente a Neo4j configurando la IP como `localhost` (ya que comparten red).
+*   **Grafos**: Accede a `http://localhost:7474` para realizar consultas Cypher manuales o visualizar el mapa de red generado.
 
 ---
 

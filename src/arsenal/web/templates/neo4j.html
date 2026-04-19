@@ -13,37 +13,6 @@
             grafos.</p>
     </div>
 
-    <!-- Controles locales de Neo4j y NeoDash -->
-    <div class="glass-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
-        <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">🖥️ Servicios
-            Locales Docker</h3>
-        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">Levanta una instancia local de
-            Neo4j y NeoDash con Docker directamente desde aquí.</p>
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
-            <button id="btnNeo4j" class="btn"
-                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; background: #018bff; color: white;"
-                onclick="toggleDockerService('neo4j')">
-                <span id="iconNeo4j">▶️</span> <span id="textNeo4j">Levantar Neo4j</span>
-            </button>
-            <a id="linkNeo4j" href="http://localhost:7474" target="_blank" class="btn btn-success"
-                style="display: none; padding: 0.6rem 1.2rem; font-size: 0.95rem; align-items: center; gap: 0.5rem;">
-                <span>🔗</span> Panel Neo4j
-            </a>
-
-            <div style="width: 1px; background: var(--border-color); align-self: stretch;"></div>
-
-            <button id="btnNeodash" class="btn"
-                style="padding: 0.6rem 1.2rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; background: #60a5fa; color: white;"
-                onclick="toggleDockerService('neodash')">
-                <span id="iconNeodash">▶️</span> <span id="textNeodash">Levantar NeoDash</span>
-            </button>
-            <a id="linkNeodash" href="http://localhost:5005" target="_blank" class="btn btn-success"
-                style="display: none; padding: 0.6rem 1.2rem; font-size: 0.95rem; align-items: center; gap: 0.5rem;">
-                <span>🔗</span> Panel NeoDash
-            </a>
-        </div>
-        <div id="dockerStatusMsg" style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);"></div>
-    </div>
 
     <!-- Conexión a Neo4j -->
     <div id="connectionStatus" class="glass-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
@@ -81,7 +50,7 @@
                     style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);"></span>
                 <span id="connectionText" style="font-weight: 500; color: var(--text-primary);">Desconectado</span>
             </div>
-            <div style="display: flex; gap: 0.5rem;">
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <button type="button" id="connectBtn" class="btn"
                     style="background: #4ECDC4; color: white; padding: 0.5rem 1rem; font-size: 0.9rem;">
                     🔌 Conectar
@@ -89,6 +58,18 @@
                 <button type="button" id="disconnectBtn" class="btn"
                     style="background: #ef4444; color: white; padding: 0.5rem 1rem; font-size: 0.9rem; display: none;">
                     🔌 Desconectar
+                </button>
+                <button type="button" id="openBrowserBtn" class="btn"
+                    onclick="openNeo4jBrowser()"
+                    style="background: #7c3aed; color: white; padding: 0.5rem 1rem; font-size: 0.9rem; display: none;"
+                    title="Abrir Neo4j Browser en nueva pestaña">
+                    🌐 Abrir Neo4j Browser
+                </button>
+                <button type="button" class="btn"
+                    onclick="window.open('http://localhost:7777', '_blank')"
+                    style="background: #4ECDC4; color: #06111e; padding: 0.5rem 1rem; font-size: 0.9rem; font-weight: 700;"
+                    title="Abrir Graph Viewer (visualización tipo BloodHound)">
+                    ⬡ Abrir Graph Viewer
                 </button>
             </div>
         </div>
@@ -132,6 +113,18 @@
         <div id="exportStatus" class="export-status hidden" style="margin-top: 1rem;">
             <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">Estado de la Exportación</h3>
             <div id="exportMessages" class="export-messages" style="font-size: 0.9rem;"></div>
+        </div>
+    </div>
+
+    <!-- Consultas Cypher Útiles -->
+    <div class="glass-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
+        <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">💡 Consultas Cypher Útiles</h3>
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Copia estas consultas y pégalas en el <a href="http://localhost:7474" target="_blank" style="color: var(--accent-yellow);">Neo4j Browser</a> para analizar los datos industriales.
+        </p>
+        
+        <div id="usefulQueriesContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+            <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">Cargando consultas...</div>
         </div>
     </div>
 
@@ -997,6 +990,7 @@
 
     // Event listeners para filtros
     document.addEventListener('DOMContentLoaded', function () {
+        loadUsefulQueries();
         // Agregar listeners a los checkboxes de filtro cuando se carguen
         setTimeout(() => {
             const filters = document.querySelectorAll('.node-filter');
@@ -1252,11 +1246,45 @@
         }
     }
 
+    async function openNeo4jBrowser() {
+        const ip = document.getElementById('neo4j_ip').value;
+        if (!ip) {
+            alert('❌ No se ha configurado la IP del servidor Neo4j.');
+            return;
+        }
+
+        const browserUrl = `http://${ip}:7474`;
+
+        if (!isConnected) {
+            alert('❌ Neo4j Browser no disponible: no hay conexión activa con el servidor Neo4j.\n\nConecta primero usando el botón "Conectar".');
+            return;
+        }
+
+        // Intentar verificar si el browser HTTP está accesible
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+            const response = await fetch(browserUrl, { method: 'HEAD', mode: 'no-cors', signal: controller.signal });
+            clearTimeout(timeoutId);
+            // no-cors siempre devuelve opaque (tipo 0), si llega aquí el servidor respondió
+            window.open(browserUrl, '_blank');
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                alert(`❌ Neo4j Browser no se encuentra habilitado o no está accesible en:\n${browserUrl}\n\nVerifica que el servicio Neo4j esté iniciado.`);
+            } else {
+                // fetch fallido por CORS u otro motivo — intentamos abrir igualmente
+                // ya que no-cors puede lanzar error de red si el servidor está caído
+                alert(`❌ Neo4j Browser no se encuentra habilitado o no está accesible en:\n${browserUrl}\n\nVerifica que el servicio Neo4j esté iniciado.`);
+            }
+        }
+    }
+
     function updateConnectionStatus(connected) {
         const indicator = document.getElementById('connectionIndicator');
         const text = document.getElementById('connectionText');
         const connectBtn = document.getElementById('connectBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
+        const openBrowserBtn = document.getElementById('openBrowserBtn');
         const exportBtn = document.getElementById('exportBtn');
         const clearAllBtn = document.getElementById('clearAllBtn');
 
@@ -1266,6 +1294,7 @@
             text.textContent = 'Conectado';
             connectBtn.style.display = 'none';
             disconnectBtn.style.display = 'inline-block';
+            if (openBrowserBtn) openBrowserBtn.style.display = 'inline-block';
             exportBtn.disabled = false;
             clearAllBtn.disabled = false;
         } else {
@@ -1274,6 +1303,7 @@
             text.textContent = 'Desconectado';
             connectBtn.style.display = 'inline-block';
             disconnectBtn.style.display = 'none';
+            if (openBrowserBtn) openBrowserBtn.style.display = 'none';
             exportBtn.disabled = true;
             clearAllBtn.disabled = true;
         }
@@ -1421,70 +1451,6 @@
     });
 
     // --- NEO4J & NEODASH DOCKER CONTROLS ---
-    async function toggleDockerService(service) {
-        const svcLabel = service === 'neo4j' ? 'Neo4j' : 'Neodash';
-        const btn = document.getElementById(`btn${svcLabel}`);
-        const isRunning = btn.getAttribute('data-running') === 'true';
-        const action = isRunning ? 'stop' : 'start';
-
-        btn.disabled = true;
-        const textEl = document.getElementById(`text${svcLabel}`);
-        const origText = textEl.innerText;
-        textEl.innerText = isRunning ? 'Deteniendo...' : 'Levantando...';
-
-        const statusMsg = document.getElementById('dockerStatusMsg');
-        if (statusMsg) statusMsg.innerText = '';
-
-        try {
-            const response = await fetch(`/api/docker/${service}/${action}`, { method: 'POST' });
-            const data = await response.json();
-            if (!response.ok || data.status === 'error') {
-                throw new Error(data.message || `Error al ${action} ${service}`);
-            }
-            if (statusMsg) statusMsg.innerText = data.message || `Servicio ${service} ${isRunning ? 'detenido' : 'iniciado'}.`;
-            await checkDockerService(service);
-        } catch (error) {
-            console.error(error);
-            if (statusMsg) statusMsg.style.color = '#ef4444';
-            if (statusMsg) statusMsg.innerText = `Error: ${error.message}`;
-            textEl.innerText = origText;
-            btn.disabled = false;
-        }
-    }
-
-    async function checkDockerService(service) {
-        try {
-            const response = await fetch(`/api/docker/${service}/status`);
-            const data = await response.json();
-            const svcLabel = service === 'neo4j' ? 'Neo4j' : 'Neodash';
-            const btn = document.getElementById(`btn${svcLabel}`);
-            const icon = document.getElementById(`icon${svcLabel}`);
-            const text = document.getElementById(`text${svcLabel}`);
-            const link = document.getElementById(`link${svcLabel}`);
-
-            if (data.running) {
-                btn.setAttribute('data-running', 'true');
-                btn.style.background = '#ef4444';
-                icon.innerText = '\u23f9\ufe0f';
-                text.innerText = `Detener ${svcLabel}`;
-                link.style.display = 'inline-flex';
-            } else {
-                btn.setAttribute('data-running', 'false');
-                btn.style.background = service === 'neo4j' ? '#018bff' : '#60a5fa';
-                icon.innerText = '\u25b6\ufe0f';
-                text.innerText = `Levantar ${svcLabel}`;
-                link.style.display = 'none';
-            }
-            btn.disabled = false;
-        } catch (error) {
-            console.error(`Error checking ${service} status:`, error);
-        }
-    }
-
-    // Poll status every 5 seconds and on load
-    setInterval(() => { checkDockerService('neo4j'); checkDockerService('neodash'); }, 5000);
-    checkDockerService('neo4j');
-    checkDockerService('neodash');
 
     // Post-Intelligence integration
     async function runPostIntelligence() {
@@ -1543,6 +1509,46 @@
         } finally {
             btn.disabled = false;
         }
+    }
+    async function loadUsefulQueries() {
+        try {
+            const response = await fetch('/static/data/neo4j_queries.json');
+            const queries = await response.json();
+            const container = document.getElementById('usefulQueriesContainer');
+            
+            if (!container) return;
+            
+            container.innerHTML = queries.map((q, idx) => `
+                <div class="query-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div style="font-weight: 600; color: var(--text-primary); font-size: 0.95rem;">${q.title}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); min-height: 2.5rem;">${q.description}</div>
+                    <div style="position: relative;">
+                        <pre style="background: #1a1a1a; color: #4ECDC4; padding: 0.75rem; border-radius: 4px; font-size: 0.8rem; overflow-x: auto; margin: 0; border: 1px solid #333;">${q.query}</pre>
+                        <button onclick="copyQueryToClipboard(this)" data-query="${q.query.replace(/"/g, '&quot;')}"
+                                style="position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(78,205,196,0.2); border: 1px solid var(--accent-yellow); color: var(--accent-yellow); border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.75rem; cursor: pointer;">
+                            Copiar
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        } catch (error) {
+            console.error('Error cargando consultas útiles:', error);
+            const container = document.getElementById('usefulQueriesContainer');
+            if (container) container.innerHTML = '<p style="color: #ef4444;">Error al cargar las consultas.</p>';
+        }
+    }
+
+    function copyQueryToClipboard(btn) {
+        const text = btn.getAttribute('data-query');
+        navigator.clipboard.writeText(text).then(() => {
+            const originalText = btn.innerText;
+            btn.innerText = '✅ Copiado';
+            btn.style.background = 'rgba(78,205,196,0.5)';
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.style.background = 'rgba(78,205,196,0.2)';
+            }, 2000);
+        });
     }
 
 </script>

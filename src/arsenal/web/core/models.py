@@ -5,18 +5,20 @@ class ScanConfig(BaseModel):
     organization: str
     location: str
     target_range: Optional[str] = "0.0.0.0/0"  # Opcional, por defecto para pasivo
-    interface: str = "eth0"
+    interface: str = ""
     myip: Optional[str] = None
     scan_mode: str = "active"  # active o passive
     # Opciones para escaneos activos
-    host_discovery: bool = True
-    nmap: bool = True
+    host_discovery: bool = False
+    nmap: bool = False
+    nmap_icmp: bool = False
     nmap_speed: str = "normal"  # rapido, normal, lento
     nmap_versions: bool = False
     nmap_vulns: bool = False
-    nmap_ot_ports: bool = True
-    nmap_it_ports: bool = True
+    nmap_ot_ports: bool = False
+    nmap_it_ports: bool = False
     custom_ports: Optional[str] = None
+    custom_ping_command: Optional[str] = None
     custom_nmap_command: Optional[str] = None
     custom_host_discovery_command: Optional[str] = None
     ioxid: bool = False
@@ -38,8 +40,18 @@ class NetworkCreateRequest(BaseModel):
     network_range: str
     system_name: Optional[str] = None
 
+class NetworkUpdateRequest(BaseModel):
+    network_name: str
+    network_range: str
+    system_name: Optional[str] = None
+
 class CriticalDeviceRequest(BaseModel):
     organization: str
     name: str
     ips: str         # IPs separadas por comas: "192.168.1.1, 10.0.0.5"
+    reason: str
+
+class CriticalDeviceUpdateRequest(BaseModel):
+    name: str
+    ips: str
     reason: str

@@ -452,6 +452,7 @@
                 html += nets.map(net => `
                     <div class="network-card">
                         <button class="network-delete-btn" onclick="deleteNetwork(${net.id})">🗑️</button>
+                        <button onclick='editNetwork(${net.id}, ${JSON.stringify(net.network_name)}, ${JSON.stringify(net.network_range)}, ${JSON.stringify(net.system_name || "")})' style="position: absolute; top: 0.5rem; right: 2rem; background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: none; border-radius: 4px; cursor: pointer; padding: 0.2rem 0.5rem; font-size: 0.8rem;" title="Editar">✏️</button>
                         <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem;">${net.network_name}</div>
                         <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8;">${net.network_range}</div>
                     </div>
@@ -513,6 +514,33 @@
             return;
         }
         window.location.href = `/api/networks/export?organization=${encodeURIComponent(org)}`;
+    }
+
+    async function editNetwork(id, currentName, currentRange, currentSystem) {
+        const newName = prompt('Nombre de la red:', currentName);
+        if (newName === null) return;
+        const newRange = prompt('Rango (ej: 192.168.1.0/24):', currentRange);
+        if (newRange === null) return;
+        const newSystem = prompt('Sistema Opcional:', currentSystem);
+        if (newSystem === null) return;
+        
+        try {
+            const response = await fetch(`/api/networks/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    network_name: newName,
+                    network_range: newRange,
+                    system_name: newSystem || null
+                })
+            });
+            if (!response.ok) throw new Error(await response.text());
+            const org = currentFilters.organization || document.getElementById('filterOrg').value;
+            loadNetworks(org);
+        } catch (error) {
+            console.error(error);
+            alert('Error al editar red: ' + error.message);
+        }
     }
 
     async function deleteNetwork(id) {
@@ -619,10 +647,10 @@
             progressBar.style.background = 'linear-gradient(90deg, #6366f1, #4f46e5)';
         }
 
-        // Actualizar tabla de resultados
-        if (liveData && liveData.results && liveData.results.length > 0 && resultsBody && resultsContainer) {
+        // Actualizar tabla de resultados activos
+        if (liveData && liveData.active && liveData.active.length > 0 && resultsBody && resultsContainer) {
             resultsContainer.style.display = 'block';
-            resultsBody.innerHTML = liveData.results.map(r => {
+            resultsBody.innerHTML = liveData.active.map(r => {
                 const portDisplay = r.port || '-';
                 const protocolDisplay = r.protocol || '-';
                 const serviceDisplay = r.service_name || (r.port ? '-' : 'Host activo');
@@ -635,6 +663,25 @@
                         <td style="padding: 0.75rem; color: #e2e8f0;">${serviceDisplay}</td>
                         <td style="padding: 0.75rem; color: #e2e8f0;">${r.product || '-'}</td>
                         <td style="padding: 0.75rem; color: #e2e8f0;">${r.version || '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Actualizar tabla de resultados pasivos
+        const passiveBody = container.querySelector(`#passiveResultsBody_${scanId}`);
+        const passiveContainer = container.querySelector(`#passiveContainer_${scanId}`);
+        if (liveData && liveData.passive && liveData.passive.length > 0 && passiveBody && passiveContainer) {
+            passiveContainer.style.display = 'block';
+            passiveBody.innerHTML = liveData.passive.map(r => {
+                return `
+                    <tr style="border-bottom: 1px solid #334155;">
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.src_ip}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.dst_ip}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.src_port || '-'}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.dst_port || '-'}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.protocol || '-'}</td>
+                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.last_seen || '-'}</td>
                     </tr>
                 `;
             }).join('');
@@ -659,21 +706,23 @@
         scanProgressDiv.className = 'dashboard-section';
         scanProgressDiv.style.cssText = 'padding: 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-color); margin-bottom: 1.5rem;';
         scanProgressDiv.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
                 <h3 style="margin: 0; color: var(--accent-yellow); font-size: 1.1rem; font-weight: 600;">
                     ⏳ Escaneo #${scanId} en Ejecución - ${scanData.organization_name} / ${scanData.location}
                 </h3>
-                <button class="btn btn-danger btn-sm" onclick="stopTrackingScan(${scanId})" style="padding: 0.4rem 0.8rem;">
-                    ❌ Ocultar
-                </button>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button class="btn btn-sm" onclick="stopScan(${scanId})" style="padding: 0.4rem 0.8rem; background:#f59e0b; color:#000; border:none; font-weight:600;">⏹️ Detener</button>
+                    <button class="btn btn-danger btn-sm" onclick="cancelScan(${scanId})" style="padding: 0.4rem 0.8rem;">❌ Cancelar</button>
+                    <button class="btn btn-sm" onclick="stopTrackingScan(${scanId})" style="padding: 0.4rem 0.8rem; background: #475569; color: white; border:none;">🙈 Ocultar</button>
+                </div>
             </div>
             <div class="progress-bar" style="width: 100%; height: 30px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
                 <div id="progressBar_${scanId}" class="progress-fill" style="height: 100%; background: linear-gradient(90deg, #10b981, #059669); width: 0%; transition: width 0.3s ease;"></div>
             </div>
             <div id="progressMessages_${scanId}" style="margin-bottom: 1rem; padding: 1rem; background: #0f172a; border-radius: 6px; border: 1px solid #334155;"></div>
             <div id="liveResultsContainer_${scanId}" style="margin-top: 1.5rem; display: none;">
-                <h4 style="margin-bottom: 1rem; color: #e2e8f0;">📊 Resultados en Tiempo Real</h4>
-                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #334155; border-radius: 6px;">
+                <h4 style="margin-bottom: 1rem; color: #60a5fa;">🔌 Dispositivos y Puertos (Activo)</h4>
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #334155; border-radius: 6px; margin-bottom: 1.5rem;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
                         <thead style="position: sticky; top: 0; background: #1e293b; z-index: 10;">
                             <tr>
@@ -686,9 +735,26 @@
                                 <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #334155; color: #94a3b8;">Versión</th>
                             </tr>
                         </thead>
-                        <tbody id="liveResultsBody_${scanId}" style="background: #0f172a;">
-                            <!-- Los resultados se cargarán aquí dinámicamente -->
-                        </tbody>
+                        <tbody id="liveResultsBody_${scanId}" style="background: #0f172a;"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="passiveContainer_${scanId}" style="margin-top: 1.5rem; display: none;">
+                <h4 style="margin-bottom: 1rem; color: #10b981;">🎧 Tráfico y Conversaciones (Pasivo)</h4>
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #065f46; border-radius: 6px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead style="position: sticky; top: 0; background: #064e3b; z-index: 10;">
+                            <tr>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Origen</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Destino</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">P. Origen</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">P. Destino</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Protocolo</th>
+                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Última vez</th>
+                            </tr>
+                        </thead>
+                        <tbody id="passiveResultsBody_${scanId}" style="background: #064e3b;"></tbody>
                     </table>
                 </div>
             </div>
@@ -718,6 +784,17 @@
 
                     // Actualizar UI
                     updateScanProgressUI(scanId, updatedScan, liveData);
+
+                    // Si el escaneo terminó, recargar tabla de escaneos y estadísticas
+                    if (updatedScan.status !== 'running') {
+                        await loadRecentScans();
+                        await loadStats();
+                    }
+                } else if (statusResponse.status === 404) {
+                    // El escaneo fue cancelado/borrado
+                    stopTrackingScan(scanId);
+                    await loadRecentScans();
+                    await loadStats();
                 }
             } catch (error) {
                 console.error(`Error actualizando scan ${scanId}:`, error);
@@ -823,6 +900,7 @@
                         actionsHtml = `
                             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                                 <a href="${resultsUrl}" class="btn btn-sm" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; white-space: nowrap;">📊 Ver Resultados</a>
+                                <button class="btn btn-sm" onclick="stopScan(${scan.id})" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; white-space: nowrap; background:#f59e0b; color:#000; border:none;">⏹️ Detener</button>
                                 <button class="btn btn-danger btn-sm" onclick="cancelScan(${scan.id})" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; white-space: nowrap;">❌ Cancelar</button>
                             </div>
                         `;
@@ -1106,9 +1184,30 @@
         loadRecentScans();
     }, 10000);
 
-    // Función para cancelar escaneo desde el dashboard
+    // Detener escaneo (conserva los datos recogidos hasta ese momento)
+    async function stopScan(scanId) {
+        if (!confirm(`¿Detener el escaneo #${scanId}?\n\nSe conservarán todos los resultados recogidos hasta ahora.`)) {
+            return;
+        }
+        try {
+            const response = await fetch(`/api/scan/${scanId}/stop`, { method: 'POST' });
+            const result = await response.json();
+            if (response.ok) {
+                stopTrackingScan(scanId);
+                await loadRecentScans();
+                await loadStats();
+            } else {
+                alert('❌ Error: ' + (result.detail || result.message));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error deteniendo escaneo: ' + error.message);
+        }
+    }
+
+    // Función para cancelar escaneo desde el dashboard (borra todos los datos)
     async function cancelScan(scanId) {
-        if (!confirm(`¿Estás seguro de que quieres cancelar el escaneo #${scanId}?`)) {
+        if (!confirm(`¿Cancelar y borrar el escaneo #${scanId}?\n\n⚠️ Se eliminarán TODOS los datos recogidos. Esta acción no se puede deshacer.`)) {
             return;
         }
 
@@ -1120,7 +1219,7 @@
             const result = await response.json();
 
             if (response.ok) {
-                alert('✅ ' + result.message);
+                stopTrackingScan(scanId);
                 // Recargar escaneos y estadísticas
                 await loadRecentScans();
                 await loadStats();
@@ -1230,73 +1329,6 @@
         }
     }
 
-    // --- NEO4J & NEODASH DOCKER CONTROLS ---
-
-    async function toggleDockerService(service) {
-        const btn = document.getElementById(`btn${service.charAt(0).toUpperCase() + service.slice(1)}`);
-        const isRunning = btn.getAttribute('data-running') === 'true';
-        const action = isRunning ? 'stop' : 'start';
-
-        btn.disabled = true;
-        const targetText = btn.querySelector(`span[id="text${service.charAt(0).toUpperCase() + service.slice(1)}"]`);
-        const originalText = targetText.innerText;
-        targetText.innerText = isRunning ? 'Deteniendo...' : 'Levantando...';
-
-        try {
-            const response = await fetch(`/api/docker/${service}/${action}`, { method: 'POST' });
-            const data = await response.json();
-
-            if (!response.ok || data.status === 'error') {
-                throw new Error(data.message || `Error al ${action} ${service}`);
-            }
-            // Realizamos check inmediato para actualizar botón
-            await checkDockerService(service);
-        } catch (error) {
-            console.error(error);
-            alert(`Error afectando contenedor ${service}: ` + error.message);
-            targetText.innerText = originalText;
-            btn.disabled = false;
-        }
-    }
-
-    async function checkDockerService(service) {
-        try {
-            const response = await fetch(`/api/docker/${service}/status`);
-            const data = await response.json();
-
-            const btn = document.getElementById(`btn${service.charAt(0).toUpperCase() + service.slice(1)}`);
-            const icon = document.getElementById(`icon${service.charAt(0).toUpperCase() + service.slice(1)}`);
-            const text = document.getElementById(`text${service.charAt(0).toUpperCase() + service.slice(1)}`);
-            const link = document.getElementById(`link${service.charAt(0).toUpperCase() + service.slice(1)}`);
-
-            if (data.running) {
-                btn.setAttribute('data-running', 'true');
-                btn.style.background = '#ef4444'; // Red for Stop
-                icon.innerText = '⏹️';
-                text.innerText = `Detener ${service === 'neo4j' ? 'Neo4j' : 'NeoDash'}`;
-                link.style.display = 'inline-flex';
-            } else {
-                btn.setAttribute('data-running', 'false');
-                btn.style.background = service === 'neo4j' ? '#018bff' : '#60a5fa'; // Original blue colors
-                icon.innerText = '▶️';
-                text.innerText = `Levantar ${service === 'neo4j' ? 'Neo4j' : 'NeoDash'}`;
-                link.style.display = 'none';
-            }
-            btn.disabled = false;
-        } catch (error) {
-            console.error(`Error checking ${service} status:`, error);
-        }
-    }
-
-    // Inicializar polling de estado de contenedores locales
-    setInterval(() => {
-        checkDockerService('neo4j');
-        checkDockerService('neodash');
-    }, 5000); // Revisar cada 5 segundos
-
-    // Check initial state
-    checkDockerService('neo4j');
-    checkDockerService('neodash');
 
     // ------------------------------------------------------------------ //
     //  DISPOSITIVOS CRÍTICOS                                               //
@@ -1321,6 +1353,8 @@
                 <div style="background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; padding: 1rem; position: relative;">
                     <button onclick="deleteCriticalDevice(${d.id})" title="Eliminar"
                         style="position: absolute; top: 0.6rem; right: 0.6rem; background: none; border: none; color: #f87171; cursor: pointer; font-size: 1rem;">🗑️</button>
+                    <button onclick='editCriticalDevice(${d.id}, ${JSON.stringify(d.name)}, ${JSON.stringify(d.ips)}, ${JSON.stringify(d.reason)})' title="Editar"
+                        style="position: absolute; top: 0.6rem; right: 2.2rem; background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 1rem;">✏️</button>
                     <div style="font-weight: 600; color: #f87171; margin-bottom: 0.3rem;">🚨 ${d.name}</div>
                     <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8; margin-bottom: 0.4rem;">${d.ips}</div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary);">${d.reason}</div>
@@ -1349,6 +1383,27 @@
             loadCriticalDevices();
         } catch (e) {
             alert('❌ Error añadiendo dispositivo crítico: ' + e.message);
+        }
+    }
+
+    async function editCriticalDevice(id, currentName, currentIps, currentReason) {
+        const newName = prompt('Nombre:', currentName);
+        if (newName === null) return;
+        const newIps = prompt('IPs separadas por coma:', currentIps);
+        if (newIps === null) return;
+        const newReason = prompt('Motivo de criticidad:', currentReason);
+        if (newReason === null) return;
+
+        try {
+            const resp = await fetch(`/api/critical-devices/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName, ips: newIps, reason: newReason })
+            });
+            if (!resp.ok) throw new Error(await resp.text());
+            loadCriticalDevices();
+        } catch (e) {
+            alert('❌ Error editando dispositivo crítico: ' + e.message);
         }
     }
 

@@ -141,6 +141,7 @@ class PortScanner:
         """
         self.output_file = output_file
         self.max_threads = max_threads
+        self.current_process: Optional[subprocess.Popen] = None
     
     def format_ports_list(self, ports: List[int]) -> str:
         """Formatea una lista de puertos en formato Nmap."""
@@ -206,52 +207,57 @@ class PortScanner:
         """
         cmd = ['nmap']
         
-        # Configuración de velocidad (solo -T según selección del usuario)
+        # Configuración de velocidad
         speed_map = {
             'rapido': '-T4',
             'normal': '-T3',
-            'lento': '-T2'
+            'lento': '-T2',
+            'icmp': '-T4' # ICMP por defecto rápido
         }
         
         cmd.append(speed_map.get(speed, '-T3'))
         
-        # Técnica de escaneo: TCP connect scan (no requiere privilegios root)
-        cmd.append('-sT')
-        
-        # Puertos
-        if ports:
-            ports_str = self.format_ports_list(ports)
-            if ports_str:
-                cmd.extend(ports_str.split())
+        if speed == 'icmp':
+            # Modo descubrimiento ICMP (Ping Scan)
+            cmd.append('-sn')
         else:
-            # Por defecto, top 1000 puertos más comunes
-            cmd.append('--top-ports')
-            cmd.append('1000')
-        
-        # Detección de versiones (solo si está marcado en la interfaz)
-        if enable_versions:
-            cmd.append('-sV')
-        
-        # Scripts de vulnerabilidades (solo si está marcado en la interfaz)
-        if enable_vulns:
-            cmd.append('--script')
-            cmd.append('vuln')
+            # Técnica de escaneo: TCP connect scan (no requiere privilegios root)
+            cmd.append('-sT')
+            
+            # Puertos (solo si no es modo ICMP)
+            if ports:
+                ports_str = self.format_ports_list(ports)
+                if ports_str:
+                    cmd.extend(ports_str.split())
+            else:
+                # Por defecto, top 1000 puertos más comunes
+                cmd.append('--top-ports')
+                cmd.append('1000')
+            
+            # Detección de versiones (solo si está marcado en la interfaz y no es ICMP)
+            if enable_versions:
+                cmd.append('-sV')
+            
+            # Scripts de vulnerabilidades (solo si está marcado en la interfaz y no es ICMP)
+            if enable_vulns:
+                cmd.append('--script')
+                cmd.append('vuln')
         
         # Salida XML (necesario para el funcionamiento del sistema)
         if output_file:
             cmd.extend(['-oX', output_file])
         
-        # Target
-        cmd.append(target_range)
+        # Target(s) — may be a space-separated list of IPs built by the caller
+        cmd.extend(target_range.split())
         
         return cmd
-    
-    def scan(self, target_range: str, speed: str = 'normal',
+    def scan(self, target_range: str, speed: str = 'normal', 
             ot_ports: bool = True, it_ports: bool = True,
             custom_ports: Optional[str] = None,
             enable_versions: bool = False,
             enable_vulns: bool = False,
-            output_file: Optional[str] = None) -> str:
+            output_file: Optional[str] = None,
+            process_callback: Optional[callable] = None) -> str:
         """
         Ejecuta un escaneo de puertos con Nmap mejorado.
         
@@ -296,14 +302,33 @@ class PortScanner:
             print(f"   Escaneo de vulnerabilidades: ✓ (incluyendo scripts OT)")
         
         try:
-            # Ejecutar Nmap
-            result = subprocess.run(
+            # Ejecutar Nmap usando Popen para permitir seguimiento/cancelación
+            self.current_process = subprocess.Popen(
                 cmd,
-                capture_output=True,
-                text=True,
-                check=False
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
             )
+        
+            # Llamar al callback si se proporcionó
+            if process_callback:
+                try:
+                    process_callback(self.current_process)
+                except:
+                    pass
             
+            stdout, stderr = self.current_process.communicate()
+            returncode = self.current_process.returncode
+            
+            # Crear un objeto similar al resultado de subprocess.run para compatibilidad mínima interna
+            class DummyResult:
+                def __init__(self, rc, out, err):
+                    self.returncode = rc
+                    self.stdout = out
+                    self.stderr = err
+            
+            result = DummyResult(returncode, stdout, stderr)
+                
             # Nmap puede devolver códigos de salida diferentes:
             # 0: éxito
             # 1: algún error pero puede haber resultados
