@@ -10,9 +10,10 @@ services:
     volumes:
       - ./results:/app/results
       # Mount host's NetExec workspaces read-only so the exploitation tab can
-      # import nxcdb data. Override the host path with ARSENAL_NXC_HOST_PATH if
-      # nxc is not run as the same user that launches docker-compose.
-      - ${ARSENAL_NXC_HOST_PATH:-${HOME}/.nxc}:/root/.nxc:ro
+      # import nxcdb data. When launched with `sudo docker-compose up`, $HOME
+      # resolves to /root (usually empty), so prefer SUDO_USER's home and fall
+      # back to $HOME. Override explicitly with ARSENAL_NXC_HOST_PATH in .env.
+      - ${ARSENAL_NXC_HOST_PATH:-/home/${SUDO_USER:-${USER}}/.nxc}:/root/.nxc:ro
     env_file:
       - .env
     restart: unless-stopped
