@@ -568,9 +568,14 @@ def import_workspace(workspace_path: Path,
         if db.exists():
             creds.extend(_load_simple_protocol(db, proto, hosts))
 
+    # Loot vive en ~/.nxc/logs/ y es GLOBAL a todos los workspaces. Para no
+    # traer hosts fantasma al importar un workspace limpio, sólo asociamos un
+    # loot file si su IP ya aparece en las DBs del workspace.
     for item in collect_loot(logs_root):
         ip = item['ip']
-        host = hosts.setdefault(ip, NetExecHost(ip=ip))
+        host = hosts.get(ip)
+        if not host:
+            continue
         host.hostname = host.hostname or item['hostname']
         host.loot_files.append(item)
         if not host.last_seen or item['timestamp'] > host.last_seen:
@@ -659,9 +664,14 @@ def import_all_workspaces(root: Optional[Path] = None,
         all_creds.extend(sub['credentials'])
         all_dpapi.extend(sub['dpapi_secrets'])
 
+    # Loot sólo se asocia a hosts que realmente aparecen en alguna DB; así
+    # evitamos materializar hosts fantasma de auditorías anteriores ya
+    # purgadas del workspace pero con ficheros residuales en ~/.nxc/logs/.
     for item in collect_loot(logs_root):
         ip = item['ip']
-        host = merged_hosts.setdefault(ip, NetExecHost(ip=ip))
+        host = merged_hosts.get(ip)
+        if not host:
+            continue
         host.hostname = host.hostname or item['hostname']
         host.loot_files.append(item)
         if not host.last_seen or item['timestamp'] > host.last_seen:
