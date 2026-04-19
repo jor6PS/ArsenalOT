@@ -1,88 +1,199 @@
 {#
 Partial: org_tabs.html
 Variables esperadas:
-- org_name: str — nombre de la organización
-- active_phase: str — 'inicio' | 'recon' | 'acceso' | 'explotacion' | 'explotacion_ot' | 'bitacora'
-- active_section: str (opcional) — para sub-tabs de recon: 'dashboard' | 'scan' | 'results' | 'neo4j'
+- org_name: str, nombre de la organizacion
+- active_phase: str, 'inicio' | 'recon' | 'acceso' | 'explotacion' | 'explotacion_ot' | 'post_explotacion' | 'bitacora'
+- active_section: str opcional, 'dashboard' | 'scan' | 'results' | 'neo4j' | 'findings'
 #}
 
-{# ---- BARRA DE FASES ---- #}
+{% set org_url = org_name | urlencode %}
+{% set is_pentest_phase = active_phase in ['recon', 'acceso', 'explotacion', 'explotacion_ot', 'post_explotacion'] %}
+{% set is_pentest_result = active_phase == 'bitacora' or active_section in ['results', 'neo4j', 'findings'] %}
+
+{% set phase_context = 'Selecciona una fase' %}
+{% if active_phase == 'recon' %}
+  {% set phase_context = 'Reconocimiento' %}
+{% elif active_phase == 'explotacion' %}
+  {% set phase_context = 'Explotación' %}
+{% elif active_phase == 'explotacion_ot' %}
+  {% set phase_context = 'Explotación OT' %}
+{% endif %}
+
+{% set results_context = 'Ver entregables' %}
+{% if active_phase == 'bitacora' %}
+  {% set results_context = 'Bitácora' %}
+{% elif active_section == 'findings' %}
+  {% set results_context = 'Findings' %}
+{% elif active_section == 'neo4j' %}
+  {% set results_context = 'Neo4j' %}
+{% elif active_section == 'results' %}
+  {% set results_context = 'Overview' %}
+{% endif %}
+
 <div class="org-sticky-wrapper">
   <div class="org-phase-header">
     <div class="org-phase-title">
-      <a href="/pentest" class="org-back-link" title="Volver a organizaciones">⬅</a>
-      <span class="org-phase-icon">🏢</span>
-      <span class="org-phase-name">{{ org_name }}</span>
+      <a href="/pentest" class="org-back-link" title="Volver a organizaciones" aria-label="Volver a organizaciones">
+        ←
+      </a>
+      <a href="/pentest/{{ org_url }}"
+        class="org-home-button {% if active_phase == 'inicio' %}org-home-button--active{% endif %}"
+        title="Ir al inicio de {{ org_name }}">
+        <span class="org-home-icon">{{ org_name[0:1] | upper }}</span>
+        <span class="org-home-text">
+          <span class="org-phase-name">{{ org_name }}</span>
+          <small>Inicio de organización</small>
+        </span>
+      </a>
     </div>
 
-    <nav class="phase-tabs">
-      <a href="/pentest/{{ org_name | urlencode }}"
-        class="phase-tab {% if active_phase == 'inicio' %}phase-tab--active{% endif %}">
-        <span class="phase-tab-icon">🏠</span>
-        <span class="phase-tab-label">Inicio</span>
-      </a>
+    <div class="org-nav-row" data-org-nav>
+      <details class="org-nav-dropdown org-nav-dropdown--phase">
+        <summary class="org-nav-summary {% if is_pentest_phase %}org-nav-summary--active{% endif %}">
+          <span class="org-nav-summary-icon">◇</span>
+          <span class="org-nav-summary-text">
+            <span>Fases del pentest</span>
+            <small>{{ phase_context }}</small>
+          </span>
+          <span class="org-nav-caret">▾</span>
+        </summary>
+        <nav class="org-nav-menu" aria-label="Fases del pentest">
+          <a href="/pentest/{{ org_url }}/recon/scan"
+            class="org-nav-item {% if active_phase == 'recon' %}org-nav-item--active{% endif %}">
+            <span class="org-nav-item-icon">R</span>
+            <span class="org-nav-item-text">
+              <span>Reconocimiento</span>
+              <small>Escaneos, descubrimiento y enumeración</small>
+            </span>
+          </a>
 
-      <a href="/pentest/{{ org_name | urlencode }}/recon"
-        class="phase-tab {% if active_phase == 'recon' %}phase-tab--active phase-tab--recon{% endif %}">
-        <span class="phase-tab-icon">🔍</span>
-        <span class="phase-tab-label">Reconocimiento</span>
-      </a>
+          <span class="org-nav-item org-nav-item--disabled" title="En desarrollo">
+            <span class="org-nav-item-icon">AI</span>
+            <span class="org-nav-item-text">
+              <span>Acceso Inicial</span>
+              <small>Entrada y validación de acceso</small>
+            </span>
+            <span class="org-nav-badge">Prox.</span>
+          </span>
 
-      <span class="phase-tab phase-tab--disabled" title="En desarrollo">
-        <span class="phase-tab-icon">🔓</span>
-        <span class="phase-tab-label">Acceso Inicial</span>
-        <span class="phase-tab-badge">Próx.</span>
-      </span>
+          <a href="/pentest/{{ org_url }}/exploitation"
+            class="org-nav-item {% if active_phase == 'explotacion' %}org-nav-item--active{% endif %}">
+            <span class="org-nav-item-icon">EX</span>
+            <span class="org-nav-item-text">
+              <span>Explotación</span>
+              <small>Credenciales, NetExec e importaciones</small>
+            </span>
+          </a>
 
-      <a href="/pentest/{{ org_name | urlencode }}/exploitation"
-        class="phase-tab {% if active_phase == 'explotacion' %}phase-tab--active phase-tab--exploit{% endif %}">
-        <span class="phase-tab-icon">💣</span>
-        <span class="phase-tab-label">Explotación</span>
-      </a>
+          <a href="/pentest/{{ org_url }}/exploitation-ot"
+            class="org-nav-item {% if active_phase == 'explotacion_ot' %}org-nav-item--active{% endif %}">
+            <span class="org-nav-item-icon">OT</span>
+            <span class="org-nav-item-text">
+              <span>Explotación OT</span>
+              <small>Protocolos y pruebas industriales</small>
+            </span>
+          </a>
 
-      <a href="/pentest/{{ org_name | urlencode }}/exploitation-ot"
-        class="phase-tab {% if active_phase == 'explotacion_ot' %}phase-tab--active phase-tab--exploit{% endif %}">
-        <span class="phase-tab-icon">🏭</span>
-        <span class="phase-tab-label">Explotación OT</span>
-      </a>
+          <span class="org-nav-item org-nav-item--disabled" title="En desarrollo">
+            <span class="org-nav-item-icon">PX</span>
+            <span class="org-nav-item-text">
+              <span>Post Explotación</span>
+              <small>Persistencia, impacto y evidencias</small>
+            </span>
+            <span class="org-nav-badge">Prox.</span>
+          </span>
+        </nav>
+      </details>
 
-      <span class="phase-tab phase-tab--disabled" title="En desarrollo">
-        <span class="phase-tab-icon">📈</span>
-        <span class="phase-tab-label">Post-Explotación</span>
-        <span class="phase-tab-badge">Próx.</span>
-      </span>
+      <details class="org-nav-dropdown org-nav-dropdown--results">
+        <summary class="org-nav-summary {% if is_pentest_result %}org-nav-summary--active{% endif %}">
+          <span class="org-nav-summary-icon">□</span>
+          <span class="org-nav-summary-text">
+            <span>Resultados del pentest</span>
+            <small>{{ results_context }}</small>
+          </span>
+          <span class="org-nav-caret">▾</span>
+        </summary>
+        <nav class="org-nav-menu" aria-label="Resultados del pentest">
+          <a href="/pentest/{{ org_url }}/recon/results"
+            class="org-nav-item {% if active_section == 'results' %}org-nav-item--active{% endif %}">
+            <span class="org-nav-item-icon">OV</span>
+            <span class="org-nav-item-text">
+              <span>Overview</span>
+              <small>Inventario consolidado de resultados</small>
+            </span>
+          </a>
 
-      <a href="/pentest/{{ org_name | urlencode }}/bitacora"
-        class="phase-tab {% if active_phase == 'bitacora' %}phase-tab--active phase-tab--bitacora{% endif %}">
-        <span class="phase-tab-icon">📓</span>
-        <span class="phase-tab-label">Bitácora</span>
-      </a>
-    </nav>
+          <a href="/pentest/{{ org_url }}/bitacora"
+            class="org-nav-item {% if active_phase == 'bitacora' %}org-nav-item--active{% endif %}">
+            <span class="org-nav-item-icon">B</span>
+            <span class="org-nav-item-text">
+              <span>Bitácora</span>
+              <small>Notas, evidencias y trazabilidad</small>
+            </span>
+          </a>
+
+          <a href="/pentest/{{ org_url }}/recon/findings"
+            class="org-nav-item {% if active_section == 'findings' %}org-nav-item--active{% endif %}">
+            <span class="org-nav-item-icon">◆</span>
+            <span class="org-nav-item-text">
+              <span>Findings</span>
+              <small>Hallazgos y sincronización con PwnDoc</small>
+            </span>
+          </a>
+
+          <a href="/pentest/{{ org_url }}/recon/neo4j"
+            class="org-nav-item {% if active_section == 'neo4j' %}org-nav-item--active{% endif %}">
+            <span class="org-nav-item-icon">N4J</span>
+            <span class="org-nav-item-text">
+              <span>Neo4j</span>
+              <small>Exportación y análisis de grafos</small>
+            </span>
+          </a>
+        </nav>
+      </details>
+    </div>
   </div>
 
-  {# ---- SUB-TABS DE RECONOCIMIENTO (solo si estamos en esa fase) ---- #}
   {% if active_phase == 'recon' %}
-  <nav class="section-tabs">
-    <a href="/pentest/{{ org_name | urlencode }}/recon"
-      class="section-tab {% if active_section == 'dashboard' %}section-tab--active{% endif %}">
-      <span>📊</span> Dashboard
+  <nav class="recon-subnav" aria-label="Vistas de reconocimiento">
+    <a href="/pentest/{{ org_url }}/recon"
+      class="recon-subnav-item {% if active_section == 'dashboard' %}recon-subnav-item--active{% endif %}">
+      <span class="recon-subnav-icon">D</span>
+      <span>Dashboard</span>
     </a>
-    <a href="/pentest/{{ org_name | urlencode }}/recon/scan"
-      class="section-tab {% if active_section == 'scan' %}section-tab--active{% endif %}">
-      <span>🚀</span> Nuevo Escaneo
-    </a>
-    <a href="/pentest/{{ org_name | urlencode }}/recon/results"
-      class="section-tab {% if active_section == 'results' %}section-tab--active{% endif %}">
-      <span>📋</span> Resultados
-    </a>
-    <a href="/pentest/{{ org_name | urlencode }}/recon/neo4j"
-      class="section-tab {% if active_section == 'neo4j' %}section-tab--active{% endif %}">
-      <span>🕸️</span> Neo4j
-    </a>
-    <a href="/pentest/{{ org_name | urlencode }}/recon/findings"
-      class="section-tab {% if active_section == 'findings' %}section-tab--active{% endif %}">
-      <span>🐛</span> Findings
+    <a href="/pentest/{{ org_url }}/recon/scan"
+      class="recon-subnav-item {% if active_section == 'scan' %}recon-subnav-item--active{% endif %}">
+      <span class="recon-subnav-icon">+</span>
+      <span>Nuevo escaneo</span>
     </a>
   </nav>
   {% endif %}
 </div>
+
+<script>
+  (() => {
+    const nav = document.querySelector('[data-org-nav]');
+    if (!nav) return;
+    const dropdowns = Array.from(nav.querySelectorAll('.org-nav-dropdown'));
+
+    dropdowns.forEach((dropdown) => {
+      dropdown.addEventListener('toggle', () => {
+        if (!dropdown.open) return;
+        dropdowns.forEach((other) => {
+          if (other !== dropdown) other.removeAttribute('open');
+        });
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (nav.contains(event.target)) return;
+      dropdowns.forEach((dropdown) => dropdown.removeAttribute('open'));
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      dropdowns.forEach((dropdown) => dropdown.removeAttribute('open'));
+    });
+  })();
+</script>

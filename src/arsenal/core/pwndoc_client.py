@@ -17,7 +17,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 PWNDOC_URL      = os.environ.get("PWNDOC_URL",      "https://localhost:4242")
 PWNDOC_USER     = os.environ.get("PWNDOC_USER",     "admin")
-PWNDOC_PASSWORD = os.environ.get("PWNDOC_PASSWORD", "changeme")
+PWNDOC_PASSWORD = os.environ.get("PWNDOC_PASSWORD", "ArsenalOT2026!")
 
 
 class PwnDocClient:

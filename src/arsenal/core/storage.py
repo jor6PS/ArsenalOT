@@ -87,6 +87,23 @@ class ScanStorage:
                 FOREIGN KEY (organization_name) REFERENCES organizations(name) ON DELETE CASCADE
             )
         """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scan_phase_progress (
+                scan_id INTEGER NOT NULL,
+                phase_key TEXT NOT NULL,
+                phase_label TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                progress INTEGER NOT NULL DEFAULT 0,
+                detail TEXT,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                duration_seconds REAL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (scan_id, phase_key),
+                FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
+            )
+        """)
         
         # Tabla de hosts descubiertos
         cursor.execute("""
@@ -340,6 +357,10 @@ class ScanStorage:
             ON scans(started_at)
         """)
         cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_scan_phase_progress_scan
+            ON scan_phase_progress(scan_id, sort_order)
+        """)
+        cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_hosts_ip 
             ON hosts(ip_address)
         """)
@@ -576,6 +597,103 @@ class ScanStorage:
             (scan_dir / "pcap").mkdir(exist_ok=True)
         
         return scan_id
+
+    def initialize_scan_phases(self, scan_id: int, phases: List[Dict]):
+        """Create or replace the phase progress rows for a scan."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM scan_phase_progress WHERE scan_id = ?", (scan_id,))
+        for index, phase in enumerate(phases):
+            cursor.execute("""
+                INSERT INTO scan_phase_progress
+                    (scan_id, phase_key, phase_label, status, progress, detail, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                scan_id,
+                phase["key"],
+                phase["label"],
+                phase.get("status", "pending"),
+                int(phase.get("progress", 0)),
+                phase.get("detail"),
+                phase.get("sort_order", index),
+            ))
+        conn.commit()
+        conn.close()
+
+    def update_scan_phase(self, scan_id: int, phase_key: str, status: str = None,
+                          progress: int = None, detail: str = None,
+                          mark_started: bool = False, mark_completed: bool = False):
+        """Update one phase row while preserving existing values."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        row = cursor.execute("""
+            SELECT started_at FROM scan_phase_progress
+            WHERE scan_id = ? AND phase_key = ?
+        """, (scan_id, phase_key)).fetchone()
+
+        if not row:
+            conn.close()
+            return
+
+        updates = []
+        params = []
+        now = datetime.now()
+
+        if status is not None:
+            updates.append("status = ?")
+            params.append(status)
+        if progress is not None:
+            updates.append("progress = ?")
+            params.append(max(0, min(100, int(progress))))
+        if detail is not None:
+            updates.append("detail = ?")
+            params.append(detail)
+        if mark_started and not row["started_at"]:
+            updates.append("started_at = ?")
+            params.append(now)
+        if mark_completed:
+            updates.append("completed_at = ?")
+            params.append(now)
+            started_value = row["started_at"]
+            started_dt = None
+            if started_value:
+                try:
+                    started_dt = datetime.fromisoformat(str(started_value))
+                except ValueError:
+                    started_dt = None
+            if started_dt:
+                updates.append("duration_seconds = ?")
+                params.append((now - started_dt).total_seconds())
+
+        if updates:
+            params.extend([scan_id, phase_key])
+            cursor.execute(f"""
+                UPDATE scan_phase_progress
+                SET {', '.join(updates)}
+                WHERE scan_id = ? AND phase_key = ?
+            """, params)
+            conn.commit()
+
+        conn.close()
+
+    def get_scan_phases(self, scan_id: int) -> List[Dict]:
+        """Return ordered phase progress for a scan."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        rows = cursor.execute("""
+            SELECT phase_key, phase_label, status, progress, detail,
+                   started_at, completed_at, duration_seconds, sort_order
+            FROM scan_phase_progress
+            WHERE scan_id = ?
+            ORDER BY sort_order ASC
+        """, (scan_id,)).fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
     
     def _get_scan_directory(self, organization: str, location: str, 
                            scan_id: int, timestamp: str = None) -> Path:

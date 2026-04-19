@@ -13,9 +13,18 @@ services:
       # import nxcdb data. When launched with `sudo docker-compose up`, $HOME
       # resolves to /root (usually empty), so prefer SUDO_USER's home and fall
       # back to $HOME. Override explicitly with ARSENAL_NXC_HOST_PATH in .env.
-      - ${ARSENAL_NXC_HOST_PATH:-/home/${SUDO_USER:-${USER}}/.nxc}:/root/.nxc:ro
+      - ${ARSENAL_NXC_HOST_PATH:-/home/${SUDO_USER:-${USER:-root}}/.nxc}:/root/.nxc:ro
     env_file:
-      - .env
+      - path: .env
+        required: false
+    environment:
+      - NEO4J_HOST=${NEO4J_HOST:-127.0.0.1}
+      - NEO4J_PORT=${NEO4J_PORT:-7687}
+      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j123}
+      - PWNDOC_URL=${PWNDOC_URL:-https://127.0.0.1:4242}
+      - PWNDOC_USER=${PWNDOC_USER:-admin}
+      - PWNDOC_PASSWORD=${PWNDOC_PASSWORD:-ArsenalOT2026!}
     restart: unless-stopped
     depends_on:
       - neo4j
@@ -28,7 +37,7 @@ services:
       - "7474:7474"   # Browser UI
       - "7687:7687"   # Bolt protocol
     environment:
-      - NEO4J_AUTH=${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD}
+      - NEO4J_AUTH=${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-neo4j123}
       - NEO4J_PLUGINS=["apoc"]
     volumes:
       - neo4j_data:/data
@@ -46,7 +55,7 @@ services:
       # The browser JS connects to Neo4j via HTTP REST API (no WebSocket)
       - NEO4J_HTTP_URL=http://localhost:7474
       - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j123}
     restart: unless-stopped
 
   # ── PwnDoc ───────────────────────────────────────────────────
@@ -78,10 +87,7 @@ services:
       - pwndoc-net
 
   pwndoc-frontend:
-    build:
-      # #main:frontend → clona el repo y usa frontend/ como contexto de build
-      # (el Dockerfile de producción está en frontend/Dockerfile)
-      context: "https://github.com/pwndoc/pwndoc.git#main:frontend"
+    image: ghcr.io/pwndoc/pwndoc-frontend:latest
     container_name: pwndoc-frontend
     restart: unless-stopped
     ports:

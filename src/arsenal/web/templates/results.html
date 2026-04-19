@@ -375,6 +375,20 @@
 
         // Consolida resultados activos por IP — una fila por host
         function consolidateByIp(results) {
+            function addValue(targetSet, value) {
+                if (value !== null && value !== undefined && value !== '') {
+                    targetSet.add(value);
+                }
+            }
+
+            function addDiscoveryMethods(targetSet, value) {
+                if (!value) return;
+                value.toString().split(/[;,]/)
+                    .map(v => v.trim())
+                    .filter(Boolean)
+                    .forEach(v => targetSet.add(v));
+            }
+
             const map = new Map();
             for (const r of results) {
                 const ip = r.ip_address;
@@ -388,9 +402,11 @@
                         location: r.location,
                         interfaces_json: r.interfaces_json,
                         is_critical: !!r.is_critical,
-                        discovery_method: r.discovery_method,
+                        discovery_methods: new Set(),
+                        discovery_method: '',
                         netexec: r.netexec || null,
-                        ports: []
+                        ports: [],
+                        portsByKey: new Map()
                     });
                 }
                 const host = map.get(ip);
@@ -400,20 +416,56 @@
                 if (r.is_critical) host.is_critical = true;
                 if (r.interfaces_json && !host.interfaces_json) host.interfaces_json = r.interfaces_json;
                 if (r.netexec && !host.netexec) host.netexec = r.netexec;
+                addDiscoveryMethods(host.discovery_methods, r.discovery_method);
                 if (r.port) {
-                    host.ports.push({
-                        port: r.port,
-                        protocol: r.protocol,
-                        service_name: r.service_name,
-                        product: r.product,
-                        version: r.version,
-                        scan_id: r.scan_id,
-                        has_screenshot: !!r.has_screenshot,
-                        has_source_code: !!r.has_source_code
-                    });
+                    const portKey = `${r.port}/${r.protocol || ''}`;
+                    if (!host.portsByKey.has(portKey)) {
+                        host.portsByKey.set(portKey, {
+                            port: r.port,
+                            protocol: r.protocol,
+                            service_names: new Set(),
+                            products: new Set(),
+                            versions: new Set(),
+                            discovery_methods: new Set(),
+                            scan_id: r.scan_id,
+                            screenshot_scan_id: null,
+                            source_scan_id: null,
+                            has_screenshot: false,
+                            has_source_code: false
+                        });
+                    }
+                    const port = host.portsByKey.get(portKey);
+                    if (!port.protocol && r.protocol) port.protocol = r.protocol;
+                    addValue(port.service_names, r.service_name);
+                    addValue(port.products, r.product);
+                    addValue(port.versions, r.version);
+                    addDiscoveryMethods(port.discovery_methods, r.discovery_method);
+                    if (r.has_screenshot) {
+                        port.has_screenshot = true;
+                        port.screenshot_scan_id = r.scan_id;
+                    }
+                    if (r.has_source_code) {
+                        port.has_source_code = true;
+                        port.source_scan_id = r.scan_id;
+                    }
                 }
             }
-            return [...map.values()];
+            return [...map.values()].map(host => {
+                host.ports = [...host.portsByKey.values()]
+                    .map(port => ({
+                        ...port,
+                        service_name: [...port.service_names].join(', '),
+                        product: [...port.products].join(', '),
+                        version: [...port.versions].join(', '),
+                        discovery_methods: [...port.discovery_methods],
+                        discovery_method: [...port.discovery_methods].join(', ')
+                    }))
+                    .sort((a, b) => Number(a.port) - Number(b.port));
+                host.discovery_methods = [...host.discovery_methods];
+                host.discovery_method = host.discovery_methods.join(', ');
+                delete host.portsByKey;
+                return host;
+            });
         }
 
         // Consolida resultados pasivos por IP origen — una fila por host origen
@@ -565,11 +617,34 @@
             // --- 3. RENDERIZAR TABLA ACTIVA (consolidada por IP) ---
             const activeTbody = document.getElementById('resultsBody');
             const consolidatedActive = consolidateByIp(filteredActive);
-            document.getElementById('activeCount').textContent = `(${consolidatedActive.length} hosts, ${filteredActive.length} puertos)`;
+            const uniqueActivePorts = consolidatedActive.reduce((total, row) => total + row.ports.length, 0);
+            document.getElementById('activeCount').textContent = `(${consolidatedActive.length} hosts, ${uniqueActivePorts} puertos únicos)`;
             if (consolidatedActive.length === 0) {
                 activeTbody.innerHTML = '<tr><td colspan="16" class="empty">No hay resultados activos</td></tr>';
             } else {
-                const methodLabels = { 'nmap': '🔌 Nmap', 'passive_capture': '🎧 Captura Pasiva', 'host_discovery': '🔍 Host Discovery', 'arp_scan': '🔍 ARP Scan', 'icmp_ping': '🔍 ICMP Ping', 'syn_scan': '🔍 SYN Scan', 'netexec': '🔓 NetExec' };
+                const methodLabels = {
+                    'nmap': '🔌 Nmap',
+                    'nmap_ports': '🔌 Nmap Puertos',
+                    'nmap_ping': '📡 Nmap Ping',
+                    'passive_capture': '🎧 Captura Pasiva',
+                    'host_discovery': '🔍 Host Discovery',
+                    'arp_discovery': '🔍 ARP Discovery',
+                    'arp_scan': '🔍 ARP Scan',
+                    'icmp_discovery': '📡 ICMP Discovery',
+                    'icmp_ping': '📡 ICMP Ping',
+                    'syn_scan': '🔍 SYN Scan',
+                    'ioxid': '🧭 IOXIDResolver',
+                    'specific_capture': '📸 Captura Específica',
+                    'enrichment': '🌐 Enriquecimiento',
+                    'netexec': '🔓 NetExec',
+                    'netexec_import': '🔓 NetExec'
+                };
+                const renderMethods = methods => {
+                    const unique = [...new Set((methods || []).filter(Boolean))];
+                    return unique.length
+                        ? unique.map(m => `<span class="interface-badge">${methodLabels[m] || m}</span>`).join('')
+                        : '-';
+                };
                 activeTbody.innerHTML = consolidatedActive.map(row => {
                     // Interfaces
                     let interfacesHtml = '-';
@@ -595,16 +670,16 @@
 
                     // Evidence buttons per port
                     const shotButtons = row.ports.filter(p => p.has_screenshot).map(p =>
-                        `<button class="btn-evidence" onclick="showScreenshot(${p.scan_id}, '${row.ip_address}', ${p.port})" title="Captura puerto ${p.port}">📸<small>${p.port}</small></button>`
+                        `<button class="btn-evidence" onclick="showScreenshot(${p.screenshot_scan_id || p.scan_id}, '${row.ip_address}', ${p.port})" title="Captura puerto ${p.port}">📸<small>${p.port}</small></button>`
                     ).join('') || '-';
                     const srcButtons = row.ports.filter(p => p.has_source_code).map(p =>
-                        `<button class="btn-evidence" onclick="showSourceCode(${p.scan_id}, '${row.ip_address}', ${p.port})" title="Código fuente puerto ${p.port}">📄<small>${p.port}</small></button>`
+                        `<button class="btn-evidence" onclick="showSourceCode(${p.source_scan_id || p.scan_id}, '${row.ip_address}', ${p.port})" title="Código fuente puerto ${p.port}">📄<small>${p.port}</small></button>`
                     ).join('') || '-';
 
                     const isCritical = row.is_critical || criticalIps.has(row.ip_address);
                     const rowStyle = isCritical ? ' style="border-left: 3px solid #ef4444; background: rgba(239,68,68,0.05);"' : '';
                     const criticalBadge = isCritical ? ' <span title="Dispositivo Crítico" style="color:#ef4444;font-size:0.9rem;">🚨</span>' : '';
-                    let discoveryDisplay = methodLabels[row.discovery_method] || row.discovery_method || '-';
+                    let discoveryDisplay = renderMethods(row.discovery_methods);
                     if (row.netexec) {
                         const nxcKey = `nxc_${row.ip_address}`;
                         window.__nxcCache = window.__nxcCache || {};

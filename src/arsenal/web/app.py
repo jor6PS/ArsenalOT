@@ -6,8 +6,15 @@ Aplicación web para gestión de escaneos de red
 import os
 import sys
 
+def _running_as_root() -> bool:
+    geteuid = getattr(os, "geteuid", None)
+    return bool(geteuid and geteuid() == 0)
+
+def _allow_unprivileged_run() -> bool:
+    return os.getenv("ARSENALOT_ALLOW_UNPRIVILEGED", "").lower() in {"1", "true", "yes"}
+
 # Verificar que se está ejecutando con sudo
-if os.geteuid() != 0:
+if os.name == "posix" and not _running_as_root() and not _allow_unprivileged_run():
     print("="*70)
     print("  ⚠️  ERROR: Esta aplicación requiere privilegios de administrador")
     print("="*70)
@@ -19,12 +26,22 @@ if os.geteuid() != 0:
     sys.exit(1)
 
 import socket
-import fcntl
 import struct
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 def get_interface_ip(ifname: str) -> str:
     """Obtiene la dirección IP de una interfaz de red específica"""
+    if not ifname:
+        return None
+
     try:
+        if fcntl is None:
+            return socket.gethostbyname(socket.gethostname())
+
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         return socket.inet_ntoa(fcntl.ioctl(
             s.fileno(),
@@ -726,7 +743,11 @@ async def get_scan_results_live(scan_id: int):
     cursor = conn.cursor()
     
     # Verificar que el escaneo existe y obtener metadata necesaria
-    scan = cursor.execute("SELECT id, status, error_message, organization_name, location, scan_mode FROM scans WHERE id = ?", (scan_id,)).fetchone()
+    scan = cursor.execute("""
+        SELECT id, status, error_message, organization_name, location, scan_mode,
+               started_at, completed_at
+        FROM scans WHERE id = ?
+    """, (scan_id,)).fetchone()
     if not scan:
         conn.close()
         raise HTTPException(status_code=404, detail="Escaneo no encontrado")
@@ -830,6 +851,33 @@ async def get_scan_results_live(scan_id: int):
     
     # Obtener error_message si existe (sqlite3.Row no tiene .get())
     error_message = scan["error_message"] if scan["error_message"] else None
+    phases = storage.get_scan_phases(scan_id)
+
+    if phases:
+        progress_values = []
+        for phase in phases:
+            phase_status = phase.get("status")
+            if phase_status in ("completed", "failed", "skipped"):
+                progress_values.append(100)
+            else:
+                progress_values.append(int(phase.get("progress") or 0))
+        progress_percent = round(sum(progress_values) / len(progress_values))
+    else:
+        progress_percent = 100 if scan["status"] in ("completed", "failed") else 10
+
+    elapsed_seconds = None
+    eta_seconds = None
+    try:
+        started = datetime.fromisoformat(str(scan["started_at"])) if scan["started_at"] else None
+        completed = datetime.fromisoformat(str(scan["completed_at"])) if scan["completed_at"] else None
+        if started:
+            end_time = completed or datetime.now()
+            elapsed_seconds = max(0, int((end_time - started).total_seconds()))
+            if scan["status"] == "running" and scan["scan_mode"] != "passive" and 5 <= progress_percent < 100:
+                eta_seconds = max(0, int(elapsed_seconds * (100 - progress_percent) / progress_percent))
+    except Exception:
+        elapsed_seconds = None
+        eta_seconds = None
     
     return {
         "scan_id": scan_id,
@@ -840,7 +888,12 @@ async def get_scan_results_live(scan_id: int):
         "stats": {
             "hosts": hosts_count,
             "ports": ports_count
-        }
+        },
+        "phases": phases,
+        "progress_percent": progress_percent,
+        "elapsed_seconds": elapsed_seconds,
+        "eta_seconds": eta_seconds,
+        "eta_label": "Sin ETA en captura pasiva" if scan["scan_mode"] == "passive" and scan["status"] == "running" else None
     }
 
 @app.get("/api/results")
