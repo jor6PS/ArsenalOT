@@ -11,11 +11,10 @@ los mismos identificadores y pillaged_from). Ambos caminos son intercambiables;
 se elige la lectura directa para evitar depender del binario nxc en tiempo de
 ejecución (por ejemplo, en el contenedor Docker no está instalado).
 
-Las DBs de NetExec no almacenan timestamps por fila, así que el filtrado por
-fecha se resuelve a nivel de DB/archivo:
-  - una DB se considera dentro del rango si su mtime cae dentro (cada DB es
-    una instantánea del último escaneo de ese protocolo).
-  - los loot files se filtran por el timestamp embebido en el nombre.
+No se filtra por fecha: NetExec no guarda timestamps por fila y los mtimes de
+las DBs no se corresponden 1-a-1 con una auditoría concreta. El importador
+carga TODO lo que haya en el workspace. Es responsabilidad del usuario limpiar
+la DB de NetExec entre clientes (``nxcdb`` → ``proto X`` → ``clear_database``).
 """
 
 from __future__ import annotations
@@ -531,36 +530,9 @@ def _load_winrm(db_path: Path, hosts: Dict[str, NetExecHost]) -> List[NetExecCre
     return creds
 
 
-def _db_in_range(db_path: Path,
-                 date_from: Optional[datetime],
-                 date_to: Optional[datetime]) -> bool:
-    """True si el mtime de la DB cae dentro del rango (o no hay rango)."""
-    if not date_from and not date_to:
-        return True
-    try:
-        mtime = datetime.fromtimestamp(db_path.stat().st_mtime)
-    except OSError:
-        return False
-    if date_from and mtime < date_from:
-        return False
-    if date_to and mtime > date_to:
-        return False
-    return True
-
-
 def import_workspace(workspace_path: Path,
-                     date_from: Optional[datetime] = None,
-                     date_to: Optional[datetime] = None,
                      logs_root: Optional[Path] = None) -> dict:
-    """Importa un workspace de NetExec.
-
-    Args:
-        workspace_path: ruta al directorio del workspace (.../workspaces/<name>).
-        date_from, date_to: filtro temporal (inclusive). Se aplica al mtime de
-            cada DB (una DB es un snapshot del último escaneo de ese protocolo)
-            y a los loot files por su timestamp embebido en el nombre.
-        logs_root: raíz alternativa de los loot files (por defecto ~/.nxc/logs).
-    """
+    """Importa un workspace de NetExec completo (sin filtros)."""
     workspace_path = Path(workspace_path)
     if not workspace_path.is_dir():
         raise FileNotFoundError(f"Workspace no encontrado: {workspace_path}")
@@ -570,37 +542,33 @@ def import_workspace(workspace_path: Path,
     dpapi_secrets: List[dict] = []
 
     smb_db = workspace_path / 'smb.db'
-    if smb_db.exists() and _db_in_range(smb_db, date_from, date_to):
+    if smb_db.exists():
         sc, ds = _load_smb(smb_db, hosts)
         creds.extend(sc)
         dpapi_secrets.extend(ds)
 
     ldap_db = workspace_path / 'ldap.db'
-    if ldap_db.exists() and _db_in_range(ldap_db, date_from, date_to):
+    if ldap_db.exists():
         creds.extend(_load_ldap(ldap_db, hosts))
 
     mssql_db = workspace_path / 'mssql.db'
-    if mssql_db.exists() and _db_in_range(mssql_db, date_from, date_to):
+    if mssql_db.exists():
         creds.extend(_load_mssql(mssql_db, hosts))
 
     rdp_db = workspace_path / 'rdp.db'
-    if rdp_db.exists() and _db_in_range(rdp_db, date_from, date_to):
+    if rdp_db.exists():
         _load_rdp(rdp_db, hosts)
 
     winrm_db = workspace_path / 'winrm.db'
-    if winrm_db.exists() and _db_in_range(winrm_db, date_from, date_to):
+    if winrm_db.exists():
         creds.extend(_load_winrm(winrm_db, hosts))
 
     for proto in ('ftp', 'ssh', 'nfs', 'vnc', 'wmi'):
         db = workspace_path / f'{proto}.db'
-        if db.exists() and _db_in_range(db, date_from, date_to):
+        if db.exists():
             creds.extend(_load_simple_protocol(db, proto, hosts))
 
-    lo = date_from or datetime(1970, 1, 1)
-    hi = date_to or datetime(2999, 12, 31)
     for item in collect_loot(logs_root):
-        if not (lo <= item['timestamp'] <= hi):
-            continue
         ip = item['ip']
         host = hosts.setdefault(ip, NetExecHost(ip=ip))
         host.hostname = host.hostname or item['hostname']
@@ -615,8 +583,6 @@ def import_workspace(workspace_path: Path,
         'dpapi_secrets_total': len(dpapi_secrets),
         'loot_files_total': sum(len(h.loot_files) for h in hosts.values()),
         'protocols_seen': sorted({p for h in hosts.values() for p in h.protocols}),
-        'date_from': date_from.isoformat() if date_from else None,
-        'date_to': date_to.isoformat() if date_to else None,
     }
 
     return {
@@ -654,15 +620,9 @@ def global_date_range(root: Optional[Path] = None,
 
 
 def import_all_workspaces(root: Optional[Path] = None,
-                          date_from: Optional[datetime] = None,
-                          date_to: Optional[datetime] = None,
                           logs_root: Optional[Path] = None,
                           explicit: Optional[Path] = None) -> dict:
-    """Importa TODOS los workspaces de NetExec mergeando resultados por IP.
-
-    El filtrado temporal se aplica a nivel de DB (por mtime) y loot files
-    (por timestamp en el nombre). Los loot files se asocian una sola vez.
-    """
+    """Importa TODOS los workspaces de NetExec mergeando resultados por IP."""
     root = root or default_workspace_root(explicit)
     logs_root = logs_root or default_logs_root(explicit)
     if not root.exists():
@@ -679,7 +639,7 @@ def import_all_workspaces(root: Optional[Path] = None,
 
     for ws_path in workspaces:
         ws_names.append(ws_path.name)
-        sub = _import_workspace_raw(ws_path, date_from, date_to)
+        sub = _import_workspace_raw(ws_path)
         for ip, h in sub['hosts'].items():
             cur = merged_hosts.setdefault(ip, NetExecHost(ip=ip))
             cur.hostname = cur.hostname or h.hostname
@@ -699,11 +659,7 @@ def import_all_workspaces(root: Optional[Path] = None,
         all_creds.extend(sub['credentials'])
         all_dpapi.extend(sub['dpapi_secrets'])
 
-    lo = date_from or datetime(1970, 1, 1)
-    hi = date_to or datetime(2999, 12, 31)
     for item in collect_loot(logs_root):
-        if not (lo <= item['timestamp'] <= hi):
-            continue
         ip = item['ip']
         host = merged_hosts.setdefault(ip, NetExecHost(ip=ip))
         host.hostname = host.hostname or item['hostname']
@@ -718,8 +674,6 @@ def import_all_workspaces(root: Optional[Path] = None,
         'dpapi_secrets_total': len(all_dpapi),
         'loot_files_total': sum(len(h.loot_files) for h in merged_hosts.values()),
         'protocols_seen': sorted({p for h in merged_hosts.values() for p in h.protocols}),
-        'date_from': date_from.isoformat() if date_from else None,
-        'date_to': date_to.isoformat() if date_to else None,
     }
     return {
         'workspace': '+'.join(ws_names) if ws_names else '',
@@ -731,34 +685,32 @@ def import_all_workspaces(root: Optional[Path] = None,
     }
 
 
-def _import_workspace_raw(workspace_path: Path,
-                          date_from: Optional[datetime] = None,
-                          date_to: Optional[datetime] = None) -> dict:
-    """Carga las DBs de un workspace, saltando las que queden fuera del rango."""
+def _import_workspace_raw(workspace_path: Path) -> dict:
+    """Carga todas las DBs de un workspace sin asociar loot."""
     hosts: Dict[str, NetExecHost] = {}
     creds: List[NetExecCredential] = []
     dpapi_secrets: List[dict] = []
 
     smb_db = workspace_path / 'smb.db'
-    if smb_db.exists() and _db_in_range(smb_db, date_from, date_to):
+    if smb_db.exists():
         sc, ds = _load_smb(smb_db, hosts)
         creds.extend(sc)
         dpapi_secrets.extend(ds)
     ldap_db = workspace_path / 'ldap.db'
-    if ldap_db.exists() and _db_in_range(ldap_db, date_from, date_to):
+    if ldap_db.exists():
         creds.extend(_load_ldap(ldap_db, hosts))
     mssql_db = workspace_path / 'mssql.db'
-    if mssql_db.exists() and _db_in_range(mssql_db, date_from, date_to):
+    if mssql_db.exists():
         creds.extend(_load_mssql(mssql_db, hosts))
     rdp_db = workspace_path / 'rdp.db'
-    if rdp_db.exists() and _db_in_range(rdp_db, date_from, date_to):
+    if rdp_db.exists():
         _load_rdp(rdp_db, hosts)
     winrm_db = workspace_path / 'winrm.db'
-    if winrm_db.exists() and _db_in_range(winrm_db, date_from, date_to):
+    if winrm_db.exists():
         creds.extend(_load_winrm(winrm_db, hosts))
     for proto in ('ftp', 'ssh', 'nfs', 'vnc', 'wmi'):
         db = workspace_path / f'{proto}.db'
-        if db.exists() and _db_in_range(db, date_from, date_to):
+        if db.exists():
             creds.extend(_load_simple_protocol(db, proto, hosts))
 
     return {'hosts': hosts, 'credentials': creds, 'dpapi_secrets': dpapi_secrets}

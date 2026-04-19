@@ -2142,6 +2142,43 @@ class ScanStorage:
         finally:
             conn.close()
 
+    def purge_netexec_imports(self, organization: str) -> Dict:
+        """Borra todos los imports previos de NetExec para una organización.
+
+        Elimina escaneos ``scan_type='netexec_import'`` (CASCADE limpia
+        scan_results, enrichments, vulnerabilities y hosts huérfanos) y
+        las credenciales cuyo source_protocol procede de NetExec.
+        """
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys = ON")
+        cursor = conn.cursor()
+
+        scan_ids = [r[0] for r in cursor.execute(
+            "SELECT id FROM scans WHERE UPPER(organization_name) = UPPER(?) "
+            "AND scan_type = 'netexec_import'",
+            (organization,)
+        ).fetchall()]
+
+        netexec_protos = ('smb', 'ldap', 'mssql', 'rdp', 'winrm',
+                          'ftp', 'ssh', 'nfs', 'vnc', 'wmi', 'smb-dpapi')
+        placeholders = ','.join('?' * len(netexec_protos))
+        creds_deleted = cursor.execute(
+            f"DELETE FROM credentials WHERE UPPER(organization_name) = UPPER(?) "
+            f"AND source_protocol IN ({placeholders})",
+            (organization, *netexec_protos)
+        ).rowcount
+        conn.commit()
+        conn.close()
+
+        for sid in scan_ids:
+            self.delete_scan(sid)
+
+        return {
+            'scans_deleted': len(scan_ids),
+            'credentials_deleted': creds_deleted,
+        }
+
     def import_netexec_data(self, organization: str, location: str,
                             workspace_data: Dict,
                             created_by: str = 'netexec_import') -> Dict:
