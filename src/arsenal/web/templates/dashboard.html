@@ -621,6 +621,9 @@
         const elapsed = scanData.started_at ?
             Math.floor((new Date() - new Date(scanData.started_at)) / 1000) : 0;
         const elapsedStr = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+        const progressPercent = liveData?.progress_percent ?? scanData.progress_percent ?? 10;
+        const etaText = liveData?.eta_label || (liveData?.eta_seconds != null ? `${Math.floor(liveData.eta_seconds / 60)}m ${liveData.eta_seconds % 60}s` : 'calculando');
+        const phases = liveData?.phases || scanData.phases || [];
 
         let message = `<div><strong>${statusText}</strong></div>`;
         message += `<div>🖥️ Hosts descubiertos: ${scanData.hosts_discovered || 0}</div>`;
@@ -630,20 +633,29 @@
             message += `<div>🎯 Target: ${scanData.target_range}</div>`;
         }
 
+        message += `<div>Progreso: ${progressPercent}% | ETA: ${etaText}</div>`;
+        if (phases.length) {
+            message += `<div style="margin-top:.75rem; display:grid; gap:.35rem;">${phases.map(p => `
+                <div style="display:flex; justify-content:space-between; gap:.75rem; padding:.4rem .55rem; border:1px solid #334155; border-radius:6px; background:#111827;">
+                    <span>${p.phase_label}</span>
+                    <span style="color:#94a3b8;">${p.status} - ${p.progress || 0}%</span>
+                </div>
+            `).join('')}</div>`;
+        }
         messagesDiv.innerHTML = message;
 
         // Actualizar barra de progreso
         if (scanData.status === 'completed') {
             progressBar.style.width = '100%';
             progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+        } else if (scanData.status === 'failed') {
+            progressBar.style.width = '100%';
+            progressBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
         } else if (scanData.hosts_discovered > 0 || scanData.ports_found > 0) {
-            const baseProgress = 20;
-            const activityProgress = Math.min(80, (scanData.hosts_discovered * 5) + (scanData.ports_found * 2));
-            const totalProgress = baseProgress + activityProgress;
-            progressBar.style.width = `${totalProgress}%`;
+            progressBar.style.width = `${progressPercent}%`;
             progressBar.style.background = 'linear-gradient(90deg, #3b82f6, #2563eb)';
         } else {
-            progressBar.style.width = '10%';
+            progressBar.style.width = `${progressPercent}%`;
             progressBar.style.background = 'linear-gradient(90deg, #6366f1, #4f46e5)';
         }
 
@@ -841,9 +853,7 @@
             }
 
             // Detectar escaneos en ejecución y mostrar su progreso
-            const runningScans = filteredScans.filter(s =>
-                s.status === 'running' && s.is_really_running === true
-            );
+            const runningScans = filteredScans.filter(s => s.status === 'running');
 
             // Iniciar seguimiento de escaneos en ejecución
             for (const scan of runningScans) {
@@ -896,7 +906,7 @@
                     // Botones de acción organizados
                     const resultsUrl = `/pentest/${encodeURIComponent(scan.organization_name)}/recon/results?scan_id=${scan.id}`;
                     let actionsHtml = '';
-                    if (isReallyRunning) {
+                    if (isRunning) {
                         actionsHtml = `
                             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                                 <a href="${resultsUrl}" class="btn btn-sm" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; white-space: nowrap;">📊 Ver Resultados</a>

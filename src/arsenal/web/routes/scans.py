@@ -105,6 +105,45 @@ def set_phase(scan_id: int, phase_key: str, status: str = None, progress: int = 
     except Exception as e:
         print(f"[Scan {scan_id}] Error actualizando fase {phase_key}: {e}")
 
+def parse_specific_web_targets(target_range: str):
+    """Parse a user supplied list of IP, IP:port or URL targets for EyeWitness."""
+    targets = []
+    seen = set()
+    raw_items = [p.strip() for p in (target_range or "").replace("\n", ",").split(",")]
+    for raw in raw_items:
+        if not raw:
+            continue
+        item = raw
+        for prefix in ("http://", "https://"):
+            if item.lower().startswith(prefix):
+                item = item[len(prefix):]
+                break
+        item = item.strip().strip("/")
+        if "/" in item:
+            continue
+
+        host = item
+        ports = []
+        if ":" in item:
+            host, port_text = item.rsplit(":", 1)
+            if port_text.isdigit():
+                ports = [int(port_text)]
+        if not ports:
+            ports = [80, 443, 8000, 8080, 8081, 8443, 8888, 9090, 10000]
+
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            continue
+
+        for port in ports:
+            key = (host, port)
+            if key in seen:
+                continue
+            seen.add(key)
+            targets.append({"ip_address": host, "port": port, "protocol": "tcp"})
+    return targets
+
 @router.get("/api/scans/list")
 async def get_scans_list(organization: Optional[str] = None, location: Optional[str] = None):
     """Obtiene lista de escaneos para dropdowns."""
@@ -288,6 +327,12 @@ async def get_scans(
         
         # Verificar si está realmente en ejecución
         if scan_dict['status'] == 'running':
+            if scan_id_str in running_scans:
+                thread = running_scans[scan_id_str]
+                if thread and thread.is_alive():
+                    scan_dict['is_really_running'] = True
+                    result.append(scan_dict)
+                    continue
             if scan_id_str in running_processes:
                 process = running_processes[scan_id_str]
                 if process.poll() is None:  # Proceso sigue vivo
@@ -496,7 +541,12 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     
                     # Actualizar discovered_ips con nuevos hallazgos
                     new_hosts_count = 0
+                    accepted_ping_reasons = {"echo-reply", "timestamp-reply", "address-mask-reply"}
                     for host_ip, host_data in parsed_data['hosts'].items():
+                        reason = (host_data.get('reason') or '').lower()
+                        if reason and reason not in accepted_ping_reasons:
+                            print(f"[Scan {scan_id}] Ignorando host ping {host_ip}: reason={reason}")
+                            continue
                         if host_ip not in discovered_ips:
                             discovered_ips[host_ip] = {'mac_address': None, 'vendor': None}
                             new_hosts_count += 1
@@ -621,6 +671,11 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         
                         # Si no hay puertos abiertos, registrar el host de todas formas
                         if not host_data.get('ports'):
+                            reason = (host_data.get('reason') or '').lower()
+                            reliable_host_reasons = {"echo-reply", "timestamp-reply", "address-mask-reply", "arp-response", "user-set"}
+                            if host_ip not in discovered_ips and reason not in reliable_host_reasons:
+                                hosts_processed += 1
+                                continue
                             storage.save_host_result(
                                 scan_id=scan_id,
                                 host_ip=host_ip,
@@ -775,6 +830,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 
                 # Determinar targets
                 targets_to_process = []
+                explicit_web_targets = parse_specific_web_targets(config.target_range)
                 if discovered_ips:
                     targets_to_process = sorted(list(discovered_ips))
                 else:
@@ -795,6 +851,13 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 # 1. Preparar objetivos para EyeWitness
                 unique_eyewitness_targets = []
                 seen_targets = set()
+                if explicit_web_targets:
+                    targets_to_process = []
+                    for target in explicit_web_targets:
+                        key = (target['ip_address'], int(target['port']))
+                        if key not in seen_targets:
+                            unique_eyewitness_targets.append(target)
+                            seen_targets.add(key)
                 
                 for target_str in targets_to_process:
                     try:
@@ -862,6 +925,14 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # ============================================================================
         # PASO 3: IOXIDRESOLVER (si está habilitado)
         # ============================================================================
+        if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE and not config.nmap:
+            try:
+                phase = next((p for p in storage.get_scan_phases(scan_id) if p.get("phase_key") == "specific_capture"), None)
+                if phase and phase.get("status") == "running":
+                    set_phase(scan_id, "specific_capture", status="completed", progress=100, detail="EyeWitness finalizado", completed=True)
+            except Exception:
+                pass
+
         if hasattr(config, 'ioxid') and config.ioxid:
             print(f"[Scan {scan_id}] 📌 Iniciando escaneo IOXIDResolver...")
             try:
@@ -926,6 +997,8 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # PASO 4: ENRIQUECIMIENTO STANDALONE (si está habilitado y no se hizo en Modo Específico)
         # ============================================================================
         if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE and config.scan_mode != "specific":
+            if config.nmap:
+                set_phase(scan_id, "web_enrichment", status="running", progress=15, detail="Buscando servicios web para evidencias", started=True)
             print(f"[Scan {scan_id}] 🌐 Iniciando fase de enriquecimiento standalone...")
             
             enrichment_targets = []
@@ -1060,6 +1133,13 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     except:
                         pass
         
+        try:
+            for phase in storage.get_scan_phases(scan_id):
+                if phase.get("status") in ("pending", "running"):
+                    set_phase(scan_id, phase.get("phase_key"), status="completed", progress=100, detail=phase.get("detail") or "Finalizado", completed=True)
+        except Exception:
+            pass
+
         # Contar hosts y puertos finales
         try:
             conn = sqlite3.connect(str(storage.db_path), timeout=30.0)

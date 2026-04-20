@@ -210,6 +210,17 @@ async def get_scan_status(scan_id: int):
     # Verificar si tiene archivo PCAP (acceso directo a sqlite3.Row, no usar .get())
     pcap_file_val = scan['pcap_file'] if scan['pcap_file'] is not None else None
     result['has_pcap'] = bool(pcap_file_val and Path(pcap_file_val).exists())
+    phases = storage.get_scan_phases(scan_id)
+    result['phases'] = phases
+    if result['status'] in ('completed', 'failed'):
+        result['progress_percent'] = 100
+    elif phases:
+        values = []
+        for phase in phases:
+            values.append(100 if phase.get('status') in ('completed', 'failed', 'skipped') else int(phase.get('progress') or 0))
+        result['progress_percent'] = round(sum(values) / len(values))
+    else:
+        result['progress_percent'] = 10 if result['status'] == 'running' else 100
     
     return result
 
@@ -853,7 +864,9 @@ async def get_scan_results_live(scan_id: int):
     error_message = scan["error_message"] if scan["error_message"] else None
     phases = storage.get_scan_phases(scan_id)
 
-    if phases:
+    if scan["status"] in ("completed", "failed"):
+        progress_percent = 100
+    elif phases:
         progress_values = []
         for phase in phases:
             phase_status = phase.get("status")

@@ -407,7 +407,7 @@
                     <label class="checkbox-label">
                         <input type="checkbox" id="nmap_icmp" name="nmap_icmp" onchange="toggleIcmpMode(this)">
                         <span>📍 Activar Ping Discovery (-sn)</span>
-                        <small>Identifica hosts activos mediante ICMP y otros protocolos de Capa 3</small>
+                        <small>Identifica hosts activos mediante ICMP echo real, sin probes ARP/TCP de Nmap</small>
                     </label>
                 </div>
 
@@ -1026,7 +1026,7 @@
         // el backend los ejecutará uno tras otro. El comando mostrado aquí
         // es para la fase de Puertos (o Ping si solo se activa Ping).
         if (icmpMode && !nmapEnabled) {
-            let cmd = ['nmap', '-T4', '-sn'];
+            let cmd = ['nmap', '-T4', '-sn', '-PE', '--disable-arp-ping'];
             cmd.push(targetRange);
             return cmd.join(' ');
         }
@@ -1116,7 +1116,7 @@
         }
 
         const targetRange = document.getElementById('target_range_active').value || 'TARGET_IP';
-        return `nmap -sn -T4 ${targetRange}`;
+        return `nmap -T4 -sn -PE --disable-arp-ping ${targetRange}`;
     }
 
     function updateHostDiscoveryCommand() {

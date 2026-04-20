@@ -34,6 +34,37 @@ def is_ip_in_network(ip_str: str, network_str: str) -> bool:
     except ValueError:
         return False
 
+def _json_items_as_text(value) -> str:
+    """Convert legacy/list/dict JSON metadata to a readable comma-separated string."""
+    if not value:
+        return ""
+    try:
+        data = json.loads(value) if isinstance(value, str) else value
+    except Exception:
+        return str(value).strip("\x00")
+
+    if isinstance(data, dict):
+        items = []
+        for key, item in data.items():
+            if isinstance(item, dict):
+                label = item.get("name") or item.get("hostname") or item.get("ip") or item.get("address") or key
+            else:
+                label = item
+            if label:
+                items.append(str(label).strip("\x00"))
+        return ", ".join(items)
+    if isinstance(data, list):
+        items = []
+        for item in data:
+            if isinstance(item, dict):
+                label = item.get("name") or item.get("hostname") or item.get("ip") or item.get("address") or json.dumps(item, ensure_ascii=False)
+            else:
+                label = item
+            if label:
+                items.append(str(label).strip("\x00"))
+        return ", ".join(items)
+    return str(data).strip("\x00")
+
 def connect_to_neo4j(ip: str, username: str = None, password: str = None) -> Graph:
     """Conectar a la base de datos Neo4j."""
     username = username or os.getenv("NEO4J_USERNAME") or "neo4j"
@@ -183,8 +214,8 @@ def get_scans_data(db_path: str, org: str = None, location: str = None,
                     'vendor': row['isolation_vendor'] or '',
                     'mac': row['isolation_mac'] or '',
                     'os_info': row['isolation_os'] or '',
-                    'hostnames': ", ".join([s.strip('\x00') for s in json.loads(row['isolation_hostnames'])]) if row['isolation_hostnames'] else '',
-                    'interfaces': ", ".join([s.strip('\x00') for s in json.loads(row['isolation_interfaces'] or row['global_interfaces'])]) if (row['isolation_interfaces'] or row['global_interfaces']) else '',
+                    'hostnames': _json_items_as_text(row['isolation_hostnames']),
+                    'interfaces': _json_items_as_text(row['isolation_interfaces'] or row['global_interfaces']),
                     'scripts': row['isolation_scripts'] or '',
                     'timestamp': row['isolation_last_seen'] or row['discovered_at'],
                     'network_range': subnet if subnet and subnet != "Unknown" else None,
@@ -295,8 +326,8 @@ def get_scans_data(db_path: str, org: str = None, location: str = None,
                     'vendor': (h_info.get('isolation_vendor') if h_info else '') or '',
                     'mac': mac or (h_info.get('isolation_mac') if h_info else '') or '', # Captura pcap > metadata scan
                     'os_info': '', # Aislado
-                    'hostnames': ", ".join([s.strip('\x00') for s in json.loads(h_info.get('isolation_hostnames'))]) if h_info and h_info.get('isolation_hostnames') else '',
-                    'interfaces': ", ".join([s.strip('\x00') for s in json.loads(h_info.get('isolation_interfaces') or h_info.get('global_interfaces'))]) if h_info and (h_info.get('isolation_interfaces') or h_info.get('global_interfaces')) else '',
+                    'hostnames': _json_items_as_text(h_info.get('isolation_hostnames')) if h_info else '',
+                    'interfaces': _json_items_as_text(h_info.get('isolation_interfaces') or h_info.get('global_interfaces')) if h_info else '',
                     'timestamp': h_info.get('isolation_last_seen') if h_info else None,
                     'network_range': subnet if subnet and subnet != "Unknown" else None,
                     'network_name': subnet_name,
