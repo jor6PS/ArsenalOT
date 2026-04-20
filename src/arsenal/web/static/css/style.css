@@ -98,6 +98,24 @@ body {
     color: var(--accent-primary);
 }
 
+.svg-icon {
+    width: 1.15em;
+    height: 1.15em;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.brand-icon {
+    width: 1.35rem;
+    height: 1.35rem;
+    color: #818cf8;
+    filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.34));
+}
+
 .nav-menu {
     display: flex;
     list-style: none;
@@ -185,6 +203,11 @@ body {
     height: 60px;
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.03);
+}
+
+.stat-icon .svg-icon {
+    width: 1.45rem;
+    height: 1.45rem;
 }
 
 .stat-info h3 {
@@ -1108,6 +1131,14 @@ tr:last-child td {
     font-size: 1rem;
 }
 
+.org-home-icon .svg-icon,
+.org-nav-summary-icon .svg-icon,
+.org-nav-item-icon .svg-icon,
+.recon-subnav-icon .svg-icon {
+    width: 1rem;
+    height: 1rem;
+}
+
 .org-home-text {
     display: flex;
     min-width: 0;
@@ -1233,6 +1264,11 @@ tr:last-child td {
     border-radius: 6px;
     color: #94a3b8;
     transition: transform 0.18s ease, background 0.18s ease;
+}
+
+.org-nav-caret .svg-icon {
+    width: 0.95rem;
+    height: 0.95rem;
 }
 
 .org-nav-dropdown[open] .org-nav-caret {

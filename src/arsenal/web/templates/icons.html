@@ -1,0 +1,53 @@
+{% macro icon(name, class_name='svg-icon') -%}
+{% if name == 'shield' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-2.9 8.5-7 10-4.1-1.5-7-5.5-7-10V6l7-3z"/><path d="M9.5 12l1.8 1.8 3.8-4.1"/></svg>
+{% elif name == 'audit' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8l2 3v13H6V7l2-3z"/><path d="M9 10h6M9 14h6M9 18h3"/><path d="M10 4v3h4V4"/></svg>
+{% elif name == 'report' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7V3z"/><path d="M14 3v5h4M9.5 12h5M9.5 16h5M9.5 19h3"/></svg>
+{% elif name == 'database' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>
+{% elif name == 'graph' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="17" cy="18" r="3"/><circle cx="6" cy="17" r="2.5"/><path d="M9 7h6M8 15l7-7M9 17h5.5"/></svg>
+{% elif name == 'building' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V6l8-3 8 3v15"/><path d="M8 9h2M14 9h2M8 13h2M14 13h2M8 17h2M14 17h2M3 21h18"/></svg>
+{% elif name == 'api' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7L3 12l5 5M16 7l5 5-5 5"/><path d="M14 4l-4 16"/></svg>
+{% elif name == 'network' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M10.8 7.2L6.3 15.8M13.2 7.2l4.5 8.6M7.5 18h9"/></svg>
+{% elif name == 'device' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M10 7h4M11 17h2"/></svg>
+{% elif name == 'search' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l5 5"/></svg>
+{% elif name == 'key' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="14.5" r="3.5"/><path d="M10 12l9-9M15 7l2 2M13 9l2 2"/></svg>
+{% elif name == 'exploit' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/><circle cx="12" cy="12" r="4"/></svg>
+{% elif name == 'factory' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l6 4V9l6 4V7h5v14H3z"/><path d="M7 17h2M12 17h2M17 17h2"/></svg>
+{% elif name == 'flag' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4"/><path d="M6 5h11l-2 4 2 4H6"/></svg>
+{% elif name == 'overview' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>
+{% elif name == 'book' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10a3 3 0 0 1 3 3v14H8a3 3 0 0 0-3-3V4z"/><path d="M5 18a3 3 0 0 1 3-3h10"/><path d="M9 8h5M9 11h5"/></svg>
+{% elif name == 'finding' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 16H3L12 3z"/><path d="M12 9v4M12 17h.01"/></svg>
+{% elif name == 'dashboard' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13a8 8 0 1 1 16 0"/><path d="M12 13l4-4"/><path d="M6 18h12"/></svg>
+{% elif name == 'plus' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+{% elif name == 'download' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg>
+{% elif name == 'trash' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>
+{% elif name == 'upload' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V9"/><path d="M8 13l4-4 4 4"/><path d="M5 4h14"/></svg>
+{% elif name == 'arrow-left' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+{% elif name == 'chevron-down' -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+{% else -%}
+<svg class="{{ class_name }}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg>
+{% endif -%}
+{%- endmacro %}
