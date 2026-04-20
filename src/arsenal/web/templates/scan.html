@@ -1358,8 +1358,8 @@
 
             if (result.scan_id) {
                 currentScanId = result.scan_id;
-                startBtn.disabled = false;
-                btnText.textContent = '🚀 Iniciar Escaneo';
+                startBtn.disabled = true;
+                btnText.textContent = 'Escaneo en curso';
                 btnSpinner.style.display = 'none';
                 cancelBtn.style.display = 'inline-block';
                 cancelBtn.classList.remove('hidden');
@@ -1650,81 +1650,73 @@
     }
 
     function startProgressTracking(scanId) {
+        if (resultsPollingInterval) {
+            clearInterval(resultsPollingInterval);
+            resultsPollingInterval = null;
+        }
+        if (wsConnection) {
+            wsConnection.close();
+            wsConnection = null;
+        }
+
         currentScanId = scanId;
         lastResultsHash = null;
         const messagesDiv = document.getElementById('progressMessages');
-        const statusDiv = document.getElementById('scanStatus');
-        const cancelBtn = document.getElementById('cancelScanBtn');
-        const progressBar = document.getElementById('progressBarFill');
+        if (messagesDiv) {
+            messagesDiv.innerHTML = '<div style="color:#94a3b8;">Todavia no hay hallazgos. El detalle por fases se actualiza arriba.</div>';
+        }
 
-        // Conectar WebSocket para estadísticas
-        const ws = new WebSocket(`ws://${window.location.host.replace('http://', 'ws://').replace('https://', 'wss://')}/ws/scan/${scanId}`);
+        connectScanWebSocket(scanId);
+
+        // Iniciar polling de resultados en tiempo real. Este es el canal fiable;
+        // el WebSocket solo acelera refrescos si esta disponible.
+        loadLiveResults(scanId);
+        resultsPollingInterval = setInterval(async () => {
+            const data = await loadLiveResults(scanId);
+            if (data && data.status !== 'running') {
+                stopProgressTracking();
+            }
+        }, 2000);
+    }
+
+    function connectScanWebSocket(scanId, attempt = 1) {
+        if (currentScanId !== scanId) return;
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/scan/${scanId}`);
+        let opened = false;
         wsConnection = ws;
 
         ws.onopen = function () {
-            // No mostrar mensaje, el estado se muestra en scanStatus
-            messagesDiv.innerHTML = '';
+            opened = true;
         };
 
         ws.onmessage = function (event) {
             const data = JSON.parse(event.data);
 
             if (data.type === 'progress') {
-                // No mostrar mensaje antiguo, solo actualizar barra de progreso y cargar resultados
-                // El estado se muestra en scanStatus (más abajo)
-
-                // Cargar resultados para actualizar la lista
                 loadLiveResults(scanId);
-
-                // Mejorar barra de progreso basada en hosts/ports descubiertos
-                if (data.status === 'completed') {
-                    progressBar.style.width = '100%';
-                    progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
-                } else if (data.hosts_discovered > 0 || data.ports_found > 0) {
-                    // Progreso incremental: 20% base + hasta 80% basado en actividad
-                    const baseProgress = 20;
-                    const activityProgress = Math.min(80, (data.hosts_discovered * 5) + (data.ports_found * 2));
-                    const totalProgress = baseProgress + activityProgress;
-                    progressBar.style.width = `${totalProgress}%`;
-                    progressBar.style.background = 'linear-gradient(90deg, #3b82f6, #2563eb)';
-                } else {
-                    progressBar.style.width = '10%';
-                    progressBar.style.background = 'linear-gradient(90deg, #6366f1, #4f46e5)';
-                }
-
-            } else if (data.type === 'completed') {
-                loadLiveResults(scanId);
-                stopProgressTracking();
-            } else if (data.type === 'failed') {
+            } else if (data.type === 'completed' || data.type === 'failed') {
                 loadLiveResults(scanId);
                 stopProgressTracking();
             } else if (data.type === 'error') {
-                messagesDiv.innerHTML += `<div class="error">⚠️ ${data.message}</div>`;
+                console.warn('WebSocket scan progress:', data.message);
             }
         };
 
         ws.onerror = function (error) {
-            console.error('WebSocket error:', error);
-            messagesDiv.innerHTML += '<div class="error">❌ Error de conexión WebSocket</div>';
+            console.warn(`WebSocket de seguimiento no disponible en el intento ${attempt}; se mantiene polling HTTP.`, error);
         };
 
         ws.onclose = function () {
-            console.log('WebSocket cerrado');
-            wsConnection = null;
-        };
-
-        // Iniciar polling de resultados en tiempo real
-        loadLiveResults(scanId); // Cargar inmediatamente
-        resultsPollingInterval = setInterval(async () => {
-            const data = await loadLiveResults(scanId);
-            if (data) {
-                if (data.status !== 'running') {
-                    stopProgressTracking();
-                }
+            if (wsConnection === ws) {
+                wsConnection = null;
             }
-        }, 2000); // Poll cada 2 segundos
+            if (!opened && currentScanId === scanId && attempt < 3) {
+                setTimeout(() => connectScanWebSocket(scanId, attempt + 1), 700 * attempt);
+            }
+        };
     }
-
     function stopProgressTracking() {
         if (resultsPollingInterval) {
             clearInterval(resultsPollingInterval);
@@ -1741,6 +1733,16 @@
         const stopBtn = document.getElementById('stopScanBtn');
         stopBtn.style.display = 'none';
         stopBtn.classList.add('hidden');
+
+        const startBtn = document.getElementById('startScanBtn');
+        const btnText = document.getElementById('btnText');
+        const btnSpinner = document.getElementById('btnSpinner');
+        if (startBtn) startBtn.disabled = false;
+        if (btnText) btnText.textContent = 'Iniciar Escaneo';
+        if (btnSpinner) {
+            btnSpinner.style.display = 'none';
+            btnSpinner.classList.add('hidden');
+        }
 
         currentScanId = null;
         lastResultsHash = null;
