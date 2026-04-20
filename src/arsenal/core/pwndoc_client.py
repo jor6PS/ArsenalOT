@@ -17,7 +17,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 PWNDOC_URL      = os.environ.get("PWNDOC_URL",      "https://localhost:4242")
 PWNDOC_USER     = os.environ.get("PWNDOC_USER",     "admin")
-PWNDOC_PASSWORD = os.environ.get("PWNDOC_PASSWORD", "changeme")
+PWNDOC_PASSWORD = os.environ.get("PWNDOC_PASSWORD", "ArsenalOT2026!")
 
 
 class PwnDocClient:
@@ -118,12 +118,16 @@ class PwnDocClient:
         """
         self._ensure_auth()
         vuln: dict = {
+            "status": 0,
             "details": [{
                 "locale": locale,
                 "title": title,
+                "vulnType": "Undefined",
                 "description": description,
                 "observation": observation,
                 "remediation": remediation,
+                "references": [],
+                "customFields": [],
             }],
             "cvssv3": cvssv3,
             "references": references or [],
@@ -152,14 +156,34 @@ class PwnDocClient:
         result = self._request("GET", "/api/data/audit-types")
         return result.get("datas", [])
 
+    def create_audit_type(self, name: str, templates: list = None,
+                          sections: list = None, hidden: list = None) -> Dict:
+        """Crea un tipo de auditoría básico en PwnDoc."""
+        self._ensure_auth()
+        result = self._request("POST", "/api/data/audit-types", {
+            "name": name,
+            "templates": templates if templates is not None else [],
+            "sections": sections if sections is not None else [],
+            "hidden": hidden if hidden is not None else [],
+        })
+        return result.get("datas", {})
+
+    def ensure_default_audit_type(self, name: str = "ArsenalOT Infraestructura") -> str:
+        """Devuelve un auditType existente o crea uno básico para ArsenalOT."""
+        audit_types = self.list_audit_types()
+        for audit_type in audit_types:
+            if audit_type.get("name") == name:
+                return name
+        if audit_types:
+            return audit_types[0]["name"]
+        self.create_audit_type(name)
+        return name
+
     def _first_audit_type(self) -> str:
         """Devuelve el nombre del primer audit type disponible, o lanza excepción si no hay ninguno."""
         types = self.list_audit_types()
         if not types:
-            raise RuntimeError(
-                "PwnDoc no tiene ningún auditType configurado. "
-                "Crea al menos uno desde la interfaz de PwnDoc antes de usar esta función."
-            )
+            return self.ensure_default_audit_type()
         return types[0]["name"]
 
     def list_audits(self) -> List[Dict]:
@@ -167,8 +191,15 @@ class PwnDocClient:
         result = self._request("GET", "/api/audits")
         return result.get("datas", [])
 
+    def get_audit(self, audit_id: str) -> Dict:
+        """Devuelve una auditoria completa, incluidos sus findings."""
+        self._ensure_auth()
+        result = self._request("GET", f"/api/audits/{audit_id}")
+        return result.get("datas", {})
+
     def create_audit(self, name: str, language: str = "es",
-                     audit_type: str = None) -> Dict:
+                     audit_type: str = None, scope: list = None,
+                     date_start: str = "", date_end: str = "") -> Dict:
         """Crea una nueva auditoría en PwnDoc.
 
         Si audit_type no se especifica, usa el primer auditType disponible.
@@ -180,11 +211,42 @@ class PwnDocClient:
             "name": name,
             "auditType": audit_type,
             "language": language,
-            "scope": [],
         })
         datas = result.get("datas", {})
         # Response: {"message": "...", "audit": {_id, name, ...}}
-        return datas.get("audit") or datas
+        audit = datas.get("audit") or datas
+        audit_id = str(audit.get("_id") or audit.get("id") or "")
+        if audit_id and (scope or date_start or date_end):
+            self.update_audit_general(
+                audit_id,
+                name=name,
+                language=language,
+                scope=scope or [],
+                date_start=date_start,
+                date_end=date_end,
+            )
+        return audit
+
+    def update_audit_general(self, audit_id: str, name: str = None,
+                             language: str = None, scope: list = None,
+                             date_start: str = "", date_end: str = "") -> Dict:
+        """Actualiza datos generales de una auditoría PwnDoc."""
+        self._ensure_auth()
+        payload: dict = {}
+        if name:
+            payload["name"] = name
+        if language:
+            payload["language"] = language
+        if scope is not None:
+            payload["scope"] = [s for s in scope if s]
+        if date_start:
+            payload["date_start"] = date_start
+        if date_end:
+            payload["date_end"] = date_end
+        if not payload:
+            return {}
+        result = self._request("PUT", f"/api/audits/{audit_id}/general", payload)
+        return result.get("datas", {})
 
     def get_audit_by_name(self, name: str) -> Optional[Dict]:
         """Devuelve la primera auditoría cuyo nombre coincida (insensible a mayúsculas)."""
@@ -194,15 +256,33 @@ class PwnDocClient:
         return None
 
     def ensure_audit(self, name: str, language: str = "es",
-                     audit_type: str = None) -> str:
+                     audit_type: str = None, scope: list = None,
+                     date_start: str = "", date_end: str = "") -> str:
         """
         Devuelve el _id de la auditoría con ese nombre.
         Si no existe, la crea con el language y audit_type indicados.
         """
         existing = self.get_audit_by_name(name)
         if existing:
-            return str(existing.get("_id") or existing.get("id"))
-        created = self.create_audit(name, language, audit_type)
+            audit_id = str(existing.get("_id") or existing.get("id"))
+            if scope or date_start or date_end:
+                self.update_audit_general(
+                    audit_id,
+                    name=name,
+                    language=language,
+                    scope=scope or [],
+                    date_start=date_start,
+                    date_end=date_end,
+                )
+            return audit_id
+        created = self.create_audit(
+            name,
+            language,
+            audit_type,
+            scope=scope,
+            date_start=date_start,
+            date_end=date_end,
+        )
         return str(created.get("_id") or created.get("id"))
 
     # ─── Findings ──────────────────────────────────────────────
@@ -216,23 +296,44 @@ class PwnDocClient:
         remediation: str = "",
         cvssv3: str = "",
         vuln_type_id: str = None,
+        category: str = "",
+        references: list = None,
+        poc: str = "",
+        status: int = 0,
     ) -> Dict:
-        """Añade un hallazgo a una auditoría de PwnDoc."""
+        """Añade un hallazgo a una auditoría de PwnDoc sin modificar la biblioteca."""
         self._ensure_auth()
+        before_ids = {
+            str(f.get("_id") or f.get("id"))
+            for f in self.get_findings(audit_id)
+            if f.get("_id") or f.get("id")
+        }
         payload: dict = {
-            "title":       title,
+            "title": title,
             "description": description,
             "observation": observation,
             "remediation": remediation,
-            "cvssv3":      cvssv3,
-            "references":  [],
-            "poc":         "",
-            "status":      0,
+            "cvssv3": cvssv3,
+            "references": references or [],
+            "poc": poc or "",
+            "status": status,
+            "category": category or "No Category",
         }
         if vuln_type_id:
             payload["vulnType"] = vuln_type_id
-        result = self._request("POST", f"/api/audits/{audit_id}/findings", payload)
-        return result.get("datas", {})
+        self._request("POST", f"/api/audits/{audit_id}/findings", payload)
+
+        findings = self.get_findings(audit_id)
+        new_findings = [
+            f for f in findings
+            if str(f.get("_id") or f.get("id")) not in before_ids
+        ]
+        if new_findings:
+            return new_findings[-1]
+        for finding in reversed(findings):
+            if finding.get("title") == title:
+                return finding
+        return {}
 
     def get_findings(self, audit_id: str) -> List[Dict]:
         """Lista los hallazgos de una auditoría."""
@@ -240,3 +341,39 @@ class PwnDocClient:
         result = self._request("GET", f"/api/audits/{audit_id}")
         audit_data = result.get("datas", {})
         return audit_data.get("findings", [])
+
+    def update_finding(
+        self,
+        audit_id: str,
+        finding_id: str,
+        title: str,
+        description: str = "",
+        observation: str = "",
+        remediation: str = "",
+        cvssv3: str = "",
+        vuln_type_id: str = None,
+        category: str = "",
+    ) -> Dict:
+        """Actualiza un finding concreto de una auditoría sin tocar la biblioteca."""
+        self._ensure_auth()
+        payload: dict = {
+            "title": title,
+            "description": description,
+            "observation": observation,
+            "remediation": remediation,
+            "cvssv3": cvssv3,
+            "references": [],
+            "poc": "",
+            "status": 0,
+            "category": category or "No Category",
+        }
+        if vuln_type_id:
+            payload["vulnType"] = vuln_type_id
+        result = self._request("PUT", f"/api/audits/{audit_id}/findings/{finding_id}", payload)
+        return result.get("datas", {})
+
+    def delete_finding(self, audit_id: str, finding_id: str) -> Dict:
+        """Elimina un finding concreto de una auditoría."""
+        self._ensure_auth()
+        result = self._request("DELETE", f"/api/audits/{audit_id}/findings/{finding_id}")
+        return result.get("datas", {})

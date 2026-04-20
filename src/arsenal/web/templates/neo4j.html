@@ -116,18 +116,6 @@
         </div>
     </div>
 
-    <!-- Consultas Cypher Útiles -->
-    <div class="glass-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
-        <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; color: var(--accent-yellow);">💡 Consultas Cypher Útiles</h3>
-        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
-            Copia estas consultas y pégalas en el <a href="http://localhost:7474" target="_blank" style="color: var(--accent-yellow);">Neo4j Browser</a> para analizar los datos industriales.
-        </p>
-        
-        <div id="usefulQueriesContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
-            <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">Cargando consultas...</div>
-        </div>
-    </div>
-
     <!-- Capa de Post-Inteligencia removida a petición del usuario -->
 
     <details
@@ -990,7 +978,6 @@
 
     // Event listeners para filtros
     document.addEventListener('DOMContentLoaded', function () {
-        loadUsefulQueries();
         // Agregar listeners a los checkboxes de filtro cuando se carguen
         setTimeout(() => {
             const filters = document.querySelectorAll('.node-filter');
@@ -1510,46 +1497,5 @@
             btn.disabled = false;
         }
     }
-    async function loadUsefulQueries() {
-        try {
-            const response = await fetch('/static/data/neo4j_queries.json');
-            const queries = await response.json();
-            const container = document.getElementById('usefulQueriesContainer');
-            
-            if (!container) return;
-            
-            container.innerHTML = queries.map((q, idx) => `
-                <div class="query-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
-                    <div style="font-weight: 600; color: var(--text-primary); font-size: 0.95rem;">${q.title}</div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary); min-height: 2.5rem;">${q.description}</div>
-                    <div style="position: relative;">
-                        <pre style="background: #1a1a1a; color: #4ECDC4; padding: 0.75rem; border-radius: 4px; font-size: 0.8rem; overflow-x: auto; margin: 0; border: 1px solid #333;">${q.query}</pre>
-                        <button onclick="copyQueryToClipboard(this)" data-query="${q.query.replace(/"/g, '&quot;')}"
-                                style="position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(78,205,196,0.2); border: 1px solid var(--accent-yellow); color: var(--accent-yellow); border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.75rem; cursor: pointer;">
-                            Copiar
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-        } catch (error) {
-            console.error('Error cargando consultas útiles:', error);
-            const container = document.getElementById('usefulQueriesContainer');
-            if (container) container.innerHTML = '<p style="color: #ef4444;">Error al cargar las consultas.</p>';
-        }
-    }
-
-    function copyQueryToClipboard(btn) {
-        const text = btn.getAttribute('data-query');
-        navigator.clipboard.writeText(text).then(() => {
-            const originalText = btn.innerText;
-            btn.innerText = '✅ Copiado';
-            btn.style.background = 'rgba(78,205,196,0.5)';
-            setTimeout(() => {
-                btn.innerText = originalText;
-                btn.style.background = 'rgba(78,205,196,0.2)';
-            }, 2000);
-        });
-    }
-
 </script>
 {% endblock %}

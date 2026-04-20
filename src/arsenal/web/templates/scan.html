@@ -122,6 +122,145 @@
         gap: 1rem;
     }
     .nmap-full-width { grid-column: 1 / -1; }
+
+    .scan-progress {
+        margin-top: 1.5rem;
+        background: rgba(15, 23, 42, 0.82);
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        padding: 1rem;
+    }
+    .progress-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+    .progress-title {
+        margin: 0;
+        color: #f8fafc;
+        font-size: 1.1rem;
+    }
+    .progress-subtitle {
+        margin-top: 0.25rem;
+        color: #94a3b8;
+        font-size: 0.86rem;
+    }
+    .scan-status-badge {
+        border-radius: 999px;
+        border: 1px solid #334155;
+        color: #cbd5e1;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.82rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .scan-status-badge.running { border-color: #3b82f6; color: #bfdbfe; background: rgba(59, 130, 246, 0.14); }
+    .scan-status-badge.completed { border-color: #10b981; color: #bbf7d0; background: rgba(16, 185, 129, 0.14); }
+    .scan-status-badge.failed { border-color: #ef4444; color: #fecaca; background: rgba(239, 68, 68, 0.14); }
+    .progress-bar {
+        position: relative;
+        height: 16px;
+        background: #020617;
+        border-radius: 999px;
+        overflow: hidden;
+        border: 1px solid #334155;
+    }
+    .progress-fill {
+        height: 100%;
+        width: 0%;
+        transition: width 0.35s ease, background 0.35s ease;
+        background: linear-gradient(90deg, #38bdf8, #2563eb);
+    }
+    .progress-percent {
+        margin-top: 0.45rem;
+        color: #cbd5e1;
+        font-size: 0.84rem;
+        text-align: right;
+    }
+    .progress-metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 0.75rem;
+        margin: 1rem 0;
+    }
+    .progress-metric {
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(30, 41, 59, 0.72);
+        border-radius: 8px;
+        padding: 0.75rem;
+    }
+    .metric-label {
+        color: #94a3b8;
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .metric-value {
+        margin-top: 0.25rem;
+        color: #f8fafc;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+    .phase-timeline {
+        display: grid;
+        gap: 0.6rem;
+        margin-top: 1rem;
+    }
+    .phase-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 0.75rem;
+        align-items: center;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(2, 6, 23, 0.38);
+        border-radius: 8px;
+        padding: 0.75rem;
+    }
+    .phase-dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #64748b;
+        box-shadow: 0 0 0 4px rgba(100, 116, 139, 0.14);
+    }
+    .phase-row.running .phase-dot { background: #38bdf8; box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.18); }
+    .phase-row.completed .phase-dot { background: #22c55e; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18); }
+    .phase-row.failed .phase-dot { background: #ef4444; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.18); }
+    .phase-name {
+        color: #e2e8f0;
+        font-weight: 700;
+    }
+    .phase-detail {
+        color: #94a3b8;
+        font-size: 0.84rem;
+        margin-top: 0.25rem;
+    }
+    .phase-state {
+        color: #cbd5e1;
+        font-size: 0.82rem;
+        text-align: right;
+        white-space: nowrap;
+    }
+    .live-results {
+        margin-top: 1rem;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(2, 6, 23, 0.28);
+        border-radius: 8px;
+        padding: 0.85rem;
+        max-height: 320px;
+        overflow: auto;
+    }
+    @media (max-width: 700px) {
+        .progress-head, .phase-row {
+            grid-template-columns: 1fr;
+            display: grid;
+        }
+        .phase-state {
+            text-align: left;
+        }
+    }
 </style>
 
 <div class="scan-page" style="margin-top: 1.5rem;">
@@ -268,7 +407,7 @@
                     <label class="checkbox-label">
                         <input type="checkbox" id="nmap_icmp" name="nmap_icmp" onchange="toggleIcmpMode(this)">
                         <span>📍 Activar Ping Discovery (-sn)</span>
-                        <small>Identifica hosts activos mediante ICMP y otros protocolos de Capa 3</small>
+                        <small>Identifica hosts activos mediante ICMP echo real, sin probes ARP/TCP de Nmap</small>
                     </label>
                 </div>
 
@@ -498,17 +637,38 @@
 </form>
 
 <div id="scanProgress" class="scan-progress hidden">
-    <h3>Progreso del Escaneo</h3>
-    <div class="progress-bar"
-        style="width: 100%; height: 30px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
-        <div id="progressBarFill" class="progress-fill"
-            style="height: 100%; background: linear-gradient(90deg, #10b981, #059669); width: 0%; transition: width 0.3s ease;">
+    <div class="progress-head">
+        <div>
+            <h3 class="progress-title">Seguimiento del escaneo</h3>
+            <div id="progressSubtitle" class="progress-subtitle">Preparando ejecucion...</div>
+        </div>
+        <div id="scanStatusBadge" class="scan-status-badge">Pendiente</div>
+    </div>
+    <div class="progress-bar">
+        <div id="progressBarFill" class="progress-fill"></div>
+    </div>
+    <div id="progressPercent" class="progress-percent">0%</div>
+    <div class="progress-metrics">
+        <div class="progress-metric">
+            <div class="metric-label">Tiempo</div>
+            <div id="metricElapsed" class="metric-value">--</div>
+        </div>
+        <div class="progress-metric">
+            <div class="metric-label">ETA</div>
+            <div id="metricEta" class="metric-value">--</div>
+        </div>
+        <div class="progress-metric">
+            <div class="metric-label">Hosts</div>
+            <div id="metricHosts" class="metric-value">0</div>
+        </div>
+        <div class="progress-metric">
+            <div class="metric-label">Puertos / Conversaciones</div>
+            <div id="metricPorts" class="metric-value">0</div>
         </div>
     </div>
-    <div id="progressMessages" class="progress-messages"
-        style="margin-bottom: 1rem; padding: 1rem; background: #0f172a; border-radius: 6px; border: 1px solid #334155;">
-    </div>
-    <div id="scanStatus" class="scan-status" style="margin-bottom: 1rem;"></div>
+    <div id="scanStatus" class="scan-status"></div>
+    <div id="phaseTimeline" class="phase-timeline"></div>
+    <div id="progressMessages" class="live-results"></div>
 </div>
 </div>
 
@@ -866,7 +1026,7 @@
         // el backend los ejecutará uno tras otro. El comando mostrado aquí
         // es para la fase de Puertos (o Ping si solo se activa Ping).
         if (icmpMode && !nmapEnabled) {
-            let cmd = ['nmap', '-T4', '-sn'];
+            let cmd = ['nmap', '-T4', '-sn', '-PE', '--disable-arp-ping'];
             cmd.push(targetRange);
             return cmd.join(' ');
         }
@@ -956,7 +1116,7 @@
         }
 
         const targetRange = document.getElementById('target_range_active').value || 'TARGET_IP';
-        return `nmap -sn -T4 ${targetRange}`;
+        return `nmap -T4 -sn -PE --disable-arp-ping ${targetRange}`;
     }
 
     function updateHostDiscoveryCommand() {
@@ -1098,6 +1258,12 @@
         const btnSpinner = document.getElementById('btnSpinner');
         const cancelBtn = document.getElementById('cancelScanBtn');
 
+        if (currentScanId) {
+            document.getElementById('scanProgress').classList.remove('hidden');
+            document.getElementById('scanProgress').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
+
         // Deshabilitar botón y mostrar spinner
         startBtn.disabled = true;
         btnText.textContent = 'Iniciando...';
@@ -1199,7 +1365,7 @@
             if (result.scan_id) {
                 currentScanId = result.scan_id;
                 startBtn.disabled = false;
-                btnText.textContent = '🚀 Iniciar Escaneo';
+                btnText.textContent = 'Escaneo en curso';
                 btnSpinner.style.display = 'none';
                 cancelBtn.style.display = 'inline-block';
                 cancelBtn.classList.remove('hidden');
@@ -1296,10 +1462,106 @@
     });
 
     // Función para cargar resultados en tiempo real y actualizar el progreso
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        }[char]));
+    }
+
+    function formatDuration(seconds) {
+        if (seconds === null || seconds === undefined) return '--';
+        const total = Math.max(0, Number(seconds) || 0);
+        const h = Math.floor(total / 3600);
+        const m = Math.floor((total % 3600) / 60);
+        const s = Math.floor(total % 60);
+        if (h > 0) return `${h}h ${m}m`;
+        if (m > 0) return `${m}m ${s}s`;
+        return `${s}s`;
+    }
+
+    function statusLabel(status) {
+        return {
+            pending: 'Pendiente',
+            running: 'En ejecucion',
+            completed: 'Completado',
+            failed: 'Fallido',
+            skipped: 'Omitido'
+        }[status] || status || 'Pendiente';
+    }
+
+    function isTerminalScanStatus(status) {
+        return ['completed', 'failed', 'cancelled', 'canceled'].includes(String(status || '').toLowerCase());
+    }
+
+    function updateScanProgressView(data) {
+        const progress = Math.max(0, Math.min(100, Number(data.progress_percent ?? 0)));
+        const progressBar = document.getElementById('progressBarFill');
+        const progressPercent = document.getElementById('progressPercent');
+        const badge = document.getElementById('scanStatusBadge');
+        const subtitle = document.getElementById('progressSubtitle');
+        const stats = data.stats || { hosts: 0, ports: 0 };
+        const phases = data.phases || [];
+        const currentPhase = phases.find(p => p.status === 'running') || phases.find(p => p.status === 'pending');
+
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+            if (data.status === 'failed') {
+                progressBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
+            } else if (data.status === 'completed') {
+                progressBar.style.background = 'linear-gradient(90deg, #22c55e, #16a34a)';
+            } else {
+                progressBar.style.background = 'linear-gradient(90deg, #38bdf8, #2563eb)';
+            }
+        }
+        if (progressPercent) progressPercent.textContent = `${progress}%`;
+        if (badge) {
+            badge.className = `scan-status-badge ${data.status || 'pending'}`;
+            badge.textContent = statusLabel(data.status);
+        }
+        if (subtitle) {
+            subtitle.textContent = currentPhase ? `${currentPhase.phase_label}: ${currentPhase.detail || statusLabel(currentPhase.status)}` : 'Sin fases activas';
+        }
+
+        document.getElementById('metricElapsed').textContent = formatDuration(data.elapsed_seconds);
+        document.getElementById('metricEta').textContent = data.eta_label || (data.eta_seconds !== null && data.eta_seconds !== undefined ? formatDuration(data.eta_seconds) : '--');
+        document.getElementById('metricHosts').textContent = stats.hosts || 0;
+        document.getElementById('metricPorts').textContent = stats.ports || 0;
+
+        const statusDiv = document.getElementById('scanStatus');
+        if (statusDiv) {
+            if (data.status === 'failed') {
+                statusDiv.innerHTML = `<div class="error"><strong>Escaneo fallido</strong><br><pre style="white-space: pre-wrap; font-size: 0.9em; margin-top: 0.5rem; padding: 0.5rem; background: #1e293b; color: #e2e8f0; border-radius: 4px;">${escapeHtml(data.error_message || 'Error desconocido')}</pre></div>`;
+            } else if (data.status === 'completed') {
+                statusDiv.innerHTML = `<div class="success"><strong>Escaneo completado</strong><br>Hosts: ${stats.hosts || 0} | Puertos/conversaciones: ${stats.ports || 0}</div>`;
+            } else {
+                statusDiv.innerHTML = '';
+            }
+        }
+
+        const timeline = document.getElementById('phaseTimeline');
+        if (timeline) {
+            timeline.innerHTML = phases.map(phase => `
+                <div class="phase-row ${escapeHtml(phase.status || 'pending')}">
+                    <div class="phase-dot"></div>
+                    <div>
+                        <div class="phase-name">${escapeHtml(phase.phase_label)}</div>
+                        <div class="phase-detail">${escapeHtml(phase.detail || '')}</div>
+                    </div>
+                    <div class="phase-state">${statusLabel(phase.status)} - ${Number(phase.progress || 0)}%</div>
+                </div>
+            `).join('');
+        }
+    }
+
     async function loadLiveResults(scanId) {
         try {
             const response = await fetch(`/api/scan/${scanId}/results/live`);
             const data = await response.json();
+            updateScanProgressView(data);
 
             // Actualizar los mensajes de progreso con los resultados
             const messagesDiv = document.getElementById('progressMessages');
@@ -1383,37 +1645,11 @@
 
                     messagesDiv.innerHTML = resultsHtml;
                 }
+            } else if (messagesDiv && !lastResultsHash) {
+                messagesDiv.innerHTML = '<div style="color:#94a3b8;">Todavia no hay hallazgos. El detalle por fases se actualiza arriba.</div>';
             }
-
-            // Actualizar estado del escaneo
-            const statusDiv = document.getElementById('scanStatus');
-            if (statusDiv) {
-                if (data.status === 'running') {
-                    // Mostrar que está en ejecución
-                    const stats = data.stats || { hosts: 0, ports: 0 };
-                    statusDiv.innerHTML = `<div style="padding: 0.75rem; background: #1e293b; border: 1px solid #334155; border-radius: 4px; color: #60a5fa;">
-                        <strong>🔄 Escaneo en ejecución...</strong><br>
-                        <div style="margin-top: 0.5rem; font-size: 0.9em; color: #94a3b8;">
-                            Hosts descubiertos: <strong>${stats.hosts || 0}</strong> | Puertos encontrados: <strong>${stats.ports || 0}</strong>
-                        </div>
-                    </div>`;
-                } else if (data.status === 'failed') {
-                    // Solo mostrar error si realmente falló
-                    if (data.error_message) {
-                        statusDiv.innerHTML = `<div class="error"><strong>Escaneo falló</strong><br><pre style="white-space: pre-wrap; font-size: 0.9em; margin-top: 0.5rem; padding: 0.5rem; background: #1e293b; color: #e2e8f0; border-radius: 4px;">${data.error_message}</pre></div>`;
-                    }
-                    stopProgressTracking();
-                } else if (data.status === 'completed') {
-                    // Escaneo completado
-                    const stats = data.stats || { hosts: 0, ports: 0 };
-                    statusDiv.innerHTML = `<div style="padding: 0.75rem; background: #064e3b; border: 1px solid #059669; border-radius: 4px; color: #d1fae5;">
-                        <strong>✅ Escaneo completado</strong><br>
-                        <div style="margin-top: 0.5rem; font-size: 0.9em;">
-                            Hosts descubiertos: <strong>${stats.hosts || 0}</strong> | Puertos encontrados: <strong>${stats.ports || 0}</strong>
-                        </div>
-                    </div>`;
-                    stopProgressTracking();
-                }
+            if (isTerminalScanStatus(data.status)) {
+                stopProgressTracking();
             }
 
             return data;
@@ -1424,117 +1660,73 @@
     }
 
     function startProgressTracking(scanId) {
+        if (resultsPollingInterval) {
+            clearInterval(resultsPollingInterval);
+            resultsPollingInterval = null;
+        }
+        if (wsConnection) {
+            wsConnection.close();
+            wsConnection = null;
+        }
+
         currentScanId = scanId;
         lastResultsHash = null;
         const messagesDiv = document.getElementById('progressMessages');
-        const statusDiv = document.getElementById('scanStatus');
-        const cancelBtn = document.getElementById('cancelScanBtn');
-        const progressBar = document.getElementById('progressBarFill');
+        if (messagesDiv) {
+            messagesDiv.innerHTML = '<div style="color:#94a3b8;">Todavia no hay hallazgos. El detalle por fases se actualiza arriba.</div>';
+        }
 
-        // Conectar WebSocket para estadísticas
-        const ws = new WebSocket(`ws://${window.location.host.replace('http://', 'ws://').replace('https://', 'wss://')}/ws/scan/${scanId}`);
+        connectScanWebSocket(scanId);
+
+        // Iniciar polling de resultados en tiempo real. Este es el canal fiable;
+        // el WebSocket solo acelera refrescos si esta disponible.
+        loadLiveResults(scanId);
+        resultsPollingInterval = setInterval(async () => {
+            const data = await loadLiveResults(scanId);
+            if (data && isTerminalScanStatus(data.status)) {
+                stopProgressTracking();
+            }
+        }, 2000);
+    }
+
+    function connectScanWebSocket(scanId, attempt = 1) {
+        if (currentScanId !== scanId) return;
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/scan/${scanId}`);
+        let opened = false;
         wsConnection = ws;
 
         ws.onopen = function () {
-            // No mostrar mensaje, el estado se muestra en scanStatus
-            messagesDiv.innerHTML = '';
+            opened = true;
         };
 
         ws.onmessage = function (event) {
             const data = JSON.parse(event.data);
 
             if (data.type === 'progress') {
-                // No mostrar mensaje antiguo, solo actualizar barra de progreso y cargar resultados
-                // El estado se muestra en scanStatus (más abajo)
-
-                // Cargar resultados para actualizar la lista
                 loadLiveResults(scanId);
-
-                // Mejorar barra de progreso basada en hosts/ports descubiertos
-                if (data.status === 'completed') {
-                    progressBar.style.width = '100%';
-                    progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
-                } else if (data.hosts_discovered > 0 || data.ports_found > 0) {
-                    // Progreso incremental: 20% base + hasta 80% basado en actividad
-                    const baseProgress = 20;
-                    const activityProgress = Math.min(80, (data.hosts_discovered * 5) + (data.ports_found * 2));
-                    const totalProgress = baseProgress + activityProgress;
-                    progressBar.style.width = `${totalProgress}%`;
-                    progressBar.style.background = 'linear-gradient(90deg, #3b82f6, #2563eb)';
-                } else {
-                    progressBar.style.width = '10%';
-                    progressBar.style.background = 'linear-gradient(90deg, #6366f1, #4f46e5)';
-                }
-
-            } else if (data.type === 'completed') {
-                progressBar.style.width = '100%';
-                progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
-                messagesDiv.innerHTML += `<div class="success">✅ ${data.message}</div>`;
-                statusDiv.innerHTML = `<div class="success"><strong>Escaneo completado exitosamente</strong><br>Hosts: ${data.hosts_discovered} | Puertos: ${data.ports_found}</div>`;
-                stopProgressTracking();
-            } else if (data.type === 'failed') {
-                progressBar.style.width = '0%';
-                progressBar.style.background = '#ef4444';
-                messagesDiv.innerHTML += `<div class="error">❌ ${data.message}</div>`;
-                const errorMsg = data.error_message || 'Error desconocido';
-                statusDiv.innerHTML = `
-                    <div class="error">
-                        <strong>Escaneo falló</strong>
-                        <details style="margin-top: 0.5rem;">
-                            <summary style="cursor: pointer; color: #fee2e2; font-size: 0.9em;">Ver detalles del error</summary>
-                            <pre style="white-space: pre-wrap; font-size: 0.85em; margin-top: 0.5rem; padding: 0.5rem; background: #1e293b; color: #e2e8f0; border-radius: 4px; overflow-x: auto; max-height: 300px; overflow-y: auto;">${errorMsg}</pre>
-                        </details>
-                    </div>
-                `;
+            } else if (data.type === 'completed' || data.type === 'failed') {
+                loadLiveResults(scanId);
                 stopProgressTracking();
             } else if (data.type === 'error') {
-                messagesDiv.innerHTML += `<div class="error">⚠️ ${data.message}</div>`;
+                console.warn('WebSocket scan progress:', data.message);
             }
         };
 
         ws.onerror = function (error) {
-            console.error('WebSocket error:', error);
-            messagesDiv.innerHTML += '<div class="error">❌ Error de conexión WebSocket</div>';
+            console.warn(`WebSocket de seguimiento no disponible en el intento ${attempt}; se mantiene polling HTTP.`, error);
         };
 
         ws.onclose = function () {
-            console.log('WebSocket cerrado');
-            wsConnection = null;
-        };
-
-        // Iniciar polling de resultados en tiempo real
-        loadLiveResults(scanId); // Cargar inmediatamente
-        resultsPollingInterval = setInterval(async () => {
-            const data = await loadLiveResults(scanId);
-            if (data) {
-                // Actualizar barra de progreso basada en estado
-                const progressBar = document.getElementById('progressBarFill');
-                if (progressBar) {
-                    if (data.status === 'running') {
-                        // Mantener progreso animado mientras está ejecutándose
-                        const stats = data.stats || { hosts: 0, ports: 0 };
-                        const baseProgress = 20;
-                        const activityProgress = Math.min(80, (stats.hosts * 5) + (stats.ports * 2));
-                        const totalProgress = baseProgress + activityProgress;
-                        progressBar.style.width = `${totalProgress}%`;
-                        progressBar.style.background = 'linear-gradient(90deg, #3b82f6, #2563eb)';
-                    } else if (data.status === 'completed') {
-                        progressBar.style.width = '100%';
-                        progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
-                    } else if (data.status === 'failed') {
-                        progressBar.style.width = '100%';
-                        progressBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
-                    }
-                }
-
-                // Solo parar el polling si el escaneo terminó (completed o failed)
-                if (data.status !== 'running') {
-                    stopProgressTracking();
-                }
+            if (wsConnection === ws) {
+                wsConnection = null;
             }
-        }, 2000); // Poll cada 2 segundos
+            if (!opened && currentScanId === scanId && attempt < 3) {
+                setTimeout(() => connectScanWebSocket(scanId, attempt + 1), 700 * attempt);
+            }
+        };
     }
-
     function stopProgressTracking() {
         if (resultsPollingInterval) {
             clearInterval(resultsPollingInterval);
@@ -1551,6 +1743,16 @@
         const stopBtn = document.getElementById('stopScanBtn');
         stopBtn.style.display = 'none';
         stopBtn.classList.add('hidden');
+
+        const startBtn = document.getElementById('startScanBtn');
+        const btnText = document.getElementById('btnText');
+        const btnSpinner = document.getElementById('btnSpinner');
+        if (startBtn) startBtn.disabled = false;
+        if (btnText) btnText.textContent = 'Iniciar Escaneo';
+        if (btnSpinner) {
+            btnSpinner.style.display = 'none';
+            btnSpinner.classList.add('hidden');
+        }
 
         currentScanId = null;
         lastResultsHash = null;

@@ -2,7 +2,7 @@ import csv
 import io
 import json
 import sqlite3
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from fastapi.responses import PlainTextResponse, StreamingResponse
@@ -218,16 +218,53 @@ async def get_organizations():
 class CreateOrgRequest(BaseModel):
     name: str
     description: str = ""
+    create_pwndoc_audit: bool = True
+    pwndoc_audit_name: Optional[str] = None
+    pwndoc_audit_type: Optional[str] = None
+    pwndoc_language: str = "es"
+    pwndoc_scope: List[str] = []
+    pwndoc_date_start: str = ""
+    pwndoc_date_end: str = ""
 
 
 @router.post("/api/organizations")
 async def create_organization(body: CreateOrgRequest):
-    """Crea una organización y su estructura de bitácora."""
+    """Crea una organización, su bitácora y opcionalmente su auditoría PwnDoc."""
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="El nombre no puede estar vacío.")
+    pwndoc_result = None
+    if body.create_pwndoc_audit:
+        try:
+            from arsenal.core.pwndoc_client import PwnDocClient
+            client = PwnDocClient()
+            audit_type = body.pwndoc_audit_type or client.ensure_default_audit_type()
+            audit_name = (body.pwndoc_audit_name or name).strip() or name
+            audit_id = client.ensure_audit(
+                audit_name,
+                language=(body.pwndoc_language or "es"),
+                audit_type=audit_type,
+                scope=[s.strip() for s in (body.pwndoc_scope or []) if s and s.strip()],
+                date_start=body.pwndoc_date_start,
+                date_end=body.pwndoc_date_end,
+            )
+            pwndoc_result = {
+                "ok": True,
+                "audit_id": audit_id,
+                "audit_name": audit_name,
+                "audit_type": audit_type,
+            }
+        except Exception as e:
+            raise HTTPException(
+                status_code=502,
+                detail=f"No se pudo crear la auditoría en PwnDoc: {e}"
+            )
+
     storage.create_organization(name, body.description)
-    return {"ok": True, "name": name.upper()}
+    if pwndoc_result:
+        storage.save_pwndoc_audit_id(name.upper(), pwndoc_result["audit_id"])
+
+    return {"ok": True, "name": name.upper(), "pwndoc": pwndoc_result}
 
 @router.get("/api/locations")
 async def get_locations(organization: Optional[str] = None):

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+{% import "icons.html" as icons %}
 
 <head>
     <meta charset="UTF-8">
@@ -17,12 +18,12 @@
         <div class="nav-container">
             <div class="nav-brand">
                 <a href="/" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
-                    <h1><span>🛡️</span> ArsenalOT</h1>
+                    <h1><span>{{ icons.icon('shield', 'svg-icon brand-icon') }}</span> ArsenalOT</h1>
                 </a>
             </div>
             <ul class="nav-menu">
                 <li><a href="/" class="nav-link">Dashboard</a></li>
-                <li><a href="/pentest" class="nav-link">Organizaciones</a></li>
+                <li><a href="/pentest" class="nav-link">Auditor&iacute;a</a></li>
             </ul>
         </div>
     </nav>
@@ -32,7 +33,7 @@
     </main>
 
     <footer class="footer">
-        <p>&copy; 2025 ArsenalOT - Sistema de Gestión de Escaneos de Red</p>
+        <p>&copy; 2025 ArsenalOT - Sistema de gesti&oacute;n de escaneos de red</p>
     </footer>
 
     <script src="/static/js/main.js"></script>

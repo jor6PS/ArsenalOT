@@ -957,6 +957,7 @@ function bindEvents() {
     const querySel        = document.getElementById('query-select');
     const visOriginSel    = document.getElementById('visibility-origin-select');
     const attackTargetIn  = document.getElementById('attack-target-input');
+    const cypherEditor    = document.getElementById('cypher-editor');
     const extraHint       = document.getElementById('query-extra-hint');
 
     function getActivePreset() {
@@ -966,7 +967,8 @@ function bindEvents() {
 
     function refreshRunButtonState() {
         const preset = getActivePreset();
-        const baseEnabled = !!preset && !!selectedOrg;
+        const hasCypher = !!cypherEditor.value.trim();
+        const baseEnabled = hasCypher && !!selectedOrg;
         let extraOk = true;
         if (preset && preset.needsExtra === 'visibility-origin') {
             extraOk = !!visOriginSel.value;
@@ -994,26 +996,30 @@ function bindEvents() {
     }
 
     querySel.addEventListener('change', () => {
-        setExtraVisibility(getActivePreset());
+        const preset = getActivePreset();
+        cypherEditor.value = preset ? preset.query : '';
+        setExtraVisibility(preset);
         refreshRunButtonState();
     });
 
     visOriginSel.addEventListener('change',   refreshRunButtonState);
     attackTargetIn.addEventListener('input',  refreshRunButtonState);
+    cypherEditor.addEventListener('input',    refreshRunButtonState);
 
     document.getElementById('run-query-btn').addEventListener('click', () => {
         const preset = getActivePreset();
-        if (!preset) return;
+        const cypher = cypherEditor.value.trim();
+        if (!cypher) return;
         const params = { org: selectedOrg || '' };
-        if (preset.needsExtra === 'visibility-origin') {
+        if (preset && preset.needsExtra === 'visibility-origin') {
             if (!visOriginSel.value) return;
             params.location = visOriginSel.value;
-        } else if (preset.needsExtra === 'attack-target') {
+        } else if (preset && preset.needsExtra === 'attack-target') {
             const t = attackTargetIn.value.trim();
             if (!t) return;
             params.target = t;
         }
-        execQuery(preset.query, true, params);
+        execQuery(cypher, true, params);
     });
 
     document.getElementById('fit-btn').addEventListener('click',

@@ -83,6 +83,66 @@ def run_eyewitness_batch(targets, img_folder, source_folder):
     for t in targets:
         results[(t['ip_address'], t['port'])] = {"screenshot": None, "source": None}
 
+    def _target_url(target):
+        ip = target['ip_address']
+        port = int(target['port'])
+        scheme = 'https' if port == 443 else 'http'
+        return f"{scheme}://{ip}:{port}"
+
+    print(f"Ejecutando EyeWitness para {len(targets)} objetivos...")
+    for t in targets:
+        ip = t['ip_address']
+        port = int(t['port'])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            targets_file = os.path.join(tmpdir, "targets.txt")
+            output_dir = os.path.join(tmpdir, "eyewitness_out")
+            with open(targets_file, "w", encoding="utf-8") as f:
+                f.write(_target_url(t) + "\n")
+
+            cmd = [
+                "xvfb-run", "-a", "eyewitness", "--web", "-f", targets_file,
+                "-d", output_dir, "--no-prompt", "--timeout", "15"
+            ]
+
+            try:
+                print(f"EyeWitness objetivo: {ip}:{port}")
+                process = subprocess.run(cmd, capture_output=True, text=True, timeout=75)
+                if process.returncode != 0:
+                    print(f"EyeWitness devolvio codigo {process.returncode} para {ip}:{port}")
+                    if process.stderr:
+                        print(f"EyeWitness error: {process.stderr[:500]}")
+
+                output_path = Path(output_dir)
+                screenshots = sorted(
+                    [p for p in output_path.rglob("*.png") if p.is_file()],
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True,
+                )
+                if screenshots:
+                    dest_img = os.path.join(img_folder, f"{ip}_{port}.png")
+                    shutil.copy2(screenshots[0], dest_img)
+                    with open(dest_img, "rb") as f:
+                        results[(ip, port)]["screenshot"] = base64.b64encode(f.read()).decode("utf-8")
+                    print(f"Capturada imagen para {ip}:{port} desde {screenshots[0].name}")
+
+                sources = sorted(
+                    [p for p in output_path.rglob("*.txt") if p.is_file() and "targets" not in p.name.lower()],
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True,
+                )
+                if sources:
+                    dest_src = os.path.join(source_folder, f"{ip}_{port}.txt")
+                    shutil.copy2(sources[0], dest_src)
+                    with open(dest_src, "r", encoding="utf-8", errors="ignore") as f:
+                        results[(ip, port)]["source"] = f.read()
+                    print(f"Capturado source para {ip}:{port} desde {sources[0].name}")
+            except subprocess.TimeoutExpired:
+                print(f"EyeWitness excedio el tiempo limite para {ip}:{port}.")
+            except Exception as e:
+                print(f"Error ejecutando EyeWitness para {ip}:{port}: {e}")
+
+    return results
+
     with tempfile.TemporaryDirectory() as tmpdir:
         targets_file = os.path.join(tmpdir, "targets.txt")
         with open(targets_file, "w") as f:

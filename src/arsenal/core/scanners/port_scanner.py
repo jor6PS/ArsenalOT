@@ -218,8 +218,10 @@ class PortScanner:
         cmd.append(speed_map.get(speed, '-T3'))
         
         if speed == 'icmp':
-            # Modo descubrimiento ICMP (Ping Scan)
-            cmd.append('-sn')
+            # Modo descubrimiento ICMP real. Nmap -sn por defecto mezcla
+            # probes TCP/ARP y en algunos entornos puede marcar todo un /24
+            # como up por respuestas reset. Esta fase debe ser ICMP.
+            cmd.extend(['-sn', '-PE', '--disable-arp-ping'])
         else:
             # Técnica de escaneo: TCP connect scan (no requiere privilegios root)
             cmd.append('-sT')

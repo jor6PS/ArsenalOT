@@ -1,41 +1,108 @@
 {% extends "base.html" %}
+{% import "icons.html" as icons %}
 
-{% block title %}ArsenalOT - Dashboard Principal{% endblock %}
+{% block title %}ArsenalOT - Panel Principal{% endblock %}
+
+{% block extra_css %}
+<style>
+    .home-shell { display: grid; gap: 1.5rem; }
+    .home-hero {
+        display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+        gap: 1.25rem; align-items: stretch; padding: 1.5rem;
+        border: 1px solid rgba(148, 163, 184, 0.18); background: rgba(15, 23, 42, 0.76); border-radius: 8px;
+    }
+    .home-kicker { color: #4ECDC4; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; margin-bottom: .55rem; }
+    .home-title { margin: 0; color: var(--text-primary); font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.03; }
+    .home-subtitle { margin: .85rem 0 0; max-width: 760px; color: var(--text-secondary); font-size: 1rem; line-height: 1.65; }
+    .home-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.25rem; }
+    .home-action { display: inline-flex; align-items: center; gap: .5rem; padding: .7rem 1rem; border-radius: 7px; border: 1px solid rgba(78,205,196,.32); background: rgba(78,205,196,.12); color: #d9fffb; text-decoration: none; font-weight: 800; }
+    .home-action.secondary { border-color: rgba(129,140,248,.35); background: rgba(99,102,241,.14); color: #e0e7ff; }
+    .home-status { display: grid; gap: .65rem; align-content: center; border: 1px solid rgba(148,163,184,.16); background: rgba(2,6,23,.32); border-radius: 8px; padding: 1rem; }
+    .status-row { display: grid; grid-template-columns: auto 1fr auto; gap: .65rem; align-items: center; color: var(--text-secondary); font-size: .88rem; }
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 10px rgba(34,197,94,.45); }
+    .status-label { color: var(--text-primary); font-weight: 700; }
+    .home-section-title { margin: 0; color: var(--text-primary); font-size: 1.25rem; }
+    .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+    .home-card { display: grid; gap: .85rem; min-height: 210px; padding: 1.15rem; border: 1px solid rgba(148,163,184,.18); border-radius: 8px; background: rgba(15,23,42,.72); text-decoration: none; color: inherit; transition: transform .16s ease, border-color .16s ease, background .16s ease; }
+    .home-card:hover { transform: translateY(-2px); border-color: rgba(78,205,196,.42); background: rgba(20,31,52,.9); }
+    .card-top { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+    .card-icon { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 8px; background: rgba(78,205,196,.13); border: 1px solid rgba(78,205,196,.28); color: #8ef3ec; }
+    .card-icon .svg-icon { width: 1.25rem; height: 1.25rem; }
+    .card-tag { color: #94a3b8; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .home-card h3 { margin: 0; color: var(--text-primary); font-size: 1.1rem; }
+    .home-card p { margin: 0; color: var(--text-secondary); line-height: 1.55; font-size: .92rem; }
+    .card-link { margin-top: auto; color: #4ECDC4; font-weight: 800; font-size: .9rem; }
+    .home-card.report .card-icon { background: rgba(129,140,248,.16); border-color: rgba(129,140,248,.34); color: #c7d2fe; }
+    .home-card.data .card-icon { background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.28); color: #bbf7d0; }
+    .home-card.graph .card-icon { background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.3); color: #fde68a; }
+    .home-note { padding: 1rem; border-radius: 8px; border: 1px solid rgba(148,163,184,.16); background: rgba(2,6,23,.28); color: var(--text-secondary); line-height: 1.55; }
+    @media (max-width: 850px) { .home-hero { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <h1 class="page-title">🛡️ ArsenalOT</h1>
-    <p style="color: var(--text-secondary); margin-top: 0.5rem;">Plataforma integral de ciberseguridad y pentesting.</p>
-</div>
-
-<div class="glass-card" style="padding: 2rem; margin-top: 2rem;">
-    <h2 style="margin-top: 0; margin-bottom: 2rem; color: var(--accent-blue); font-size: 1.5rem;">Módulos Disponibles
-    </h2>
-
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
-
-        <!-- Pentest Module -->
-        <a href="/pentest" style="text-decoration: none; color: inherit;">
-            <div class="stat-card"
-                style="cursor: pointer; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2.5rem; transition: transform 0.2s, box-shadow 0.2s;">
-                <div class="stat-icon"
-                    style="font-size: 3rem; margin-bottom: 1rem; background: rgba(37, 99, 235, 0.2);">🎯</div>
-                <h3 style="margin: 0 0 1rem 0; font-size: 1.4rem;">Pentest</h3>
-                <p style="color: var(--text-secondary); text-align: center; margin: 0;">Ejecuta escaneos, analiza
-                    resultados y gestiona fases de pentesting por organización.</p>
+<div class="home-shell">
+    <section class="home-hero">
+        <div>
+            <div class="home-kicker">Panel principal</div>
+            <h1 class="home-title">ArsenalOT</h1>
+            <p class="home-subtitle">Accede desde un &uacute;nico sitio al flujo de auditor&iacute;a, la generaci&oacute;n de informes y las herramientas de an&aacute;lisis asociadas al entorno local.</p>
+            <div class="home-actions">
+                <a class="home-action" href="/pentest">Abrir auditor&iacute;a</a>
+                <a class="home-action secondary" href="https://localhost:8443" target="_blank" rel="noopener noreferrer">Abrir PwnDoc</a>
             </div>
-        </a>
-
-        <!-- Cheatsheets Module (Coming Soon) -->
-        <div class="stat-card"
-            style="opacity: 0.6; cursor: not-allowed; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2.5rem;">
-            <div class="stat-icon" style="font-size: 3rem; margin-bottom: 1rem; background: rgba(100, 116, 139, 0.2);">
-                📚</div>
-            <h3 style="margin: 0 0 1rem 0; font-size: 1.4rem;">Cheatsheets</h3>
-            <p style="color: var(--text-secondary); text-align: center; margin: 0;">(Próximamente) Guías rápidas y
-                comandos útiles para diferentes escenarios de ataque y defensa.</p>
         </div>
+        <div class="home-status" aria-label="Servicios principales">
+            <div class="status-row"><span class="status-dot"></span><span><span class="status-label">ArsenalOT</span> interfaz web</span><span>8000</span></div>
+            <div class="status-row"><span class="status-dot"></span><span><span class="status-label">PwnDoc</span> informes</span><span>8443</span></div>
+            <div class="status-row"><span class="status-dot"></span><span><span class="status-label">Neo4j</span> base de grafos</span><span>7474</span></div>
+            <div class="status-row"><span class="status-dot"></span><span><span class="status-label">Graph Viewer</span> visualizaci&oacute;n</span><span>7777</span></div>
+        </div>
+    </section>
 
-    </div>
+    <h2 class="home-section-title">&Aacute;reas de trabajo</h2>
+    <section class="home-grid" aria-label="Areas principales">
+        <a class="home-card" href="/pentest">
+            <div class="card-top"><span class="card-icon">{{ icons.icon('audit') }}</span><span class="card-tag">Operaci&oacute;n</span></div>
+            <h3>Auditor&iacute;a</h3>
+            <p>Gestiona clientes, organizaciones y tipos de auditor&iacute;a. Por ahora incluye pentest de infraestructura OT/IT y deja preparada la auditor&iacute;a de dispositivo.</p>
+            <span class="card-link">Entrar a auditor&iacute;as</span>
+        </a>
+        <a class="home-card report" href="https://localhost:8443" target="_blank" rel="noopener noreferrer">
+            <div class="card-top"><span class="card-icon">{{ icons.icon('report') }}</span><span class="card-tag">Informe</span></div>
+            <h3>PwnDoc</h3>
+            <p>Acceso directo a la plataforma de reporting para preparar entregables, findings, evidencias y versiones del informe.</p>
+            <span class="card-link">Abrir PwnDoc</span>
+        </a>
+    </section>
+
+    <h2 class="home-section-title">Aplicaciones del entorno</h2>
+    <section class="home-grid" aria-label="Aplicaciones auxiliares">
+        <a class="home-card data" href="http://localhost:7474" target="_blank" rel="noopener noreferrer">
+            <div class="card-top"><span class="card-icon">{{ icons.icon('database') }}</span><span class="card-tag">Datos</span></div>
+            <h3>Neo4j Browser</h3>
+            <p>Consulta directamente la base de grafos, valida nodos y relaciones, y ejecuta Cypher contra los datos exportados.</p>
+            <span class="card-link">Abrir Neo4j</span>
+        </a>
+        <a class="home-card graph" href="http://localhost:7777" target="_blank" rel="noopener noreferrer">
+            <div class="card-top"><span class="card-icon">{{ icons.icon('graph') }}</span><span class="card-tag">Grafo</span></div>
+            <h3>Graph Viewer</h3>
+            <p>Visualiza el mapa de activos y relaciones con consultas predeterminadas editables para explorar caminos y visibilidad.</p>
+            <span class="card-link">Abrir Graph Viewer</span>
+        </a>
+        <a class="home-card" href="/pentest">
+            <div class="card-top"><span class="card-icon">{{ icons.icon('building') }}</span><span class="card-tag">Gesti&oacute;n</span></div>
+            <h3>Organizaciones</h3>
+            <p>Crea o abre el espacio de una organizaci&oacute;n para elegir entre pentest de infraestructura y auditor&iacute;a de dispositivo.</p>
+            <span class="card-link">Ver auditor&iacute;as</span>
+        </a>
+        <a class="home-card report" href="/docs" target="_blank" rel="noopener noreferrer">
+            <div class="card-top"><span class="card-icon">{{ icons.icon('api') }}</span><span class="card-tag">T&eacute;cnico</span></div>
+            <h3>API local</h3>
+            <p>Documentaci&oacute;n interactiva de endpoints para comprobar integraciones, exportaciones, escaneos y automatizaciones internas.</p>
+            <span class="card-link">Abrir API docs</span>
+        </a>
+    </section>
+    <div class="home-note">Los accesos externos se abren en una pesta&ntilde;a nueva. Si alguno no responde, revisa que el entorno completo de Docker Compose est&eacute; levantado.</div>
 </div>
 {% endblock %}

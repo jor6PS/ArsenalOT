@@ -25,6 +25,7 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; overflow: hidden; }
+.hidden { display: none !important; }
 
 body {
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -194,6 +195,25 @@ body {
 }
 .query-select:focus  { border-color: var(--accent); }
 .query-select option { background: var(--bg); }
+
+.cypher-editor {
+    width: 100%;
+    min-height: 180px;
+    max-height: 38vh;
+    resize: vertical;
+    background: #070b14;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    color: var(--text);
+    padding: .55rem .65rem;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: .72rem;
+    line-height: 1.45;
+    outline: none;
+    margin-bottom: .45rem;
+}
+.cypher-editor:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+.cypher-editor::placeholder { color: var(--text-dim); }
 
 .btn-run {
     width: 100%;

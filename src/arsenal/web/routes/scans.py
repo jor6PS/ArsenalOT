@@ -34,16 +34,115 @@ from arsenal.scripts.check_env import check_dependencies
 
 # helper definition (was top of app.py)
 import socket
-import fcntl
 import struct
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
 def get_interface_ip(ifname: str) -> str:
+    if not ifname:
+        return None
+
     try:
+        if fcntl is None:
+            return socket.gethostbyname(socket.gethostname())
+
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         return socket.inet_ntoa(fcntl.ioctl(
             s.fileno(), 0x8915, struct.pack('256s', ifname[:15].encode('utf-8'))
         )[20:24])
     except Exception:
         return None
+
+def build_scan_phases(config: ScanConfig):
+    """Build the phase list used by the runner and the live UI."""
+    phases = []
+
+    def add(key, label, detail=None):
+        phases.append({
+            "key": key,
+            "label": label,
+            "detail": detail,
+            "sort_order": len(phases),
+        })
+
+    if config.scan_mode == "passive":
+        add("passive_capture", "Captura pasiva", "Esperando trafico en la interfaz seleccionada")
+        add("pcap_processing", "Procesamiento PCAP", "Analizando conversaciones detectadas")
+        return phases
+
+    if config.host_discovery:
+        add("host_discovery", "Fase 1 - Descubrimiento ARP", "Buscando hosts activos")
+    if config.nmap_icmp:
+        add("ping_discovery", "Fase 2 - Ping Scan", "Confirmando hosts con Nmap -sn")
+    if config.nmap:
+        add("port_scan", "Fase 3 - Puertos y servicios", "Escaneando puertos y servicios")
+    if (config.screenshots or config.source_code) and not config.nmap:
+        add("specific_capture", "Capturas especificas", "Probando servicios web indicados")
+    if hasattr(config, "ioxid") and config.ioxid:
+        add("ioxid", "IOXIDResolver", "Buscando interfaces DCOM")
+    if (config.screenshots or config.source_code) and config.scan_mode != "specific" and config.nmap:
+        add("web_enrichment", "Evidencias web", "Capturas y codigo fuente de servicios web")
+
+    if not phases:
+        add("scan", "Escaneo", "Ejecutando tareas seleccionadas")
+    return phases
+
+def set_phase(scan_id: int, phase_key: str, status: str = None, progress: int = None,
+              detail: str = None, started: bool = False, completed: bool = False):
+    try:
+        storage.update_scan_phase(
+            scan_id,
+            phase_key,
+            status=status,
+            progress=progress,
+            detail=detail,
+            mark_started=started,
+            mark_completed=completed,
+        )
+    except Exception as e:
+        print(f"[Scan {scan_id}] Error actualizando fase {phase_key}: {e}")
+
+def parse_specific_web_targets(target_range: str):
+    """Parse a user supplied list of IP, IP:port or URL targets for EyeWitness."""
+    targets = []
+    seen = set()
+    raw_items = [p.strip() for p in (target_range or "").replace("\n", ",").split(",")]
+    for raw in raw_items:
+        if not raw:
+            continue
+        item = raw
+        for prefix in ("http://", "https://"):
+            if item.lower().startswith(prefix):
+                item = item[len(prefix):]
+                break
+        item = item.strip().strip("/")
+        if "/" in item:
+            continue
+
+        host = item
+        ports = []
+        if ":" in item:
+            host, port_text = item.rsplit(":", 1)
+            if port_text.isdigit():
+                ports = [int(port_text)]
+        if not ports:
+            ports = [80, 443, 8000, 8080, 8081, 8443, 8888, 9090, 10000]
+
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            continue
+
+        for port in ports:
+            key = (host, port)
+            if key in seen:
+                continue
+            seen.add(key)
+            targets.append({"ip_address": host, "port": port, "protocol": "tcp"})
+    return targets
 
 @router.get("/api/scans/list")
 async def get_scans_list(organization: Optional[str] = None, location: Optional[str] = None):
@@ -228,6 +327,12 @@ async def get_scans(
         
         # Verificar si está realmente en ejecución
         if scan_dict['status'] == 'running':
+            if scan_id_str in running_scans:
+                thread = running_scans[scan_id_str]
+                if thread and thread.is_alive():
+                    scan_dict['is_really_running'] = True
+                    result.append(scan_dict)
+                    continue
             if scan_id_str in running_processes:
                 process = running_processes[scan_id_str]
                 if process.poll() is None:  # Proceso sigue vivo
@@ -271,6 +376,12 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
             conn.close()
         except Exception as e:
             print(f"[Scan {scan_id}] Error actualizando estado inicial: {e}")
+
+        phase_errors = []
+        try:
+            storage.initialize_scan_phases(scan_id, build_scan_phases(config))
+        except Exception as e:
+            print(f"[Scan {scan_id}] Error inicializando fases: {e}")
         
         # Obtener directorio del escaneo
         scan_dir = storage.get_scan_directory(config.organization, config.location, scan_id)
@@ -310,6 +421,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # PASO 1: HOST DISCOVERY (si está habilitado)
         # ============================================================================
         if config.host_discovery:
+            set_phase(scan_id, "host_discovery", status="running", progress=10, detail="Ejecutando descubrimiento ARP", started=True)
             print(f"[Scan {scan_id}] 🔍 Iniciando descubrimiento de hosts...")
             try:
                 # Validar comando personalizado
@@ -355,6 +467,8 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 # Guardar hosts descubiertos en la BD (con MAC y vendor si los aportó arp-scan).
                 # Diferenciamos la técnica para que la bitácora pueda indicar visibilidad
                 # por capa: con MAC → ARP (L2); sin MAC → ICMP/ping (L3).
+                set_phase(scan_id, "host_discovery", status="completed", progress=100, detail=f"{len(discovered_ips)} host(s) descubiertos", completed=True)
+
                 for host_ip, host_meta in discovered_ips.items():
                     if is_scan_cancelled(): return
                     try:
@@ -370,6 +484,8 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         print(f"[Scan {scan_id}] ⚠️  Error guardando host {host_ip}: {e}")
             except Exception as e:
                 print(f"[Scan {scan_id}] ⚠️  Error en host discovery: {e}")
+                phase_errors.append(f"Descubrimiento ARP: {e}")
+                set_phase(scan_id, "host_discovery", status="failed", progress=100, detail=str(e)[:500], completed=True)
                 import traceback
                 traceback.print_exc()
         
@@ -377,6 +493,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # PASO 2: NMAP PING DISCOVERY (FASE 2)
         # ============================================================================
         if config.nmap_icmp:
+            set_phase(scan_id, "ping_discovery", status="running", progress=10, detail="Ejecutando Nmap ping scan", started=True)
             print(f"[Scan {scan_id}] 📍 Iniciando Fase 2: Ping Scan...")
             
             # Determinar targets: usar IPs de la Fase 1 si hay, sino el rango
@@ -424,7 +541,12 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     
                     # Actualizar discovered_ips con nuevos hallazgos
                     new_hosts_count = 0
+                    accepted_ping_reasons = {"echo-reply", "timestamp-reply", "address-mask-reply"}
                     for host_ip, host_data in parsed_data['hosts'].items():
+                        reason = (host_data.get('reason') or '').lower()
+                        if reason and reason not in accepted_ping_reasons:
+                            print(f"[Scan {scan_id}] Ignorando host ping {host_ip}: reason={reason}")
+                            continue
                         if host_ip not in discovered_ips:
                             discovered_ips[host_ip] = {'mac_address': None, 'vendor': None}
                             new_hosts_count += 1
@@ -456,8 +578,11 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                             print(f"[Scan {scan_id}] ⚠️ Error guardando host ping {host_ip}: {e}")
                     
                     print(f"[Scan {scan_id}] ✅ Fase 2 completada. Hallados {new_hosts_count} nuevos hosts. Total: {len(discovered_ips)}")
+                    set_phase(scan_id, "ping_discovery", status="completed", progress=100, detail=f"{new_hosts_count} host(s) nuevos. Total: {len(discovered_ips)}", completed=True)
             except Exception as e:
                 print(f"[Scan {scan_id}] ⚠️ Error en Fase 2 (Ping): {e}")
+                phase_errors.append(f"Ping Scan: {e}")
+                set_phase(scan_id, "ping_discovery", status="failed", progress=100, detail=str(e)[:500], completed=True)
 
         if is_scan_cancelled(): return
 
@@ -465,6 +590,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # PASO 3: NMAP PORT SCAN (FASE 3)
         # ============================================================================
         if config.nmap:
+            set_phase(scan_id, "port_scan", status="running", progress=10, detail="Ejecutando Nmap contra los objetivos", started=True)
             print(f"[Scan {scan_id}] 🔌 Iniciando Fase 3: Escaneo de Puertos...")
             
             # Determinar targets: usar IPs acumuladas (F1+F2) si hay, sino el rango
@@ -522,6 +648,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 total_hosts = len(parsed_data['hosts'])
                 hosts_processed = 0
                 ports_processed = 0
+                set_phase(scan_id, "port_scan", status="running", progress=55, detail=f"Procesando {total_hosts} host(s)")
                 
                 print(f"[Scan {scan_id}] 📊 Procesando {total_hosts} host(s)...")
                 
@@ -544,6 +671,11 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         
                         # Si no hay puertos abiertos, registrar el host de todas formas
                         if not host_data.get('ports'):
+                            reason = (host_data.get('reason') or '').lower()
+                            reliable_host_reasons = {"echo-reply", "timestamp-reply", "address-mask-reply", "arp-response", "user-set"}
+                            if host_ip not in discovered_ips and reason not in reliable_host_reasons:
+                                hosts_processed += 1
+                                continue
                             storage.save_host_result(
                                 scan_id=scan_id,
                                 host_ip=host_ip,
@@ -557,6 +689,9 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                 timestamp=host_data.get('endtime') or host_data.get('starttime')
                             )
                             hosts_processed += 1
+                            if total_hosts:
+                                progress = 55 + int((hosts_processed / total_hosts) * 40)
+                                set_phase(scan_id, "port_scan", status="running", progress=progress, detail=f"{hosts_processed}/{total_hosts} host(s), {ports_processed} puerto(s)")
                             continue
                         
                         # Procesar puertos
@@ -665,6 +800,9 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                         print(f"[Scan {scan_id}] ⚠️  Error obteniendo source code de {host_ip}:{port_num}: {e}")
                         
                         hosts_processed += 1
+                        if total_hosts:
+                            progress = 55 + int((hosts_processed / total_hosts) * 40)
+                            set_phase(scan_id, "port_scan", status="running", progress=progress, detail=f"{hosts_processed}/{total_hosts} host(s), {ports_processed} puerto(s)")
                     except Exception as e:
                         print(f"[Scan {scan_id}] ⚠️  Error procesando host {host_ip}: {e}")
                         import traceback
@@ -672,8 +810,11 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         continue
                 
                 print(f"[Scan {scan_id}] ✅ Procesados {hosts_processed} hosts y {ports_processed} puertos")
+                set_phase(scan_id, "port_scan", status="completed", progress=100, detail=f"{hosts_processed} host(s), {ports_processed} puerto(s)", completed=True)
             except Exception as e:
                 print(f"[Scan {scan_id}] ❌ Error en escaneo Nmap: {e}")
+                phase_errors.append(f"Escaneo de puertos: {e}")
+                set_phase(scan_id, "port_scan", status="failed", progress=100, detail=str(e)[:500], completed=True)
                 import traceback
                 traceback.print_exc()
                 raise
@@ -684,10 +825,12 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE:
             # Si Nmap no se ejecutó, necesitamos procesar los targets manualmente
             if not config.nmap:
+                set_phase(scan_id, "specific_capture", status="running", progress=10, detail="Preparando objetivos web", started=True)
                 print(f"[Scan {scan_id}] 📸 Iniciando capturas específicas sin escaneo Nmap previo...")
                 
                 # Determinar targets
                 targets_to_process = []
+                explicit_web_targets = parse_specific_web_targets(config.target_range)
                 if discovered_ips:
                     targets_to_process = sorted(list(discovered_ips))
                 else:
@@ -708,6 +851,13 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 # 1. Preparar objetivos para EyeWitness
                 unique_eyewitness_targets = []
                 seen_targets = set()
+                if explicit_web_targets:
+                    targets_to_process = []
+                    for target in explicit_web_targets:
+                        key = (target['ip_address'], int(target['port']))
+                        if key not in seen_targets:
+                            unique_eyewitness_targets.append(target)
+                            seen_targets.add(key)
                 
                 for target_str in targets_to_process:
                     try:
@@ -735,6 +885,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         continue
 
                 if unique_eyewitness_targets:
+                    set_phase(scan_id, "specific_capture", status="running", progress=45, detail=f"EyeWitness sobre {len(unique_eyewitness_targets)} objetivo(s)")
                     print(f"[Scan {scan_id}] 🎯 Ejecutando EyeWitness para {len(unique_eyewitness_targets)} objetivos específicos...")
                     try:
                         ew_results = run_eyewitness_batch(unique_eyewitness_targets, str(img_dir), str(source_dir))
@@ -774,6 +925,14 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # ============================================================================
         # PASO 3: IOXIDRESOLVER (si está habilitado)
         # ============================================================================
+        if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE and not config.nmap:
+            try:
+                phase = next((p for p in storage.get_scan_phases(scan_id) if p.get("phase_key") == "specific_capture"), None)
+                if phase and phase.get("status") == "running":
+                    set_phase(scan_id, "specific_capture", status="completed", progress=100, detail="EyeWitness finalizado", completed=True)
+            except Exception:
+                pass
+
         if hasattr(config, 'ioxid') and config.ioxid:
             print(f"[Scan {scan_id}] 📌 Iniciando escaneo IOXIDResolver...")
             try:
@@ -838,6 +997,8 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # PASO 4: ENRIQUECIMIENTO STANDALONE (si está habilitado y no se hizo en Modo Específico)
         # ============================================================================
         if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE and config.scan_mode != "specific":
+            if config.nmap:
+                set_phase(scan_id, "web_enrichment", status="running", progress=15, detail="Buscando servicios web para evidencias", started=True)
             print(f"[Scan {scan_id}] 🌐 Iniciando fase de enriquecimiento standalone...")
             
             enrichment_targets = []
@@ -972,6 +1133,13 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     except:
                         pass
         
+        try:
+            for phase in storage.get_scan_phases(scan_id):
+                if phase.get("status") in ("pending", "running"):
+                    set_phase(scan_id, phase.get("phase_key"), status="completed", progress=100, detail=phase.get("detail") or "Finalizado", completed=True)
+        except Exception:
+            pass
+
         # Contar hosts y puertos finales
         try:
             conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
@@ -987,8 +1155,9 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
             """, (scan_id,)).fetchone()[0]
             
             conn.close()
-            storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count)
-            print(f"[Scan {scan_id}] ✅ ESCANEO COMPLETADO EXITOSAMENTE")
+            error_summary = "; ".join(phase_errors)[:1000] if phase_errors else None
+            storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count, error_message=error_summary)
+            print(f"[Scan {scan_id}] {'ESCANEO COMPLETADO' if not error_summary else 'ESCANEO FINALIZADO CON ERRORES'}")
             print(f"[Scan {scan_id}]    Hosts descubiertos: {hosts_count}")
             print(f"[Scan {scan_id}]    Puertos encontrados: {ports_count}")
         except Exception as e:
@@ -1007,7 +1176,8 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     SELECT COUNT(*) FROM scan_results WHERE scan_id = ? AND port IS NOT NULL
                 """, (scan_id,)).fetchone()[0]
                 conn.close()
-                storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count)
+                error_summary = "; ".join(phase_errors)[:1000] if phase_errors else None
+                storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count, error_message=error_summary)
             except:
                 # Solo si realmente no podemos contar, completar sin parámetros
                 storage.complete_scan(scan_id)
@@ -1059,6 +1229,13 @@ def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
     except Exception as e:
         print(f"[Scan {scan_id}] Error actualizando estado inicial: {e}")
         return
+
+    try:
+        storage.initialize_scan_phases(scan_id, build_scan_phases(config))
+        set_phase(scan_id, "passive_capture", status="running", progress=35, detail="Captura activa; detener para cerrar y procesar", started=True)
+        set_phase(scan_id, "pcap_processing", status="pending", progress=0, detail="A la espera de trafico capturado")
+    except Exception as e:
+        print(f"[Scan {scan_id}] Error inicializando fases pasivas: {e}")
     
     # Obtener directorio del escaneo
     scan_dir = storage.get_scan_directory(organization, location, scan_id)
@@ -1130,6 +1307,8 @@ def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 
                 # Procesar lo que quede en el pcap antes de salir
                 print(f"[Scan {scan_id}] 📦 Procesando datos finales antes de cerrar...")
+                set_phase(scan_id, "passive_capture", status="completed", progress=100, detail="Captura detenida por el usuario", completed=True)
+                set_phase(scan_id, "pcap_processing", status="running", progress=75, detail="Procesando datos finales", started=True)
                 try:
                     process_pcap_file(scan_id, str(pcap_file), organization, location)
                 except:
@@ -1195,6 +1374,8 @@ def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
             hosts_count = stats['hosts_count']
             ports_count = stats['conversations_count'] # Usamos conversaciones como equivalente a "hallazgos"
             
+            set_phase(scan_id, "passive_capture", status="completed", progress=100, detail="Captura cerrada", completed=True)
+            set_phase(scan_id, "pcap_processing", status="completed", progress=100, detail=f"{ports_count} conversacion(es), {hosts_count} host(s)", completed=True)
             storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count)
             print(f"[Scan {scan_id}] ✅ ESCANEO PASIVO COMPLETADO")
             print(f"[Scan {scan_id}]    Hosts únicos involucrados: {hosts_count}")
@@ -1388,7 +1569,7 @@ async def websocket_scan_progress(websocket: WebSocket, scan_id: str):
                             "hosts_discovered": current_hosts,
                             "ports_found": current_ports,
                             "error_message": scan["error_message"],
-                            "message": "Escaneo completado exitosamente" if scan["status"] == "completed" else f"Escaneo falló: {scan['error_message'] or 'Error desconocido'}"
+                            "message": "Escaneo completado" if scan["status"] == "completed" else f"Escaneo falló: {scan['error_message'] or 'Error desconocido'}"
                         }
                         try:
                             await manager.send_progress(scan_id, final_message)

@@ -1637,3 +1637,17 @@ class BitacoraManager:
             'credentials_written': len(deduped),
             'domains': sorted(by_domain.keys()),
         }
+
+    def clear_credentials_note(self, org_name: str) -> Dict:
+        """Remove the managed NetExec credentials block from CREDENCIALES.md."""
+        note_path = self._get_creds_note_path(org_name)
+        content = note_path.read_text(encoding="utf-8")
+        removed = False
+        if self.CREDS_START in content and self.CREDS_END in content:
+            pre, rest = content.split(self.CREDS_START, 1)
+            _, post = rest.split(self.CREDS_END, 1)
+            content = pre.rstrip("\n") + "\n" + post.lstrip("\n")
+            removed = True
+        note_path.write_text(content, encoding="utf-8")
+        _open_permissions(note_path)
+        return {'note': str(note_path), 'removed': removed}

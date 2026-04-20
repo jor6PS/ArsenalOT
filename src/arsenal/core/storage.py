@@ -87,6 +87,23 @@ class ScanStorage:
                 FOREIGN KEY (organization_name) REFERENCES organizations(name) ON DELETE CASCADE
             )
         """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scan_phase_progress (
+                scan_id INTEGER NOT NULL,
+                phase_key TEXT NOT NULL,
+                phase_label TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                progress INTEGER NOT NULL DEFAULT 0,
+                detail TEXT,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                duration_seconds REAL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (scan_id, phase_key),
+                FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
+            )
+        """)
         
         # Tabla de hosts descubiertos
         cursor.execute("""
@@ -340,6 +357,10 @@ class ScanStorage:
             ON scans(started_at)
         """)
         cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_scan_phase_progress_scan
+            ON scan_phase_progress(scan_id, sort_order)
+        """)
+        cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_hosts_ip 
             ON hosts(ip_address)
         """)
@@ -433,6 +454,19 @@ class ScanStorage:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS arsenalot_pwndoc_findings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_name TEXT NOT NULL,
+                audit_id TEXT NOT NULL,
+                finding_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(org_name, finding_id)
+            )
+        """)
+
         # Tabla de credenciales (NetExec / pentest loot)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS credentials (
@@ -458,7 +492,7 @@ class ScanStorage:
         conn.commit()
         conn.close()
     
-    def create_organization(self, name: str, description: str = ""):
+    def create_organization(self, name: str, description: str = "", auto_pwndoc: bool = False):
         """Crea o actualiza una organización y su bitácora Obsidian."""
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -478,13 +512,8 @@ class ScanStorage:
         except Exception:
             pass  # No bloquear el flujo si falla la bitácora
 
-        # Crear auditoría en PwnDoc de forma silenciosa en hilo aparte
-        import threading as _threading
-        _threading.Thread(
-            target=self._ensure_pwndoc_audit,
-            args=(name.upper(),),
-            daemon=True,
-        ).start()
+        if auto_pwndoc:
+            self._ensure_pwndoc_audit(name.upper())
 
     def _ensure_pwndoc_audit(self, org_name: str):
         """Crea la auditoría PwnDoc para la org si no existe (silencioso)."""
@@ -520,6 +549,54 @@ class ScanStorage:
                    VALUES (UPPER(?), ?)
                    ON CONFLICT(org_name) DO UPDATE SET audit_id = excluded.audit_id""",
                 (org_name, audit_id)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def save_arsenalot_pwndoc_finding(self, org_name: str, audit_id: str,
+                                      finding_id: str, title: str):
+        """Marca un finding de PwnDoc como creado desde ArsenalOT."""
+        if not finding_id:
+            return
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        try:
+            conn.execute(
+                """INSERT INTO arsenalot_pwndoc_findings
+                   (org_name, audit_id, finding_id, title, created_at, updated_at)
+                   VALUES (UPPER(?), ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                   ON CONFLICT(org_name, finding_id) DO UPDATE SET
+                       audit_id = excluded.audit_id,
+                       title = excluded.title,
+                       updated_at = CURRENT_TIMESTAMP""",
+                (org_name, audit_id, finding_id, title)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_arsenalot_pwndoc_finding_ids(self, org_name: str) -> set:
+        """Devuelve los IDs de findings de PwnDoc creados desde ArsenalOT."""
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT finding_id FROM arsenalot_pwndoc_findings WHERE UPPER(org_name) = UPPER(?)",
+                (org_name,)
+            ).fetchall()
+            return {str(row["finding_id"]) for row in rows}
+        finally:
+            conn.close()
+
+    def delete_arsenalot_pwndoc_finding(self, org_name: str, finding_id: str):
+        """Elimina el marcador local de un finding creado desde ArsenalOT."""
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        try:
+            conn.execute(
+                "DELETE FROM arsenalot_pwndoc_findings WHERE UPPER(org_name) = UPPER(?) AND finding_id = ?",
+                (org_name, finding_id)
             )
             conn.commit()
         finally:
@@ -576,6 +653,103 @@ class ScanStorage:
             (scan_dir / "pcap").mkdir(exist_ok=True)
         
         return scan_id
+
+    def initialize_scan_phases(self, scan_id: int, phases: List[Dict]):
+        """Create or replace the phase progress rows for a scan."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM scan_phase_progress WHERE scan_id = ?", (scan_id,))
+        for index, phase in enumerate(phases):
+            cursor.execute("""
+                INSERT INTO scan_phase_progress
+                    (scan_id, phase_key, phase_label, status, progress, detail, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                scan_id,
+                phase["key"],
+                phase["label"],
+                phase.get("status", "pending"),
+                int(phase.get("progress", 0)),
+                phase.get("detail"),
+                phase.get("sort_order", index),
+            ))
+        conn.commit()
+        conn.close()
+
+    def update_scan_phase(self, scan_id: int, phase_key: str, status: str = None,
+                          progress: int = None, detail: str = None,
+                          mark_started: bool = False, mark_completed: bool = False):
+        """Update one phase row while preserving existing values."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        row = cursor.execute("""
+            SELECT started_at FROM scan_phase_progress
+            WHERE scan_id = ? AND phase_key = ?
+        """, (scan_id, phase_key)).fetchone()
+
+        if not row:
+            conn.close()
+            return
+
+        updates = []
+        params = []
+        now = datetime.now()
+
+        if status is not None:
+            updates.append("status = ?")
+            params.append(status)
+        if progress is not None:
+            updates.append("progress = ?")
+            params.append(max(0, min(100, int(progress))))
+        if detail is not None:
+            updates.append("detail = ?")
+            params.append(detail)
+        if mark_started and not row["started_at"]:
+            updates.append("started_at = ?")
+            params.append(now)
+        if mark_completed:
+            updates.append("completed_at = ?")
+            params.append(now)
+            started_value = row["started_at"]
+            started_dt = None
+            if started_value:
+                try:
+                    started_dt = datetime.fromisoformat(str(started_value))
+                except ValueError:
+                    started_dt = None
+            if started_dt:
+                updates.append("duration_seconds = ?")
+                params.append((now - started_dt).total_seconds())
+
+        if updates:
+            params.extend([scan_id, phase_key])
+            cursor.execute(f"""
+                UPDATE scan_phase_progress
+                SET {', '.join(updates)}
+                WHERE scan_id = ? AND phase_key = ?
+            """, params)
+            conn.commit()
+
+        conn.close()
+
+    def get_scan_phases(self, scan_id: int) -> List[Dict]:
+        """Return ordered phase progress for a scan."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        rows = cursor.execute("""
+            SELECT phase_key, phase_label, status, progress, detail,
+                   started_at, completed_at, duration_seconds, sort_order
+            FROM scan_phase_progress
+            WHERE scan_id = ?
+            ORDER BY sort_order ASC
+        """, (scan_id,)).fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
     
     def _get_scan_directory(self, organization: str, location: str, 
                            scan_id: int, timestamp: str = None) -> Path:
