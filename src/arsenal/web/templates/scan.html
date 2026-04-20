@@ -1258,6 +1258,12 @@
         const btnSpinner = document.getElementById('btnSpinner');
         const cancelBtn = document.getElementById('cancelScanBtn');
 
+        if (currentScanId) {
+            document.getElementById('scanProgress').classList.remove('hidden');
+            document.getElementById('scanProgress').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
+
         // Deshabilitar botón y mostrar spinner
         startBtn.disabled = true;
         btnText.textContent = 'Iniciando...';
@@ -1358,7 +1364,7 @@
 
             if (result.scan_id) {
                 currentScanId = result.scan_id;
-                startBtn.disabled = true;
+                startBtn.disabled = false;
                 btnText.textContent = 'Escaneo en curso';
                 btnSpinner.style.display = 'none';
                 cancelBtn.style.display = 'inline-block';
@@ -1485,6 +1491,10 @@
             failed: 'Fallido',
             skipped: 'Omitido'
         }[status] || status || 'Pendiente';
+    }
+
+    function isTerminalScanStatus(status) {
+        return ['completed', 'failed', 'cancelled', 'canceled'].includes(String(status || '').toLowerCase());
     }
 
     function updateScanProgressView(data) {
@@ -1638,7 +1648,7 @@
             } else if (messagesDiv && !lastResultsHash) {
                 messagesDiv.innerHTML = '<div style="color:#94a3b8;">Todavia no hay hallazgos. El detalle por fases se actualiza arriba.</div>';
             }
-            if (data.status !== 'running') {
+            if (isTerminalScanStatus(data.status)) {
                 stopProgressTracking();
             }
 
@@ -1673,7 +1683,7 @@
         loadLiveResults(scanId);
         resultsPollingInterval = setInterval(async () => {
             const data = await loadLiveResults(scanId);
-            if (data && data.status !== 'running') {
+            if (data && isTerminalScanStatus(data.status)) {
                 stopProgressTracking();
             }
         }, 2000);
