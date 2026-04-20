@@ -458,7 +458,7 @@ async function saveAuditConfig() {
     const r = await fetch(`/api/pwndoc/${encodeURIComponent(ORG)}/ensure-audit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ language, audit_type: auditType }),
+      body: JSON.stringify({ audit_name: name, language, audit_type: auditType }),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || r.statusText);

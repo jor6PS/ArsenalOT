@@ -479,7 +479,7 @@ class ScanStorage:
         conn.commit()
         conn.close()
     
-    def create_organization(self, name: str, description: str = ""):
+    def create_organization(self, name: str, description: str = "", auto_pwndoc: bool = False):
         """Crea o actualiza una organización y su bitácora Obsidian."""
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -499,13 +499,8 @@ class ScanStorage:
         except Exception:
             pass  # No bloquear el flujo si falla la bitácora
 
-        # Crear auditoría en PwnDoc de forma silenciosa en hilo aparte
-        import threading as _threading
-        _threading.Thread(
-            target=self._ensure_pwndoc_audit,
-            args=(name.upper(),),
-            daemon=True,
-        ).start()
+        if auto_pwndoc:
+            self._ensure_pwndoc_audit(name.upper())
 
     def _ensure_pwndoc_audit(self, org_name: str):
         """Crea la auditoría PwnDoc para la org si no existe (silencioso)."""

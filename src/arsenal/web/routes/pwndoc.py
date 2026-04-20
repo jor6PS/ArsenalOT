@@ -42,8 +42,12 @@ class AddFindingRequest(BaseModel):
 
 
 class EnsureAuditRequest(BaseModel):
+    audit_name: Optional[str] = None
     language: str = "es"
     audit_type: Optional[str] = None
+    scope: list[str] = []
+    date_start: str = ""
+    date_end: str = ""
 
 
 # ── Endpoints generales ────────────────────────────────────────
@@ -52,7 +56,11 @@ class EnsureAuditRequest(BaseModel):
 async def list_audit_types():
     """Lista los tipos de auditoría disponibles en PwnDoc."""
     try:
-        types = _client().list_audit_types()
+        client = _client()
+        types = client.list_audit_types()
+        if not types:
+            client.ensure_default_audit_type()
+            types = client.list_audit_types()
         return {"ok": True, "audit_types": [{"name": t["name"]} for t in types]}
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error PwnDoc: {e}")
@@ -124,12 +132,53 @@ async def ensure_audit(org_name: str, body: EnsureAuditRequest = None):
         body = EnsureAuditRequest()
     try:
         c = _client()
-        audit_id = c.ensure_audit(org_name, language=body.language,
-                                  audit_type=body.audit_type)
+        audit_name = (body.audit_name or org_name).strip() or org_name
+        audit_type = body.audit_type or c.ensure_default_audit_type()
+        audit_id = c.ensure_audit(
+            audit_name,
+            language=body.language,
+            audit_type=audit_type,
+            scope=[s.strip() for s in (body.scope or []) if s and s.strip()],
+            date_start=body.date_start,
+            date_end=body.date_end,
+        )
         storage.save_pwndoc_audit_id(org_name, audit_id)
-        return {"ok": True, "audit_id": audit_id}
+        return {
+            "ok": True,
+            "audit_id": audit_id,
+            "audit_name": audit_name,
+            "audit_type": audit_type,
+        }
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error PwnDoc: {e}")
+
+
+@router.get("/{org_name}/audit")
+async def get_org_audit(org_name: str):
+    """Devuelve el enlace ArsenalOT -> PwnDoc para una organización."""
+    audit_id = storage.get_pwndoc_audit_id(org_name)
+    if not audit_id:
+        return {"ok": True, "linked": False, "audit_id": None, "audit": None}
+    try:
+        audits = _client().list_audits()
+        audit = next(
+            (a for a in audits if str(a.get("_id") or a.get("id")) == str(audit_id)),
+            None,
+        )
+        return {
+            "ok": True,
+            "linked": True,
+            "audit_id": audit_id,
+            "audit": audit,
+        }
+    except Exception as e:
+        return {
+            "ok": True,
+            "linked": True,
+            "audit_id": audit_id,
+            "audit": None,
+            "warning": str(e),
+        }
 
 
 @router.get("/{org_name}/findings")
@@ -156,8 +205,9 @@ async def add_finding(org_name: str, body: AddFindingRequest):
         c = _client()
         audit_id = storage.get_pwndoc_audit_id(org_name)
         if not audit_id:
+            audit_type = body.audit_type or c.ensure_default_audit_type()
             audit_id = c.ensure_audit(org_name, language=body.language,
-                                      audit_type=body.audit_type)
+                                      audit_type=audit_type)
             storage.save_pwndoc_audit_id(org_name, audit_id)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error conectando PwnDoc: {e}")
