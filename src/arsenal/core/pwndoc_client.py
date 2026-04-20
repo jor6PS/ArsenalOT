@@ -287,8 +287,13 @@ class PwnDocClient:
         cvssv3: str = "",
         vuln_type_id: str = None,
     ) -> Dict:
-        """Añade un hallazgo a una auditoría de PwnDoc."""
+        """Añade un hallazgo a una auditoría de PwnDoc sin modificar la biblioteca."""
         self._ensure_auth()
+        before_ids = {
+            str(f.get("_id") or f.get("id"))
+            for f in self.get_findings(audit_id)
+            if f.get("_id") or f.get("id")
+        }
         payload: dict = {
             "title":       title,
             "description": description,
@@ -301,8 +306,19 @@ class PwnDocClient:
         }
         if vuln_type_id:
             payload["vulnType"] = vuln_type_id
-        result = self._request("POST", f"/api/audits/{audit_id}/findings", payload)
-        return result.get("datas", {})
+        self._request("POST", f"/api/audits/{audit_id}/findings", payload)
+
+        findings = self.get_findings(audit_id)
+        new_findings = [
+            f for f in findings
+            if str(f.get("_id") or f.get("id")) not in before_ids
+        ]
+        if new_findings:
+            return new_findings[-1]
+        for finding in reversed(findings):
+            if finding.get("title") == title:
+                return finding
+        return {}
 
     def get_findings(self, audit_id: str) -> List[Dict]:
         """Lista los hallazgos de una auditoría."""
@@ -310,3 +326,37 @@ class PwnDocClient:
         result = self._request("GET", f"/api/audits/{audit_id}")
         audit_data = result.get("datas", {})
         return audit_data.get("findings", [])
+
+    def update_finding(
+        self,
+        audit_id: str,
+        finding_id: str,
+        title: str,
+        description: str = "",
+        observation: str = "",
+        remediation: str = "",
+        cvssv3: str = "",
+        vuln_type_id: str = None,
+    ) -> Dict:
+        """Actualiza un finding concreto de una auditoría sin tocar la biblioteca."""
+        self._ensure_auth()
+        payload: dict = {
+            "title": title,
+            "description": description,
+            "observation": observation,
+            "remediation": remediation,
+            "cvssv3": cvssv3,
+            "references": [],
+            "poc": "",
+            "status": 0,
+        }
+        if vuln_type_id:
+            payload["vulnType"] = vuln_type_id
+        result = self._request("PUT", f"/api/audits/{audit_id}/findings/{finding_id}", payload)
+        return result.get("datas", {})
+
+    def delete_finding(self, audit_id: str, finding_id: str) -> Dict:
+        """Elimina un finding concreto de una auditoría."""
+        self._ensure_auth()
+        result = self._request("DELETE", f"/api/audits/{audit_id}/findings/{finding_id}")
+        return result.get("datas", {})

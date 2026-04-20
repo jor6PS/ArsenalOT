@@ -41,6 +41,15 @@ class AddFindingRequest(BaseModel):
     audit_type: Optional[str] = None     # Nombre del auditType PwnDoc
 
 
+class UpdateFindingRequest(BaseModel):
+    title: str
+    description: str = ""
+    observation: str = ""
+    remediation: str = ""
+    cvssv3: str = ""
+    vuln_type_id: Optional[str] = None
+
+
 class EnsureAuditRequest(BaseModel):
     audit_name: Optional[str] = None
     language: str = "es"
@@ -189,6 +198,10 @@ async def list_findings(org_name: str):
         return {"ok": True, "findings": [], "audit_id": None}
     try:
         findings = _client().get_findings(audit_id)
+        arsenalot_ids = storage.get_arsenalot_pwndoc_finding_ids(org_name)
+        for finding in findings:
+            finding_id = str(finding.get("_id") or finding.get("id") or "")
+            finding["arsenalot_added"] = finding_id in arsenalot_ids
         return {"ok": True, "findings": findings, "audit_id": audit_id}
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error PwnDoc: {e}")
@@ -214,7 +227,7 @@ async def add_finding(org_name: str, body: AddFindingRequest):
 
     # 2. Añadir hallazgo a la auditoría
     try:
-        c.add_finding(
+        finding = c.add_finding(
             audit_id    = audit_id,
             title       = body.title,
             description = body.description,
@@ -223,6 +236,14 @@ async def add_finding(org_name: str, body: AddFindingRequest):
             cvssv3      = body.cvssv3,
             vuln_type_id= body.vuln_type_id,
         )
+        finding_id = str(finding.get("_id") or finding.get("id") or "")
+        if finding_id:
+            storage.save_arsenalot_pwndoc_finding(
+                org_name=org_name,
+                audit_id=audit_id,
+                finding_id=finding_id,
+                title=body.title,
+            )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error añadiendo finding en PwnDoc: {e}")
 
@@ -240,4 +261,41 @@ async def add_finding(org_name: str, body: AddFindingRequest):
     except Exception:
         pass  # No bloquear si falla la bitácora
 
-    return {"ok": True, "audit_id": audit_id}
+    return {"ok": True, "audit_id": audit_id, "finding": finding}
+
+
+@router.put("/{org_name}/findings/{finding_id}")
+async def update_finding(org_name: str, finding_id: str, body: UpdateFindingRequest):
+    """Actualiza un finding de la auditoría PwnDoc enlazada a esta org."""
+    audit_id = storage.get_pwndoc_audit_id(org_name)
+    if not audit_id:
+        raise HTTPException(status_code=404, detail="No hay auditoría PwnDoc enlazada a esta organización.")
+    try:
+        result = _client().update_finding(
+            audit_id=audit_id,
+            finding_id=finding_id,
+            title=body.title,
+            description=body.description,
+            observation=body.observation,
+            remediation=body.remediation,
+            cvssv3=body.cvssv3,
+            vuln_type_id=body.vuln_type_id,
+        )
+        storage.save_arsenalot_pwndoc_finding(org_name, audit_id, finding_id, body.title)
+        return {"ok": True, "audit_id": audit_id, "finding_id": finding_id, "result": result}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error editando finding en PwnDoc: {e}")
+
+
+@router.delete("/{org_name}/findings/{finding_id}")
+async def delete_finding(org_name: str, finding_id: str):
+    """Elimina un finding de la auditoría PwnDoc enlazada a esta org."""
+    audit_id = storage.get_pwndoc_audit_id(org_name)
+    if not audit_id:
+        raise HTTPException(status_code=404, detail="No hay auditoría PwnDoc enlazada a esta organización.")
+    try:
+        result = _client().delete_finding(audit_id, finding_id)
+        storage.delete_arsenalot_pwndoc_finding(org_name, finding_id)
+        return {"ok": True, "audit_id": audit_id, "finding_id": finding_id, "result": result}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error eliminando finding en PwnDoc: {e}")

@@ -1,665 +1,745 @@
 {% extends "base.html" %}
 
-{% block title %}Findings — {{ org_name }} | ArsenalOT{% endblock %}
+{% block title %}Findings - {{ org_name }} | ArsenalOT{% endblock %}
 
 {% block extra_css %}
 <style>
-.findings-layout {
-  display: grid;
-  grid-template-columns: 340px 1fr;
-  gap: 1.25rem;
-  margin-top: 1.25rem;
-  align-items: start;
-}
-@media (max-width: 900px) {
-  .findings-layout { grid-template-columns: 1fr; }
-}
-
-/* ── Library panel ── */
-.lib-panel {
-  background: rgba(255,255,255,.03);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 12px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100vh - 200px);
-}
-.lib-header {
-  padding: .85rem 1rem;
-  border-bottom: 1px solid rgba(255,255,255,.07);
-  display: flex;
-  flex-direction: column;
-  gap: .6rem;
-}
-.lib-header h3 { margin: 0; font-size: .95rem; color: var(--accent-yellow); }
-.lib-search {
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 8px;
-  padding: .45rem .75rem;
-  color: var(--text-primary);
-  font-size: .85rem;
-  width: 100%;
-  box-sizing: border-box;
-}
-.lib-search:focus { outline: none; border-color: var(--accent-blue); }
-.lib-list {
-  overflow-y: auto;
-  flex: 1;
-  padding: .4rem 0;
-}
-.lib-item {
-  padding: .55rem 1rem;
-  cursor: pointer;
-  font-size: .85rem;
-  color: var(--text-secondary);
-  border-left: 3px solid transparent;
-  transition: background .12s, color .12s, border-color .12s;
-  display: flex;
-  flex-direction: column;
-  gap: .15rem;
-}
-.lib-item:hover { background: rgba(255,255,255,.05); color: var(--text-primary); }
-.lib-item.selected {
-  background: rgba(99,179,237,.1);
-  border-left-color: var(--accent-blue);
-  color: var(--text-primary);
-}
-.lib-item-title { font-weight: 500; }
-.lib-item-cat {
-  font-size: .75rem;
-  color: var(--text-muted, #666);
-  opacity: .8;
-}
-.lib-footer {
-  padding: .65rem 1rem;
-  border-top: 1px solid rgba(255,255,255,.07);
-}
-.btn-new-vuln {
-  width: 100%;
-  background: rgba(99,179,237,.15);
-  border: 1px solid rgba(99,179,237,.3);
-  border-radius: 8px;
-  color: var(--accent-blue);
-  padding: .5rem;
-  font-size: .85rem;
-  cursor: pointer;
-  transition: background .15s;
-}
-.btn-new-vuln:hover { background: rgba(99,179,237,.25); }
-
-/* ── Detail panel ── */
-.detail-panel {
-  background: rgba(255,255,255,.03);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 12px;
-  padding: 1.5rem;
-}
-.detail-panel h3 { margin-top: 0; font-size: 1rem; color: var(--accent-yellow); }
-.detail-empty {
-  color: var(--text-muted, #666);
-  font-size: .9rem;
-  text-align: center;
-  padding: 3rem 1rem;
-}
-.form-row { margin-bottom: 1.1rem; }
-.form-row label {
-  display: block;
-  font-size: .82rem;
-  color: var(--text-secondary);
-  margin-bottom: .35rem;
-  font-weight: 500;
-}
-.form-row input,
-.form-row textarea {
-  width: 100%;
-  box-sizing: border-box;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 8px;
-  padding: .55rem .75rem;
-  color: var(--text-primary);
-  font-size: .88rem;
-  font-family: inherit;
-  resize: vertical;
-}
-.form-row input:focus,
-.form-row textarea:focus { outline: none; border-color: var(--accent-blue); }
-.form-row textarea { min-height: 80px; }
-.btn-add-finding {
-  background: linear-gradient(135deg, #48bb78, #38a169);
-  border: none;
-  border-radius: 8px;
-  color: #fff;
-  padding: .6rem 1.4rem;
-  font-size: .9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity .15s;
-}
-.btn-add-finding:disabled { opacity: .5; cursor: not-allowed; }
-.btn-add-finding:not(:disabled):hover { opacity: .88; }
-
-/* ── Status bar ── */
-.pwndoc-status {
+.findings-status {
   display: flex;
   align-items: center;
-  gap: .5rem;
-  font-size: .8rem;
+  gap: .55rem;
+  margin: .9rem 0 1rem;
   color: var(--text-secondary);
-  margin-bottom: .75rem;
+  font-size: .84rem;
 }
 .status-dot {
-  width: 9px; height: 9px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: #ef4444;
-  flex-shrink: 0;
 }
-.status-dot.ok { background: #48bb78; box-shadow: 0 0 6px rgba(72,187,120,.5); }
-
-/* ── Audit-config modal ── */
+.status-dot.ok {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34,197,94,.48);
+}
+.findings-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(360px, 1fr) minmax(300px, 380px);
+  gap: 1rem;
+  align-items: start;
+}
+.findings-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 560px;
+  max-height: calc(100vh - 190px);
+  border: 1px solid rgba(148,163,184,.16);
+  border-radius: 8px;
+  background: rgba(15,23,42,.72);
+  overflow: hidden;
+}
+.panel-header {
+  padding: .95rem 1rem;
+  border-bottom: 1px solid rgba(148,163,184,.14);
+}
+.panel-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+.panel-header p {
+  margin: .25rem 0 0;
+  color: var(--text-secondary);
+  font-size: .8rem;
+  line-height: 1.45;
+}
+.panel-toolbar {
+  display: flex;
+  gap: .5rem;
+  padding: .8rem 1rem;
+  border-bottom: 1px solid rgba(148,163,184,.1);
+}
+.panel-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: .58rem .72rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148,163,184,.18);
+  background: rgba(2,6,23,.38);
+  color: var(--text-primary);
+  font: inherit;
+}
+.panel-input:focus {
+  outline: none;
+  border-color: rgba(78,205,196,.44);
+}
+.panel-list {
+  flex: 1;
+  overflow: auto;
+  padding: .45rem;
+}
+.lib-item,
+.added-item {
+  width: 100%;
+  display: grid;
+  gap: .18rem;
+  padding: .72rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+.lib-item:hover,
+.added-item:hover {
+  background: rgba(255,255,255,.045);
+  color: var(--text-primary);
+}
+.lib-item.selected,
+.added-item.selected {
+  border-color: rgba(78,205,196,.34);
+  background: rgba(78,205,196,.1);
+  color: var(--text-primary);
+}
+.item-title {
+  color: inherit;
+  font-weight: 750;
+  line-height: 1.3;
+}
+.item-meta {
+  color: #94a3b8;
+  font-size: .76rem;
+  line-height: 1.35;
+}
+.empty-state {
+  padding: 2rem 1rem;
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: .86rem;
+  line-height: 1.5;
+}
+.editor-panel {
+  min-height: 560px;
+  border: 1px solid rgba(148,163,184,.16);
+  border-radius: 8px;
+  background: rgba(15,23,42,.72);
+  padding: 1rem;
+}
+.editor-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+.editor-top h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+.editor-top p {
+  margin: .25rem 0 0;
+  color: var(--text-secondary);
+  font-size: .8rem;
+}
+.mode-badge {
+  flex: 0 0 auto;
+  padding: .25rem .55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(78,205,196,.28);
+  background: rgba(78,205,196,.1);
+  color: #9ff4ee;
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.form-row {
+  margin-bottom: .9rem;
+}
+.form-row label {
+  display: block;
+  margin-bottom: .35rem;
+  color: var(--text-secondary);
+  font-size: .82rem;
+  font-weight: 650;
+}
+.form-row input,
+.form-row textarea,
 .form-row select {
   width: 100%;
   box-sizing: border-box;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.1);
+  padding: .62rem .74rem;
   border-radius: 8px;
-  padding: .55rem .75rem;
+  border: 1px solid rgba(148,163,184,.18);
+  background: rgba(2,6,23,.38);
   color: var(--text-primary);
-  font-size: .88rem;
-  font-family: inherit;
-  appearance: none;
-  cursor: pointer;
+  font: inherit;
 }
-.form-row select:focus { outline: none; border-color: var(--accent-blue); }
-.form-row select option { background: #1a2535; }
-
-/* ── New-vuln modal ── */
+.form-row textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+.form-row input:focus,
+.form-row textarea:focus,
+.form-row select:focus {
+  outline: none;
+  border-color: rgba(78,205,196,.44);
+}
+.editor-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+.btn-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: .5rem .8rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148,163,184,.2);
+  background: rgba(255,255,255,.04);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 700;
+}
+.btn-inline:hover {
+  background: rgba(255,255,255,.08);
+}
+.btn-inline.primary {
+  border-color: rgba(78,205,196,.35);
+  background: rgba(78,205,196,.14);
+  color: #d9fffb;
+}
+.btn-inline.danger {
+  border-color: rgba(239,68,68,.34);
+  background: rgba(239,68,68,.12);
+  color: #fecaca;
+}
+.btn-inline:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.added-actions {
+  display: flex;
+  gap: .45rem;
+  margin-top: .45rem;
+}
+.added-actions button {
+  padding: .28rem .5rem;
+  min-height: 28px;
+  font-size: .76rem;
+}
 .modal-backdrop {
   display: none;
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.6);
+  position: fixed;
+  inset: 0;
   z-index: 1000;
   align-items: center;
   justify-content: center;
+  background: rgba(0,0,0,.6);
 }
-.modal-backdrop.open { display: flex; }
+.modal-backdrop.open {
+  display: flex;
+}
 .modal-box {
-  background: #1a2535;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 14px;
-  padding: 1.75rem;
   width: 520px;
-  max-width: 95vw;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-.modal-box h3 { margin-top: 0; color: var(--accent-yellow); }
-.modal-actions { display: flex; gap: .75rem; justify-content: flex-end; margin-top: 1.25rem; }
-.btn-cancel {
-  background: rgba(255,255,255,.07);
-  border: 1px solid rgba(255,255,255,.1);
+  max-width: 94vw;
+  padding: 1.5rem;
   border-radius: 8px;
+  border: 1px solid rgba(148,163,184,.2);
+  background: #111827;
+}
+.modal-box h3 {
+  margin: 0 0 .4rem;
+}
+.modal-box p {
+  margin: 0 0 1rem;
   color: var(--text-secondary);
-  padding: .5rem 1rem;
-  cursor: pointer;
-  font-size: .88rem;
+  font-size: .86rem;
 }
-.btn-save {
-  background: var(--accent-blue);
-  border: none;
-  border-radius: 8px;
-  color: #fff;
-  padding: .5rem 1.2rem;
-  cursor: pointer;
-  font-size: .88rem;
-  font-weight: 600;
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .65rem;
+  margin-top: 1rem;
 }
-
-/* ── Toast ── */
 #toast {
-  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999;
-  background: #1a2535;
-  border-radius: .5rem;
-  padding: .6rem 1.1rem;
-  font-size: .85rem;
-  box-shadow: 0 4px 16px rgba(0,0,0,.4);
-  transition: opacity .4s;
-  pointer-events: none;
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1100;
+  max-width: 380px;
+  padding: .7rem .9rem;
+  border-radius: 8px;
+  border: 1px solid rgba(78,205,196,.4);
+  background: #111827;
+  color: #d9fffb;
   opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+}
+@media (max-width: 1160px) {
+  .findings-layout {
+    grid-template-columns: 1fr;
+  }
+  .findings-panel {
+    min-height: 360px;
+    max-height: none;
+  }
 }
 </style>
 {% endblock %}
 
 {% block content %}
-{% set active_phase   = 'recon' %}
+{% set active_phase = 'recon' %}
 {% set active_section = 'findings' %}
 {% include "org_tabs.html" %}
 
 <script>const ORG = {{ org_name | tojson }};</script>
 
-<!-- PwnDoc status -->
-<div class="pwndoc-status" id="pdStatus">
+<div class="findings-status">
   <span class="status-dot" id="pdDot"></span>
-  <span id="pdStatusText">Comprobando PwnDoc…</span>
+  <span id="pdStatusText">Comprobando PwnDoc...</span>
 </div>
 
 <div class="findings-layout">
-
-  <!-- ── Biblioteca de vulnerabilidades ── -->
-  <div class="lib-panel">
-    <div class="lib-header">
-      <h3>📚 Biblioteca PwnDoc</h3>
-      <input class="lib-search" id="libSearch" type="search"
-             placeholder="Buscar vulnerabilidad…" oninput="filterLib()">
+  <aside class="findings-panel">
+    <div class="panel-header">
+      <h3>Biblioteca PwnDoc</h3>
+      <p>Vulnerabilidades base del cat&aacute;logo. Selecciona una para convertirla en finding de esta auditor&iacute;a.</p>
     </div>
-    <div class="lib-list" id="libList">
-      <div style="padding:1.5rem; text-align:center; color:#666; font-size:.85rem;">
-        Cargando…
-      </div>
+    <div class="panel-toolbar">
+      <input class="panel-input" id="libSearch" type="search" placeholder="Buscar en biblioteca" oninput="filterLibrary()">
     </div>
-    <div class="lib-footer">
-      <button class="btn-new-vuln" onclick="openNewVulnModal()">
-        ＋ Nueva vulnerabilidad en biblioteca
-      </button>
+    <div class="panel-list" id="libraryList">
+      <div class="empty-state">Cargando biblioteca...</div>
     </div>
-  </div>
+  </aside>
 
-  <!-- ── Panel de detalle / formulario ── -->
-  <div class="detail-panel" id="detailPanel">
-    <div class="detail-empty" id="detailEmpty">
-      Selecciona una vulnerabilidad de la biblioteca para añadirla como finding.
+  <section class="editor-panel">
+    <div class="editor-top">
+      <div>
+        <h3 id="editorTitle">Nuevo finding</h3>
+        <p id="editorHint">Puedes partir de una vulnerabilidad de biblioteca o crear un finding manual para esta auditor&iacute;a.</p>
+      </div>
+      <span class="mode-badge" id="modeBadge">Manual</span>
     </div>
-    <div id="detailForm" style="display:none;">
-      <h3 id="formTitle"></h3>
-
-      <div class="form-row">
-        <label>Descripción <span style="color:#ef4444">*</span></label>
-        <textarea id="fDesc" rows="4" placeholder="Descripción del hallazgo en este entorno…"></textarea>
-      </div>
-      <div class="form-row">
-        <label>Observación</label>
-        <textarea id="fObs" rows="3" placeholder="Evidencias, contexto adicional…"></textarea>
-      </div>
-      <div class="form-row">
-        <label>Remediación</label>
-        <textarea id="fRem" rows="3" placeholder="Recomendaciones de corrección…"></textarea>
-      </div>
-      <div class="form-row">
-        <label>CVSSv3 <span style="color:#999; font-weight:400">(opcional)</span></label>
-        <input type="text" id="fCvss" placeholder="p. ej. CVSS:3.1/AV:N/AC:L/…">
-      </div>
-
-      <button class="btn-add-finding" id="btnAddFinding" onclick="submitFinding()">
-        ✅ Añadir finding al proyecto
-      </button>
-    </div>
-  </div>
-
-</div>
-
-<!-- ── Modal configuración de auditoría ── -->
-<div class="modal-backdrop" id="auditConfigModal">
-  <div class="modal-box">
-    <h3>⚙️ Configurar auditoría en PwnDoc</h3>
-    <p style="color:var(--text-secondary);font-size:.85rem;margin-top:-.25rem;">
-      No existe auditoría para esta organización. Elige el tipo y el idioma antes de añadir el primer finding.
-    </p>
 
     <div class="form-row">
-      <label>Nombre de la auditoría</label>
+      <label for="fTitle">T&iacute;tulo</label>
+      <input id="fTitle" type="text" placeholder="T&iacute;tulo del finding">
+    </div>
+    <div class="form-row">
+      <label for="fDesc">Descripci&oacute;n</label>
+      <textarea id="fDesc" placeholder="Descripci&oacute;n del hallazgo en este entorno"></textarea>
+    </div>
+    <div class="form-row">
+      <label for="fObs">Observaci&oacute;n</label>
+      <textarea id="fObs" placeholder="Evidencias, activos afectados o contexto"></textarea>
+    </div>
+    <div class="form-row">
+      <label for="fRem">Remediaci&oacute;n</label>
+      <textarea id="fRem" placeholder="Recomendaciones de correcci&oacute;n"></textarea>
+    </div>
+    <div class="form-row">
+      <label for="fCvss">CVSSv3</label>
+      <input id="fCvss" type="text" placeholder="CVSS:3.1/AV:N/AC:L/...">
+    </div>
+
+    <div class="editor-actions">
+      <button class="btn-inline" type="button" onclick="resetEditor()">Finding manual</button>
+      <div style="display:flex; gap:.6rem; flex-wrap:wrap;">
+        <button class="btn-inline danger" id="btnDeleteFinding" type="button" onclick="deleteSelectedFinding()" style="display:none;">Eliminar</button>
+        <button class="btn-inline primary" id="btnSaveFinding" type="button" onclick="saveFinding()">Subir a auditor&iacute;a</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="findings-panel">
+    <div class="panel-header">
+      <h3>Findings a&ntilde;adidos desde ArsenalOT</h3>
+      <p>Estos findings ya est&aacute;n subidos a la auditor&iacute;a PwnDoc. Puedes corregirlos o eliminarlos desde aqu&iacute;.</p>
+    </div>
+    <div class="panel-toolbar">
+      <button class="btn-inline" type="button" onclick="loadAuditFindings()">Actualizar</button>
+    </div>
+    <div class="panel-list" id="addedList">
+      <div class="empty-state">Cargando findings...</div>
+    </div>
+  </aside>
+</div>
+
+<div class="modal-backdrop" id="auditConfigModal">
+  <div class="modal-box">
+    <h3>Configurar auditor&iacute;a en PwnDoc</h3>
+    <p>No hay una auditor&iacute;a PwnDoc enlazada a esta organizaci&oacute;n. Cr&eacute;ala antes de subir el finding.</p>
+    <div class="form-row">
+      <label for="acName">Nombre de la auditor&iacute;a</label>
       <input type="text" id="acName" placeholder="Nombre en PwnDoc">
     </div>
     <div class="form-row">
-      <label>Tipo de auditoría <span style="color:#ef4444">*</span></label>
-      <select id="acType">
-        <option value="" disabled selected>Cargando tipos…</option>
-      </select>
+      <label for="acType">Tipo de auditor&iacute;a</label>
+      <select id="acType"><option value="">Cargando...</option></select>
     </div>
     <div class="form-row">
-      <label>Idioma <span style="color:#ef4444">*</span></label>
+      <label for="acLang">Idioma</label>
       <select id="acLang">
-        <option value="es">Español (es)</option>
+        <option value="es">Espa&ntilde;ol (es)</option>
         <option value="en">English (en)</option>
-        <option value="fr">Français (fr)</option>
+        <option value="fr">Fran&ccedil;ais (fr)</option>
         <option value="de">Deutsch (de)</option>
-        <option value="pt">Português (pt)</option>
+        <option value="pt">Portugu&ecirc;s (pt)</option>
       </select>
     </div>
-
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeAuditConfigModal()">Cancelar</button>
-      <button class="btn-save" id="btnSaveAudit" onclick="saveAuditConfig()">Crear auditoría</button>
+      <button class="btn-inline" onclick="closeAuditConfigModal()">Cancelar</button>
+      <button class="btn-inline primary" id="btnSaveAudit" onclick="saveAuditConfig()">Crear auditor&iacute;a</button>
     </div>
   </div>
 </div>
 
-<!-- ── Modal nueva vulnerabilidad ── -->
-<div class="modal-backdrop" id="newVulnModal">
-  <div class="modal-box">
-    <h3>Nueva vulnerabilidad en biblioteca PwnDoc</h3>
-
-    <div class="form-row">
-      <label>Título <span style="color:#ef4444">*</span></label>
-      <input type="text" id="nvTitle" placeholder="Nombre de la vulnerabilidad">
-    </div>
-    <div class="form-row">
-      <label>Categoría</label>
-      <input type="text" id="nvCategory" placeholder="p. ej. Web, Red, OT…">
-    </div>
-    <div class="form-row">
-      <label>Descripción</label>
-      <textarea id="nvDesc" rows="3" placeholder="Descripción técnica…"></textarea>
-    </div>
-    <div class="form-row">
-      <label>Observación</label>
-      <textarea id="nvObs" rows="2" placeholder="Notas de contexto…"></textarea>
-    </div>
-    <div class="form-row">
-      <label>Remediación</label>
-      <textarea id="nvRem" rows="2" placeholder="Cómo mitigar…"></textarea>
-    </div>
-    <div class="form-row">
-      <label>CVSSv3</label>
-      <input type="text" id="nvCvss" placeholder="CVSS:3.1/AV:…">
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeNewVulnModal()">Cancelar</button>
-      <button class="btn-save" id="btnSaveVuln" onclick="saveNewVuln()">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Toast -->
 <div id="toast"></div>
 
 <script>
-/* ─── State ─────────────────────────────────────────────── */
-let allVulns     = [];
+let allVulns = [];
+let auditTypes = [];
+let auditExists = false;
 let selectedVuln = null;
-let auditTypes   = [];
-let auditExists  = false;       // true cuando la org ya tiene audit_id en DB
-let pendingFinding = null;      // finding esperando a que se cree la auditoría
+let selectedFinding = null;
+let editorMode = 'manual';
+let _toastTimer = null;
 
-/* ─── Init ──────────────────────────────────────────────── */
 (async function init() {
   await checkStatus();
-  await Promise.all([loadLibrary(), loadAuditTypes(), checkAuditExists()]);
+  await Promise.all([loadAuditTypes(), loadLibrary(), loadAuditFindings()]);
 })();
 
-/* ─── PwnDoc status ─────────────────────────────────────── */
 async function checkStatus() {
   try {
-    const r = await fetch('/api/pwndoc/status');
-    const d = await r.json();
-    const dot  = document.getElementById('pdDot');
-    const txt  = document.getElementById('pdStatusText');
-    if (d.ok) {
+    const response = await fetch('/api/pwndoc/status');
+    const data = await response.json();
+    const dot = document.getElementById('pdDot');
+    const text = document.getElementById('pdStatusText');
+    if (data.ok) {
       dot.classList.add('ok');
-      txt.textContent = `PwnDoc conectado (${d.url})`;
+      text.textContent = `PwnDoc conectado (${data.url})`;
     } else {
-      txt.textContent = `PwnDoc no disponible — ${d.error || ''}`;
+      text.textContent = `PwnDoc no disponible: ${data.error || 'sin detalle'}`;
     }
-  } catch {
+  } catch (error) {
     document.getElementById('pdStatusText').textContent = 'PwnDoc no alcanzable';
   }
 }
 
-/* ─── Audit types & audit existence ────────────────────── */
 async function loadAuditTypes() {
   try {
-    const r = await fetch('/api/pwndoc/audit-types');
-    if (!r.ok) return;
-    const d = await r.json();
-    auditTypes = d.audit_types || [];
-    const sel = document.getElementById('acType');
-    if (auditTypes.length) {
-      sel.innerHTML = auditTypes.map(t =>
-        `<option value="${escHtml(t.name)}">${escHtml(t.name)}</option>`
-      ).join('');
-    } else {
-      sel.innerHTML = '<option value="" disabled>Sin tipos configurados en PwnDoc</option>';
-    }
-  } catch { /* silencioso — PwnDoc puede no estar disponible */ }
+    const response = await fetch('/api/pwndoc/audit-types');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || response.statusText);
+    auditTypes = data.audit_types || [];
+    const select = document.getElementById('acType');
+    select.innerHTML = auditTypes.length
+      ? auditTypes.map(t => `<option value="${escHtml(t.name)}">${escHtml(t.name)}</option>`).join('')
+      : '<option value="">Sin tipos configurados</option>';
+  } catch (error) {
+    showToast(`No se pudieron cargar tipos PwnDoc: ${error.message}`, 'error');
+  }
 }
 
-async function checkAuditExists() {
+async function loadLibrary() {
+  const list = document.getElementById('libraryList');
   try {
-    const r = await fetch(`/api/pwndoc/${encodeURIComponent(ORG)}/findings`);
-    if (!r.ok) return;
-    const d = await r.json();
-    auditExists = !!d.audit_id;
-  } catch { auditExists = false; }
+    const response = await fetch('/api/pwndoc/vulntypes');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || response.statusText);
+    allVulns = data.vulntypes || [];
+    renderLibrary(allVulns);
+  } catch (error) {
+    list.innerHTML = `<div class="empty-state">Error cargando biblioteca: ${escHtml(error.message)}</div>`;
+  }
 }
 
-/* ─── Audit config modal ────────────────────────────────── */
+function renderLibrary(items) {
+  const list = document.getElementById('libraryList');
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-state">No hay vulnerabilidades en la biblioteca PwnDoc.</div>';
+    return;
+  }
+  list.innerHTML = items.map(v => `
+    <button type="button" class="lib-item ${selectedVuln?.id === v.id ? 'selected' : ''}" onclick="selectLibraryVuln('${jsAttr(v.id)}')">
+      <span class="item-title">${escHtml(v.title)}</span>
+      <span class="item-meta">${escHtml(v.category || 'Sin categoria')}</span>
+    </button>
+  `).join('');
+}
+
+function filterLibrary() {
+  const query = document.getElementById('libSearch').value.trim().toLowerCase();
+  const filtered = query
+    ? allVulns.filter(v => `${v.title} ${v.category || ''}`.toLowerCase().includes(query))
+    : allVulns;
+  renderLibrary(filtered);
+}
+
+function selectLibraryVuln(id) {
+  selectedVuln = allVulns.find(v => v.id === id) || null;
+  selectedFinding = null;
+  editorMode = 'library';
+  if (!selectedVuln) return;
+  document.getElementById('fTitle').value = selectedVuln.title || '';
+  document.getElementById('fDesc').value = selectedVuln.description || '';
+  document.getElementById('fObs').value = selectedVuln.observation || '';
+  document.getElementById('fRem').value = selectedVuln.remediation || '';
+  document.getElementById('fCvss').value = selectedVuln.cvssv3 || '';
+  updateEditorState();
+  renderLibrary(allVulns);
+  renderAddedList();
+}
+
+async function loadAuditFindings() {
+  const list = document.getElementById('addedList');
+  try {
+    const response = await fetch(`/api/pwndoc/${encodeURIComponent(ORG)}/findings`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || response.statusText);
+    auditExists = !!data.audit_id;
+    window.auditFindings = data.findings || [];
+    renderAddedList();
+  } catch (error) {
+    list.innerHTML = `<div class="empty-state">Error cargando findings: ${escHtml(error.message)}</div>`;
+  }
+}
+
+function renderAddedList() {
+  const list = document.getElementById('addedList');
+  const findings = (window.auditFindings || []).filter(f => f.arsenalot_added);
+  if (!auditExists) {
+    list.innerHTML = '<div class="empty-state">No hay auditor&iacute;a PwnDoc enlazada todav&iacute;a.</div>';
+    return;
+  }
+  if (!findings.length) {
+    list.innerHTML = '<div class="empty-state">A&uacute;n no has a&ntilde;adido findings desde ArsenalOT.</div>';
+    return;
+  }
+  list.innerHTML = findings.map(f => {
+    const id = getFindingId(f);
+    const selected = selectedFinding && getFindingId(selectedFinding) === id;
+    return `
+      <div class="added-item ${selected ? 'selected' : ''}">
+        <button type="button" class="added-item ${selected ? 'selected' : ''}" onclick="selectAuditFinding('${jsAttr(id)}')">
+          <span class="item-title">${escHtml(f.title || 'Sin titulo')}</span>
+          <span class="item-meta">${escHtml(f.cvssv3 || f.vulnType || 'Finding de auditoria')}</span>
+        </button>
+        <div class="added-actions">
+          <button class="btn-inline" type="button" onclick="selectAuditFinding('${jsAttr(id)}')">Editar</button>
+          <button class="btn-inline danger" type="button" onclick="deleteFindingById('${jsAttr(id)}')">Eliminar</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function selectAuditFinding(id) {
+  selectedFinding = (window.auditFindings || []).find(f => getFindingId(f) === id) || null;
+  selectedVuln = null;
+  editorMode = 'edit';
+  if (!selectedFinding) return;
+  document.getElementById('fTitle').value = selectedFinding.title || '';
+  document.getElementById('fDesc').value = selectedFinding.description || '';
+  document.getElementById('fObs').value = selectedFinding.observation || '';
+  document.getElementById('fRem').value = selectedFinding.remediation || '';
+  document.getElementById('fCvss').value = selectedFinding.cvssv3 || '';
+  updateEditorState();
+  renderLibrary(allVulns);
+  renderAddedList();
+}
+
+function resetEditor() {
+  selectedVuln = null;
+  selectedFinding = null;
+  editorMode = 'manual';
+  ['fTitle', 'fDesc', 'fObs', 'fRem', 'fCvss'].forEach(id => document.getElementById(id).value = '');
+  updateEditorState();
+  renderLibrary(allVulns);
+  renderAddedList();
+}
+
+function updateEditorState() {
+  const badge = document.getElementById('modeBadge');
+  const title = document.getElementById('editorTitle');
+  const hint = document.getElementById('editorHint');
+  const save = document.getElementById('btnSaveFinding');
+  const del = document.getElementById('btnDeleteFinding');
+
+  if (editorMode === 'edit') {
+    badge.textContent = 'Editando';
+    title.textContent = 'Editar finding de auditoria';
+    hint.textContent = 'Los cambios se aplican al finding dentro de la auditoria PwnDoc.';
+    save.textContent = 'Guardar cambios';
+    del.style.display = '';
+  } else if (editorMode === 'library') {
+    badge.textContent = 'Biblioteca';
+    title.textContent = 'Nuevo finding desde biblioteca';
+    hint.textContent = 'Se subira a la auditoria; la biblioteca PwnDoc no se modifica.';
+    save.textContent = 'Subir a auditoria';
+    del.style.display = 'none';
+  } else {
+    badge.textContent = 'Manual';
+    title.textContent = 'Nuevo finding manual';
+    hint.textContent = 'Se creara solo en la auditoria PwnDoc, no en la biblioteca.';
+    save.textContent = 'Subir a auditoria';
+    del.style.display = 'none';
+  }
+}
+
+async function saveFinding() {
+  const title = document.getElementById('fTitle').value.trim();
+  const description = document.getElementById('fDesc').value.trim();
+  if (!title) {
+    showToast('El titulo es obligatorio.', 'error');
+    return;
+  }
+  if (!description) {
+    showToast('La descripcion es obligatoria.', 'error');
+    return;
+  }
+  if (!auditExists) {
+    openAuditConfigModal();
+    return;
+  }
+
+  const payload = {
+    title,
+    description,
+    observation: document.getElementById('fObs').value.trim(),
+    remediation: document.getElementById('fRem').value.trim(),
+    cvssv3: document.getElementById('fCvss').value.trim(),
+    vuln_type_id: editorMode === 'library' && selectedVuln ? selectedVuln.id : null,
+    language: document.getElementById('acLang').value || 'es',
+    audit_type: document.getElementById('acType').value || null,
+  };
+
+  const btn = document.getElementById('btnSaveFinding');
+  btn.disabled = true;
+  try {
+    const editingId = selectedFinding ? getFindingId(selectedFinding) : null;
+    const response = await fetch(
+      editingId
+        ? `/api/pwndoc/${encodeURIComponent(ORG)}/findings/${encodeURIComponent(editingId)}`
+        : `/api/pwndoc/${encodeURIComponent(ORG)}/findings`,
+      {
+        method: editingId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || response.statusText);
+    showToast(editingId ? 'Finding actualizado.' : 'Finding subido a la auditoria.');
+    await loadAuditFindings();
+    if (!editingId) resetEditor();
+  } catch (error) {
+    showToast(`Error: ${error.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    updateEditorState();
+  }
+}
+
+function deleteSelectedFinding() {
+  if (!selectedFinding) return;
+  deleteFindingById(getFindingId(selectedFinding));
+}
+
+async function deleteFindingById(id) {
+  if (!id) return;
+  if (!confirm('Eliminar este finding de la auditoria PwnDoc?')) return;
+  try {
+    const response = await fetch(`/api/pwndoc/${encodeURIComponent(ORG)}/findings/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || response.statusText);
+    showToast('Finding eliminado.');
+    if (selectedFinding && getFindingId(selectedFinding) === id) resetEditor();
+    await loadAuditFindings();
+  } catch (error) {
+    showToast(`Error eliminando finding: ${error.message}`, 'error');
+  }
+}
+
 function openAuditConfigModal() {
   document.getElementById('acName').value = ORG;
   document.getElementById('auditConfigModal').classList.add('open');
 }
+
 function closeAuditConfigModal() {
   document.getElementById('auditConfigModal').classList.remove('open');
-  pendingFinding = null;
 }
 
 async function saveAuditConfig() {
-  const name      = document.getElementById('acName').value.trim() || ORG;
   const auditType = document.getElementById('acType').value;
-  const language  = document.getElementById('acLang').value;
-
-  if (!auditType) { showToast('Selecciona un tipo de auditoría.', '#ef4444'); return; }
-
+  if (!auditType) {
+    showToast('Selecciona un tipo de auditoria.', 'error');
+    return;
+  }
   const btn = document.getElementById('btnSaveAudit');
   btn.disabled = true;
-  btn.textContent = 'Creando…';
   try {
-    const r = await fetch(`/api/pwndoc/${encodeURIComponent(ORG)}/ensure-audit`, {
+    const response = await fetch(`/api/pwndoc/${encodeURIComponent(ORG)}/ensure-audit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ audit_name: name, language, audit_type: auditType }),
+      body: JSON.stringify({
+        audit_name: document.getElementById('acName').value.trim() || ORG,
+        language: document.getElementById('acLang').value || 'es',
+        audit_type: auditType,
+      }),
     });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.detail || r.statusText);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || response.statusText);
     auditExists = true;
-    showToast('Auditoría configurada correctamente.', '#68d391');
     closeAuditConfigModal();
-    // Si había un finding pendiente, lo enviamos ahora
-    if (pendingFinding) {
-      await _doSubmitFinding(pendingFinding.language, pendingFinding.audit_type);
-    }
-  } catch(e) {
-    showToast(`Error: ${e.message}`, '#fc8181');
+    showToast('Auditoria PwnDoc enlazada.');
+    await loadAuditFindings();
+  } catch (error) {
+    showToast(`Error creando auditoria: ${error.message}`, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Crear auditoría';
   }
 }
 
-/* ─── Library ───────────────────────────────────────────── */
-async function loadLibrary() {
-  const list = document.getElementById('libList');
-  try {
-    const r = await fetch('/api/pwndoc/vulntypes');
-    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
-    const d = await r.json();
-    allVulns = d.vulntypes || [];
-    renderLib(allVulns);
-  } catch(e) {
-    list.innerHTML = `<div style="padding:1rem;color:#ef4444;font-size:.85rem;">
-      Error cargando biblioteca: ${e.message}</div>`;
-  }
+function getFindingId(finding) {
+  return String(finding?._id || finding?.id || '');
 }
 
-function renderLib(items) {
-  const list = document.getElementById('libList');
-  if (!items.length) {
-    list.innerHTML = '<div style="padding:1rem;text-align:center;color:#666;font-size:.85rem;">Sin vulnerabilidades en la biblioteca.</div>';
-    return;
-  }
-  list.innerHTML = items.map(v => `
-    <div class="lib-item" data-id="${v.id}" onclick="selectVuln('${v.id}')">
-      <span class="lib-item-title">${escHtml(v.title)}</span>
-      ${v.category ? `<span class="lib-item-cat">${escHtml(v.category)}</span>` : ''}
-    </div>
-  `).join('');
+function escHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-function filterLib() {
-  const q = document.getElementById('libSearch').value.toLowerCase();
-  renderLib(q ? allVulns.filter(v =>
-    v.title.toLowerCase().includes(q) || (v.category||'').toLowerCase().includes(q)
-  ) : allVulns);
-  // Re-mark selected
-  if (selectedVuln) {
-    const el = document.querySelector(`.lib-item[data-id="${selectedVuln.id}"]`);
-    if (el) el.classList.add('selected');
-  }
+function jsAttr(value) {
+  return escHtml(String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 }
 
-function selectVuln(id) {
-  selectedVuln = allVulns.find(v => v.id === id) || null;
-  document.querySelectorAll('.lib-item').forEach(el => el.classList.remove('selected'));
-  const el = document.querySelector(`.lib-item[data-id="${id}"]`);
-  if (el) el.classList.add('selected');
-  showDetail();
-}
-
-function showDetail() {
-  const empty  = document.getElementById('detailEmpty');
-  const form   = document.getElementById('detailForm');
-  const title  = document.getElementById('formTitle');
-  if (!selectedVuln) { empty.style.display=''; form.style.display='none'; return; }
-  empty.style.display = 'none';
-  form.style.display  = '';
-  title.textContent   = selectedVuln.title;
-  document.getElementById('fDesc').value = selectedVuln.description || '';
-  document.getElementById('fObs').value  = selectedVuln.observation || '';
-  document.getElementById('fRem').value  = selectedVuln.remediation || '';
-  document.getElementById('fCvss').value = selectedVuln.cvssv3 || '';
-}
-
-/* ─── Add finding ───────────────────────────────────────── */
-async function submitFinding() {
-  if (!selectedVuln) return;
-  const desc = document.getElementById('fDesc').value.trim();
-  if (!desc) { showToast('La descripción es obligatoria.', '#ef4444'); return; }
-
-  // Si aún no hay auditoría, pedir configuración primero
-  if (!auditExists) {
-    pendingFinding = { language: null, audit_type: null };
-    openAuditConfigModal();
-    return;
-  }
-  await _doSubmitFinding();
-}
-
-async function _doSubmitFinding(language, audit_type) {
-  const btn  = document.getElementById('btnAddFinding');
-  const desc = document.getElementById('fDesc').value.trim();
-  if (!desc || !selectedVuln) return;
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Guardando…';
-  try {
-    const r = await fetch(`/api/pwndoc/${encodeURIComponent(ORG)}/findings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title:        selectedVuln.title,
-        description:  desc,
-        observation:  document.getElementById('fObs').value.trim(),
-        remediation:  document.getElementById('fRem').value.trim(),
-        cvssv3:       document.getElementById('fCvss').value.trim(),
-        vuln_type_id: selectedVuln.id || null,
-        language:     language  || document.getElementById('acLang').value  || 'es',
-        audit_type:   audit_type || document.getElementById('acType').value || null,
-      }),
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.detail || r.statusText);
-    auditExists = true;
-    showToast(`Finding añadido: ${selectedVuln.title}`, '#68d391');
-    document.getElementById('fDesc').value = '';
-    document.getElementById('fObs').value  = '';
-    document.getElementById('fRem').value  = '';
-    pendingFinding = null;
-  } catch(e) {
-    showToast(`Error: ${e.message}`, '#fc8181');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '✅ Añadir finding al proyecto';
-  }
-}
-
-/* ─── New vuln modal ────────────────────────────────────── */
-function openNewVulnModal() {
-  document.getElementById('newVulnModal').classList.add('open');
-  document.getElementById('nvTitle').focus();
-}
-function closeNewVulnModal() {
-  document.getElementById('newVulnModal').classList.remove('open');
-}
-
-async function saveNewVuln() {
-  const title = document.getElementById('nvTitle').value.trim();
-  if (!title) { showToast('El título es obligatorio.', '#ef4444'); return; }
-
-  const btn = document.getElementById('btnSaveVuln');
-  btn.disabled = true;
-  btn.textContent = 'Guardando…';
-  try {
-    const r = await fetch('/api/pwndoc/vulntypes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title,
-        description: document.getElementById('nvDesc').value.trim(),
-        observation: document.getElementById('nvObs').value.trim(),
-        remediation: document.getElementById('nvRem').value.trim(),
-        category:    document.getElementById('nvCategory').value.trim(),
-        cvssv3:      document.getElementById('nvCvss').value.trim(),
-      }),
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.detail || r.statusText);
-    showToast(`Vulnerabilidad creada: ${title}`, '#68d391');
-    closeNewVulnModal();
-    // Clear form
-    ['nvTitle','nvCategory','nvDesc','nvObs','nvRem','nvCvss']
-      .forEach(id => document.getElementById(id).value = '');
-    await loadLibrary();
-  } catch(e) {
-    showToast(`Error: ${e.message}`, '#fc8181');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Guardar';
-  }
-}
-
-/* ─── Helpers ───────────────────────────────────────────── */
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-let _toastTimer;
-function showToast(msg, color = '#68d391') {
-  const t = document.getElementById('toast');
-  t.textContent  = msg;
-  t.style.color  = color;
-  t.style.border = `1px solid ${color}`;
-  t.style.opacity = '1';
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.style.borderColor = type === 'error' ? 'rgba(239,68,68,.55)' : 'rgba(78,205,196,.45)';
+  toast.style.color = type === 'error' ? '#fecaca' : '#d9fffb';
+  toast.style.opacity = '1';
   clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 3500);
+  _toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 3200);
 }
 
-// Close modals on backdrop click
-document.getElementById('newVulnModal').addEventListener('click', function(e) {
-  if (e.target === this) closeNewVulnModal();
-});
-document.getElementById('auditConfigModal').addEventListener('click', function(e) {
-  if (e.target === this) closeAuditConfigModal();
+document.getElementById('auditConfigModal').addEventListener('click', (event) => {
+  if (event.target.id === 'auditConfigModal') closeAuditConfigModal();
 });
 </script>
 {% endblock %}

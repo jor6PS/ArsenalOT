@@ -454,6 +454,19 @@ class ScanStorage:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS arsenalot_pwndoc_findings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_name TEXT NOT NULL,
+                audit_id TEXT NOT NULL,
+                finding_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(org_name, finding_id)
+            )
+        """)
+
         # Tabla de credenciales (NetExec / pentest loot)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS credentials (
@@ -536,6 +549,54 @@ class ScanStorage:
                    VALUES (UPPER(?), ?)
                    ON CONFLICT(org_name) DO UPDATE SET audit_id = excluded.audit_id""",
                 (org_name, audit_id)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def save_arsenalot_pwndoc_finding(self, org_name: str, audit_id: str,
+                                      finding_id: str, title: str):
+        """Marca un finding de PwnDoc como creado desde ArsenalOT."""
+        if not finding_id:
+            return
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        try:
+            conn.execute(
+                """INSERT INTO arsenalot_pwndoc_findings
+                   (org_name, audit_id, finding_id, title, created_at, updated_at)
+                   VALUES (UPPER(?), ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                   ON CONFLICT(org_name, finding_id) DO UPDATE SET
+                       audit_id = excluded.audit_id,
+                       title = excluded.title,
+                       updated_at = CURRENT_TIMESTAMP""",
+                (org_name, audit_id, finding_id, title)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_arsenalot_pwndoc_finding_ids(self, org_name: str) -> set:
+        """Devuelve los IDs de findings de PwnDoc creados desde ArsenalOT."""
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT finding_id FROM arsenalot_pwndoc_findings WHERE UPPER(org_name) = UPPER(?)",
+                (org_name,)
+            ).fetchall()
+            return {str(row["finding_id"]) for row in rows}
+        finally:
+            conn.close()
+
+    def delete_arsenalot_pwndoc_finding(self, org_name: str, finding_id: str):
+        """Elimina el marcador local de un finding creado desde ArsenalOT."""
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        try:
+            conn.execute(
+                "DELETE FROM arsenalot_pwndoc_findings WHERE UPPER(org_name) = UPPER(?) AND finding_id = ?",
+                (org_name, finding_id)
             )
             conn.commit()
         finally:
