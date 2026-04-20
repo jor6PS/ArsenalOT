@@ -118,12 +118,16 @@ class PwnDocClient:
         """
         self._ensure_auth()
         vuln: dict = {
+            "status": 0,
             "details": [{
                 "locale": locale,
                 "title": title,
+                "vulnType": "Undefined",
                 "description": description,
                 "observation": observation,
                 "remediation": remediation,
+                "references": [],
+                "customFields": [],
             }],
             "cvssv3": cvssv3,
             "references": references or [],
@@ -186,6 +190,12 @@ class PwnDocClient:
         self._ensure_auth()
         result = self._request("GET", "/api/audits")
         return result.get("datas", [])
+
+    def get_audit(self, audit_id: str) -> Dict:
+        """Devuelve una auditoria completa, incluidos sus findings."""
+        self._ensure_auth()
+        result = self._request("GET", f"/api/audits/{audit_id}")
+        return result.get("datas", {})
 
     def create_audit(self, name: str, language: str = "es",
                      audit_type: str = None, scope: list = None,
@@ -286,6 +296,10 @@ class PwnDocClient:
         remediation: str = "",
         cvssv3: str = "",
         vuln_type_id: str = None,
+        category: str = "",
+        references: list = None,
+        poc: str = "",
+        status: int = 0,
     ) -> Dict:
         """Añade un hallazgo a una auditoría de PwnDoc sin modificar la biblioteca."""
         self._ensure_auth()
@@ -295,14 +309,15 @@ class PwnDocClient:
             if f.get("_id") or f.get("id")
         }
         payload: dict = {
-            "title":       title,
+            "title": title,
             "description": description,
             "observation": observation,
             "remediation": remediation,
-            "cvssv3":      cvssv3,
-            "references":  [],
-            "poc":         "",
-            "status":      0,
+            "cvssv3": cvssv3,
+            "references": references or [],
+            "poc": poc or "",
+            "status": status,
+            "category": category or "No Category",
         }
         if vuln_type_id:
             payload["vulnType"] = vuln_type_id
@@ -337,6 +352,7 @@ class PwnDocClient:
         remediation: str = "",
         cvssv3: str = "",
         vuln_type_id: str = None,
+        category: str = "",
     ) -> Dict:
         """Actualiza un finding concreto de una auditoría sin tocar la biblioteca."""
         self._ensure_auth()
@@ -349,6 +365,7 @@ class PwnDocClient:
             "references": [],
             "poc": "",
             "status": 0,
+            "category": category or "No Category",
         }
         if vuln_type_id:
             payload["vulnType"] = vuln_type_id

@@ -361,8 +361,8 @@
 
   <aside class="findings-panel">
     <div class="panel-header">
-      <h3>Findings a&ntilde;adidos desde ArsenalOT</h3>
-      <p>Estos findings ya est&aacute;n subidos a la auditor&iacute;a PwnDoc. Puedes corregirlos o eliminarlos desde aqu&iacute;.</p>
+      <h3>Findings en la auditor&iacute;a</h3>
+      <p>Findings subidos a la auditor&iacute;a PwnDoc. Se indica si nacen de biblioteca o si son manuales.</p>
     </div>
     <div class="panel-toolbar">
       <button class="btn-inline" type="button" onclick="loadAuditFindings()">Actualizar</button>
@@ -516,13 +516,13 @@ async function loadAuditFindings() {
 
 function renderAddedList() {
   const list = document.getElementById('addedList');
-  const findings = (window.auditFindings || []).filter(f => f.arsenalot_added);
+  const findings = window.auditFindings || [];
   if (!auditExists) {
     list.innerHTML = '<div class="empty-state">No hay auditor&iacute;a PwnDoc enlazada todav&iacute;a.</div>';
     return;
   }
   if (!findings.length) {
-    list.innerHTML = '<div class="empty-state">A&uacute;n no has a&ntilde;adido findings desde ArsenalOT.</div>';
+    list.innerHTML = '<div class="empty-state">A&uacute;n no hay findings en la auditor&iacute;a PwnDoc.</div>';
     return;
   }
   list.innerHTML = findings.map(f => {
@@ -532,7 +532,7 @@ function renderAddedList() {
       <div class="added-item ${selected ? 'selected' : ''}">
         <button type="button" class="added-item ${selected ? 'selected' : ''}" onclick="selectAuditFinding('${jsAttr(id)}')">
           <span class="item-title">${escHtml(f.title || 'Sin titulo')}</span>
-          <span class="item-meta">${escHtml(f.cvssv3 || f.vulnType || 'Finding de auditoria')}</span>
+          <span class="item-meta">${escHtml(f.origin_label || 'Manual')} - ${escHtml(f.cvssv3 || f.category || 'Finding de auditoria')}</span>
         </button>
         <div class="added-actions">
           <button class="btn-inline" type="button" onclick="selectAuditFinding('${jsAttr(id)}')">Editar</button>
@@ -618,7 +618,8 @@ async function saveFinding() {
     observation: document.getElementById('fObs').value.trim(),
     remediation: document.getElementById('fRem').value.trim(),
     cvssv3: document.getElementById('fCvss').value.trim(),
-    vuln_type_id: editorMode === 'library' && selectedVuln ? selectedVuln.id : null,
+    category: editorMode === 'library' && selectedVuln ? (selectedVuln.category || 'No Category') : 'Manual',
+    vuln_type_id: editorMode === 'library' && selectedVuln ? (selectedVuln.title || null) : null,
     language: document.getElementById('acLang').value || 'es',
     audit_type: document.getElementById('acType').value || null,
   };

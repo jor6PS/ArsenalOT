@@ -13,6 +13,89 @@ from typing import Dict, Optional, List
 from arsenal.core.storage import ScanStorage
 
 
+def _fetch_rows(cursor, query: str, params: tuple = ()) -> List[Dict]:
+    """Ejecuta una query opcional y devuelve filas como dict sin romper exports antiguos."""
+    try:
+        return [dict(row) for row in cursor.execute(query, params).fetchall()]
+    except sqlite3.OperationalError:
+        return []
+
+
+def _collect_pwndoc_export(cursor, org_names: List[str]) -> Dict:
+    """Crea una instantanea portable de auditorias PwnDoc para las organizaciones."""
+    clean_orgs = sorted({(org or "").strip().upper() for org in org_names if org})
+    if not clean_orgs:
+        return {"audits": [], "errors": []}
+
+    placeholders = ",".join("?" * len(clean_orgs))
+    mappings = _fetch_rows(
+        cursor,
+        f"SELECT * FROM pwndoc_audits WHERE UPPER(org_name) IN ({placeholders})",
+        tuple(clean_orgs),
+    )
+    markers = _fetch_rows(
+        cursor,
+        f"SELECT * FROM arsenalot_pwndoc_findings WHERE UPPER(org_name) IN ({placeholders})",
+        tuple(clean_orgs),
+    )
+    marker_ids = {
+        (row.get("org_name") or "").strip().upper(): set()
+        for row in markers
+    }
+    for row in markers:
+        marker_ids.setdefault((row.get("org_name") or "").strip().upper(), set()).add(str(row.get("finding_id")))
+
+    snapshots = []
+    errors = []
+    try:
+        from arsenal.core.pwndoc_client import PwnDocClient
+        client = PwnDocClient()
+        for mapping in mappings:
+            org_name = (mapping.get("org_name") or "").strip().upper()
+            audit_id = str(mapping.get("audit_id") or "")
+            if not org_name or not audit_id:
+                continue
+            try:
+                audit = client.get_audit(audit_id)
+                if not audit:
+                    errors.append(f"{org_name}: auditoria PwnDoc {audit_id} no encontrada")
+                    continue
+                findings = []
+                for finding in audit.get("findings", []) or []:
+                    source_id = str(finding.get("_id") or finding.get("id") or "")
+                    findings.append({
+                        "source_id": source_id,
+                        "arsenalot_added": source_id in marker_ids.get(org_name, set()),
+                        "title": finding.get("title") or "",
+                        "description": finding.get("description") or "",
+                        "observation": finding.get("observation") or "",
+                        "remediation": finding.get("remediation") or "",
+                        "cvssv3": finding.get("cvssv3") or "",
+                        "vulnType": finding.get("vulnType") or "",
+                        "category": finding.get("category") or "",
+                        "references": finding.get("references") or [],
+                        "poc": finding.get("poc") or "",
+                        "status": finding.get("status", 0),
+                    })
+                snapshots.append({
+                    "org_name": org_name,
+                    "source_audit_id": audit_id,
+                    "audit_name": audit.get("name") or org_name,
+                    "audit_type": audit.get("auditType") or audit.get("audit_type") or "",
+                    "language": audit.get("language") or "es",
+                    "scope": _normalize_pwndoc_scope(audit.get("scope") or []),
+                    "date_start": audit.get("date_start") or audit.get("dateStart") or "",
+                    "date_end": audit.get("date_end") or audit.get("dateEnd") or "",
+                    "findings": findings,
+                })
+            except Exception as exc:
+                errors.append(f"{org_name}: {exc}")
+    except Exception as exc:
+        errors.append(f"PwnDoc no disponible durante exportacion: {exc}")
+
+    return {"audits": snapshots, "errors": errors}
+
+
 def export_data(storage: ScanStorage, organization: Optional[str] = None, 
                location: Optional[str] = None, 
                scan_id: Optional[int] = None) -> Path:
@@ -65,6 +148,8 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
 
             org_rec = cursor.execute("SELECT * FROM organizations WHERE name = ?", (scan['organization_name'],)).fetchone()
             pwndoc_rows = cursor.execute("SELECT * FROM pwndoc_audits WHERE UPPER(org_name) = UPPER(?)", (scan['organization_name'],)).fetchall()
+            arsenalot_pwndoc_rows = _fetch_rows(cursor, "SELECT * FROM arsenalot_pwndoc_findings WHERE UPPER(org_name) = UPPER(?)", (scan['organization_name'],))
+            pwndoc_export = _collect_pwndoc_export(cursor, [scan['organization_name']])
 
             export_data = {
                 'type': 'scan',
@@ -81,6 +166,8 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (scan['organization_name'],)).fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (scan['organization_name'],)).fetchall()],
                 'pwndoc_audits':        [dict(p) for p in pwndoc_rows],
+                'arsenalot_pwndoc_findings': arsenalot_pwndoc_rows,
+                'pwndoc_export':         pwndoc_export,
             }
 
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
@@ -105,6 +192,8 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
 
             org_rec = cursor.execute("SELECT * FROM organizations WHERE name = ?", (organization.upper(),)).fetchone()
             pwndoc_rows = cursor.execute("SELECT * FROM pwndoc_audits WHERE UPPER(org_name) = UPPER(?)", (organization.upper(),)).fetchall()
+            arsenalot_pwndoc_rows = _fetch_rows(cursor, "SELECT * FROM arsenalot_pwndoc_findings WHERE UPPER(org_name) = UPPER(?)", (organization.upper(),))
+            pwndoc_export = _collect_pwndoc_export(cursor, [organization.upper()])
 
             export_data = {
                 'type': 'location',
@@ -121,6 +210,8 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (organization.upper(),)).fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (organization.upper(),)).fetchall()],
                 'pwndoc_audits':        [dict(p) for p in pwndoc_rows],
+                'arsenalot_pwndoc_findings': arsenalot_pwndoc_rows,
+                'pwndoc_export':         pwndoc_export,
             }
 
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
@@ -142,6 +233,8 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
             ph_sr        = ','.join('?' * len(sr_ids))   if sr_ids   else '0'
 
             pwndoc_rows = cursor.execute("SELECT * FROM pwndoc_audits WHERE UPPER(org_name) = UPPER(?)", (organization.upper(),)).fetchall()
+            arsenalot_pwndoc_rows = _fetch_rows(cursor, "SELECT * FROM arsenalot_pwndoc_findings WHERE UPPER(org_name) = UPPER(?)", (organization.upper(),))
+            pwndoc_export = _collect_pwndoc_export(cursor, [organization.upper()])
 
             export_data = {
                 'type': 'organization',
@@ -156,6 +249,8 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (organization.upper(),)).fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (organization.upper(),)).fetchall()],
                 'pwndoc_audits':        [dict(p) for p in pwndoc_rows],
+                'arsenalot_pwndoc_findings': arsenalot_pwndoc_rows,
+                'pwndoc_export':         pwndoc_export,
             }
 
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
@@ -167,6 +262,7 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
         else:
             # Exportar todo
             organizations = cursor.execute("SELECT * FROM organizations").fetchall()
+            organization_names = [o['name'] for o in organizations]
             scans         = cursor.execute("SELECT * FROM scans").fetchall()
             scan_results  = cursor.execute("SELECT * FROM scan_results").fetchall()
             hosts         = cursor.execute("SELECT * FROM hosts").fetchall()
@@ -186,6 +282,8 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks").fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices").fetchall()],
                 'pwndoc_audits':        [dict(p) for p in cursor.execute("SELECT * FROM pwndoc_audits").fetchall()],
+                'arsenalot_pwndoc_findings': _fetch_rows(cursor, "SELECT * FROM arsenalot_pwndoc_findings"),
+                'pwndoc_export':         _collect_pwndoc_export(cursor, organization_names),
             }
 
             zipf.writestr('export_data.json', json.dumps(export_data, indent=2, default=str))
@@ -239,7 +337,11 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
         'hosts': 0,
         'vulnerabilities': 0,
         'enrichments': 0,
-        'files_imported': 0
+        'files_imported': 0,
+        'pwndoc_audits': 0,
+        'pwndoc_findings': 0,
+        'pwndoc_findings_skipped': 0,
+        'pwndoc_errors': [],
     }
     
     # Crear directorio temporal para extraer
@@ -723,18 +825,138 @@ def _import_org_metadata(cursor, export_data: Dict, import_stats: Dict):
         import_stats['critical_devices'] += 1
 
     # Importar auditorías PwnDoc (mapping org → audit_id)
-    for pw in export_data.get('pwndoc_audits', []):
-        if not pw.get('org_name') or not pw.get('audit_id'):
+    _restore_pwndoc_exports(cursor, export_data, import_stats)
+
+    if not (export_data.get('pwndoc_export') or {}).get('audits'):
+        for pw in export_data.get('pwndoc_audits', []):
+            if not pw.get('org_name') or not pw.get('audit_id'):
+                continue
+            cursor.execute("""
+                INSERT INTO pwndoc_audits (org_name, audit_id, created_at)
+                VALUES (UPPER(?), ?, ?)
+                ON CONFLICT(org_name) DO UPDATE SET audit_id = excluded.audit_id
+            """, (
+                pw['org_name'], pw['audit_id'],
+                pw.get('created_at') or datetime.now().isoformat()
+            ))
+            import_stats['pwndoc_audits'] += 1
+
+
+def _restore_pwndoc_exports(cursor, export_data: Dict, import_stats: Dict):
+    """Recrea auditorias PwnDoc exportadas en el PwnDoc local del equipo destino."""
+    export_block = export_data.get('pwndoc_export') or {}
+    snapshots = export_block.get('audits') or []
+    for error in export_block.get('errors') or []:
+        import_stats.setdefault('pwndoc_errors', []).append(f"Export origen: {error}")
+    if not snapshots:
+        return
+
+    try:
+        from arsenal.core.pwndoc_client import PwnDocClient
+        client = PwnDocClient()
+        client.authenticate()
+    except Exception as exc:
+        import_stats.setdefault('pwndoc_errors', []).append(f"PwnDoc no disponible en destino: {exc}")
+        return
+
+    for snapshot in snapshots:
+        org_name = (snapshot.get('org_name') or '').strip().upper()
+        if not org_name:
             continue
-        cursor.execute("""
-            INSERT INTO pwndoc_audits (org_name, audit_id, created_at)
-            VALUES (UPPER(?), ?, ?)
-            ON CONFLICT(org_name) DO UPDATE SET audit_id = excluded.audit_id
-        """, (
-            pw['org_name'], pw['audit_id'],
-            pw.get('created_at') or datetime.now().isoformat()
-        ))
-        if 'pwndoc_audits' not in import_stats:
-            import_stats['pwndoc_audits'] = 0
-        import_stats['pwndoc_audits'] += 1
+        audit_name = (snapshot.get('audit_name') or org_name).strip() or org_name
+        language = snapshot.get('language') or 'es'
+        audit_type = _resolve_import_audit_type(client, snapshot.get('audit_type'))
+        try:
+            audit_id = client.ensure_audit(
+                audit_name,
+                language=language,
+                audit_type=audit_type,
+                scope=_normalize_pwndoc_scope(snapshot.get('scope') or []),
+                date_start=snapshot.get('date_start') or '',
+                date_end=snapshot.get('date_end') or '',
+            )
+            cursor.execute("""
+                INSERT INTO pwndoc_audits (org_name, audit_id, created_at)
+                VALUES (UPPER(?), ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(org_name) DO UPDATE SET audit_id = excluded.audit_id
+            """, (org_name, audit_id))
+            import_stats['pwndoc_audits'] += 1
+
+            existing_keys = {_finding_key(finding) for finding in client.get_findings(audit_id)}
+            for finding in snapshot.get('findings') or []:
+                key = _finding_key(finding)
+                if key in existing_keys:
+                    import_stats['pwndoc_findings_skipped'] += 1
+                    continue
+                restored = client.add_finding(
+                    audit_id=audit_id,
+                    title=finding.get('title') or 'Sin titulo',
+                    description=finding.get('description') or '',
+                    observation=finding.get('observation') or '',
+                    remediation=finding.get('remediation') or '',
+                    cvssv3=finding.get('cvssv3') or '',
+                    vuln_type_id=finding.get('vulnType') or None,
+                    category=finding.get('category') or 'Manual',
+                    references=finding.get('references') or [],
+                    poc=finding.get('poc') or '',
+                    status=int(finding.get('status') or 0),
+                )
+                restored_id = str(restored.get('_id') or restored.get('id') or '')
+                if restored_id:
+                    cursor.execute("""
+                        INSERT INTO arsenalot_pwndoc_findings
+                            (org_name, audit_id, finding_id, title, created_at, updated_at)
+                        VALUES (UPPER(?), ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        ON CONFLICT(org_name, finding_id) DO UPDATE SET
+                            audit_id = excluded.audit_id,
+                            title = excluded.title,
+                            updated_at = CURRENT_TIMESTAMP
+                    """, (org_name, audit_id, restored_id, finding.get('title') or 'Sin titulo'))
+                existing_keys.add(key)
+                import_stats['pwndoc_findings'] += 1
+        except Exception as exc:
+            import_stats.setdefault('pwndoc_errors', []).append(f"{org_name}: {exc}")
+
+
+def _resolve_import_audit_type(client, desired: Optional[str]) -> str:
+    """Usa el audit type exportado si puede crearse/encontrarse; si no, usa el default."""
+    desired = (desired or '').strip()
+    try:
+        audit_types = client.list_audit_types()
+        names = {item.get('name') for item in audit_types if item.get('name')}
+        if desired and desired in names:
+            return desired
+        if desired:
+            client.create_audit_type(desired)
+            return desired
+        return client.ensure_default_audit_type()
+    except Exception:
+        return client.ensure_default_audit_type()
+
+
+def _finding_key(finding: Dict) -> tuple:
+    """Clave estable para evitar duplicar findings al reimportar."""
+    return (
+        (finding.get('title') or '').strip().lower(),
+        (finding.get('description') or '').strip(),
+        (finding.get('category') or '').strip().lower(),
+    )
+
+
+def _normalize_pwndoc_scope(scope) -> List[str]:
+    """Convierte el scope de PwnDoc a lista de textos portable entre instancias."""
+    normalized = []
+    for item in scope or []:
+        if isinstance(item, str):
+            value = item.strip()
+        elif isinstance(item, dict):
+            raw = item.get('name') or item.get('label') or item.get('value') or ''
+            if isinstance(raw, dict):
+                raw = raw.get('name') or raw.get('label') or raw.get('value') or ''
+            value = str(raw).strip()
+        else:
+            value = str(item).strip()
+        if value:
+            normalized.append(value)
+    return normalized
 
