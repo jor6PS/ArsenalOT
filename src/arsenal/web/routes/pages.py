@@ -44,6 +44,11 @@ async def recon_findings_page(request: Request, org_name: str):
     """Página de findings (vulnerabilidades) integrada con PwnDoc."""
     return templates.TemplateResponse(request, "findings.html", {"org_name": org_name})
 
+@router.get("/pentest/{org_name}/recon/access-vectors", response_class=HTMLResponse)
+async def recon_access_vectors_page(request: Request, org_name: str):
+    """Diagrama de vectores de acceso y pseudoarquitectura de red."""
+    return templates.TemplateResponse(request, "access_vectors.html", {"org_name": org_name})
+
 @router.get("/pentest/{org_name}/exploitation", response_class=HTMLResponse)
 async def exploitation_page(request: Request, org_name: str):
     """Página de explotación IT (import de NetExec)."""

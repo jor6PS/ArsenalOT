@@ -95,6 +95,8 @@ htmlcov/
 # Claude Code (instrucciones locales y memoria del asistente)
 # =============================================================================
 .claude/
+.codex
+.codex/
 CLAUDE.md
 
 # =============================================================================

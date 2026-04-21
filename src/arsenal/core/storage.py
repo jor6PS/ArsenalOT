@@ -131,6 +131,7 @@ class ScanStorage:
                 system_name TEXT,
                 network_name TEXT NOT NULL,
                 network_range TEXT NOT NULL,
+                purdue_level INTEGER,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (organization_name) REFERENCES organizations(name) ON DELETE CASCADE
             )
@@ -141,18 +142,49 @@ class ScanStorage:
             cursor.execute("ALTER TABLE networks ADD COLUMN system_name TEXT")
         except sqlite3.OperationalError:
             pass  # Columna ya existe
+        try:
+            cursor.execute("ALTER TABLE networks ADD COLUMN purdue_level INTEGER")
+        except sqlite3.OperationalError:
+            pass  # Columna ya existe
 
         # Tabla de dispositivos críticos
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS critical_devices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 organization_name TEXT NOT NULL,
+                system_name TEXT,
                 name TEXT NOT NULL,
                 ips TEXT NOT NULL,
                 reason TEXT NOT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (organization_name) REFERENCES organizations(name) ON DELETE CASCADE
             )
+        """)
+        try:
+            cursor.execute("ALTER TABLE critical_devices ADD COLUMN system_name TEXT")
+        except sqlite3.OperationalError:
+            pass  # Columna ya existe
+
+        # Tabla de electrónica de red declarada por el usuario
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS network_devices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_name TEXT NOT NULL,
+                system_name TEXT,
+                name TEXT NOT NULL,
+                device_type TEXT NOT NULL,
+                management_ip TEXT,
+                accessible_network_ids_json TEXT,
+                origin_locations_json TEXT,
+                connected_device_ids_json TEXT,
+                notes TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (organization_name) REFERENCES organizations(name) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_network_devices_org
+            ON network_devices(organization_name, system_name)
         """)
 
         
@@ -1581,22 +1613,234 @@ class ScanStorage:
         conn.commit()
         conn.close()
         return deleted_count
+
+    def rename_location(self, organization: str, old_location: str,
+                        new_location: str) -> dict:
+        """Renombra un origen en scans, referencias auxiliares y artefactos locales."""
+        import os
+
+        org = (organization or "").strip().upper()
+        old = (old_location or "").strip().upper()
+        new = (new_location or "").strip().upper()
+        if not org or not old or not new:
+            raise ValueError("Organización, origen actual y origen nuevo son obligatorios.")
+        if old == new:
+            raise ValueError("El nuevo origen debe ser diferente al actual.")
+
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys = ON")
+        cursor = conn.cursor()
+
+        try:
+            old_count = cursor.execute("""
+                SELECT COUNT(*) FROM scans
+                WHERE UPPER(organization_name) = UPPER(?)
+                  AND UPPER(location) = UPPER(?)
+            """, (org, old)).fetchone()[0]
+            if old_count == 0:
+                raise ValueError(f"El origen '{old}' no existe en la organización '{org}'.")
+
+            new_count = cursor.execute("""
+                SELECT COUNT(*) FROM scans
+                WHERE UPPER(organization_name) = UPPER(?)
+                  AND UPPER(location) = UPPER(?)
+            """, (org, new)).fetchone()[0]
+            if new_count > 0:
+                raise ValueError(f"Ya existe el origen '{new}' en la organización '{org}'.")
+
+            cursor.execute("""
+                UPDATE scans
+                SET location = ?
+                WHERE UPPER(organization_name) = UPPER(?)
+                  AND UPPER(location) = UPPER(?)
+            """, (new, org, old))
+            scans_updated = cursor.rowcount
+
+            devices_updated = 0
+            device_rows = cursor.execute("""
+                SELECT id, origin_locations_json
+                FROM network_devices
+                WHERE UPPER(organization_name) = UPPER(?)
+                  AND origin_locations_json IS NOT NULL
+            """, (org,)).fetchall()
+            for row in device_rows:
+                values = self._normalize_text_list(row["origin_locations_json"], uppercase=True)
+                changed = False
+                renamed = []
+                for value in values:
+                    if value.upper() == old:
+                        value = new
+                        changed = True
+                    if value not in renamed:
+                        renamed.append(value)
+                if changed:
+                    cursor.execute("""
+                        UPDATE network_devices
+                        SET origin_locations_json = ?
+                        WHERE id = ?
+                    """, (json.dumps(renamed), row["id"]))
+                    devices_updated += 1
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        old_dir = self.results_root / org / old
+        new_dir = self.results_root / org / new
+        moved_files = 0
+        if old_dir.exists():
+            if not new_dir.exists():
+                old_dir.rename(new_dir)
+            else:
+                new_dir.mkdir(parents=True, exist_ok=True)
+                for child in old_dir.iterdir():
+                    target = new_dir / child.name
+                    if target.exists():
+                        target = new_dir / f"{child.stem}_from_{old}{child.suffix}"
+                    child.rename(target)
+                    moved_files += 1
+                try:
+                    old_dir.rmdir()
+                except OSError:
+                    pass
+
+        bitacora_stats = {"renamed": 0, "conflicts": 0}
+        try:
+            from arsenal.core.bitacora_manager import BitacoraManager
+            mgr = BitacoraManager(self.results_root)
+            bitacora_stats = mgr.rename_location_notes(org, old, new)
+
+            scan_conn = self._get_connection()
+            scan_rows = scan_conn.execute("""
+                    SELECT id FROM scans
+                    WHERE UPPER(organization_name) = UPPER(?)
+                      AND UPPER(location) = UPPER(?)
+                      AND status = 'completed'
+                """, (org, new)).fetchall()
+            scan_conn.close()
+            for row in scan_rows:
+                self._auto_bitacora_note(row["id"])
+        except Exception as e:
+            print(f"⚠️ Error actualizando bitácora tras renombrar origen: {e}")
+
+        neo4j_updated = False
+        try:
+            from py2neo import Graph
+            neo4j_user = os.getenv("NEO4J_USERNAME", "neo4j")
+            neo4j_pass = os.getenv("NEO4J_PASSWORD", "neo4j1")
+            neo4j_host = os.getenv("NEO4J_HOST", "localhost")
+            graph = Graph(f"bolt://{neo4j_host}:7687", auth=(neo4j_user, neo4j_pass))
+            graph.run("""
+                MATCH (o:ORIGEN {ORGANIZACION: $org})
+                WHERE toUpper(o.LOCATION) = $old
+                SET o.LOCATION = $new
+            """, org=org, old=old, new=new)
+            stats_conn = self._get_connection()
+            total_locations = stats_conn.execute("""
+                SELECT COUNT(DISTINCT location) AS n
+                FROM scans
+                WHERE UPPER(organization_name) = UPPER(?)
+            """, (org,)).fetchone()["n"]
+            stats_conn.close()
+            graph.run("""
+                MATCH (org:ORGANIZACION {name: $org})
+                SET org.TOTAL_UBICACIONES = $total_locations
+            """, org=org, total_locations=total_locations)
+            neo4j_updated = True
+        except Exception as e:
+            print(f"⚠️ No se pudo actualizar Neo4j tras renombrar origen: {e}")
+
+        return {
+            "organization": org,
+            "old_location": old,
+            "new_location": new,
+            "scans_updated": scans_updated,
+            "network_devices_updated": devices_updated,
+            "files_moved": moved_files,
+            "bitacora_notes_matched": bitacora_stats.get("matched", 0),
+            "bitacora_notes_renamed": bitacora_stats.get("renamed", 0),
+            "bitacora_note_conflicts": bitacora_stats.get("conflicts", 0),
+            "neo4j_updated": neo4j_updated,
+        }
     
+    @staticmethod
+    def _validate_purdue_level(purdue_level) -> Optional[int]:
+        """Normaliza un nivel Purdue opcional entre 0 y 5."""
+        if purdue_level is None or purdue_level == "":
+            return None
+        try:
+            level = int(purdue_level)
+        except (TypeError, ValueError):
+            raise ValueError("El nivel Purdue debe ser un número entre 0 y 5.")
+        if level < 0 or level > 5:
+            raise ValueError("El nivel Purdue debe estar entre 0 y 5.")
+        return level
+
+    @staticmethod
+    def _normalize_id_list(values) -> List[int]:
+        if values is None:
+            return []
+        if isinstance(values, str):
+            try:
+                values = json.loads(values)
+            except json.JSONDecodeError:
+                values = [v.strip() for v in values.split(",")]
+        if not isinstance(values, (list, tuple, set)):
+            values = [values]
+        ids = []
+        for value in values:
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                continue
+            if parsed not in ids:
+                ids.append(parsed)
+        return ids
+
+    @staticmethod
+    def _normalize_text_list(values, uppercase: bool = False) -> List[str]:
+        if values is None:
+            return []
+        if isinstance(values, str):
+            try:
+                values = json.loads(values)
+            except json.JSONDecodeError:
+                values = values.split(",")
+        if not isinstance(values, (list, tuple, set)):
+            values = [values]
+        result = []
+        for value in values:
+            text = str(value).strip()
+            if not text:
+                continue
+            if uppercase:
+                text = text.upper()
+            if text not in result:
+                result.append(text)
+        return result
+
     def get_networks(self, organization: str) -> List[Dict]:
         """Obtiene las redes registradas para una organización."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, organization_name, system_name, network_name, network_range, created_at
+                SELECT id, organization_name, system_name, network_name, network_range,
+                       purdue_level, created_at
                 FROM networks
                 WHERE UPPER(organization_name) = UPPER(?)
-                ORDER BY system_name, network_name
+                ORDER BY system_name, purdue_level DESC, network_name
             """, (organization,))
             
             return [dict(row) for row in cursor.fetchall()]
 
-    def add_network(self, organization: str, network_name: str, network_range: str, system_name: str = None) -> int:
+    def add_network(self, organization: str, network_name: str, network_range: str,
+                    system_name: str = None, purdue_level: int = None) -> int:
         """Añade una red a la organización."""
         # Validar y normalizar rango
         try:
@@ -1606,6 +1850,7 @@ class ScanStorage:
             normalized_range = str(net_obj)
         except ValueError as e:
             raise ValueError(f"Rango de red inválido: {e}")
+        purdue_level = self._validate_purdue_level(purdue_level)
             
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -1613,9 +1858,16 @@ class ScanStorage:
         
         try:
             cursor.execute("""
-                INSERT INTO networks (organization_name, network_name, network_range, system_name)
-                VALUES (?, ?, ?, ?)
-            """, (organization.upper(), network_name, normalized_range, system_name))
+                INSERT INTO networks
+                    (organization_name, network_name, network_range, system_name, purdue_level)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                organization.upper(),
+                network_name,
+                normalized_range,
+                system_name,
+                purdue_level,
+            ))
             
             network_id = cursor.lastrowid
             
@@ -1648,7 +1900,8 @@ class ScanStorage:
         finally:
             conn.close()
 
-    def update_network(self, network_id: int, network_name: str, network_range: str, system_name: str = None) -> bool:
+    def update_network(self, network_id: int, network_name: str, network_range: str,
+                       system_name: str = None, purdue_level: int = None) -> bool:
         """Actualiza una red existente."""
         try:
             # Usar strict=False para permitir rangos con bits de host (ej. 192.168.1.1/24)
@@ -1656,6 +1909,7 @@ class ScanStorage:
             normalized_range = str(net_obj)
         except ValueError as e:
             raise ValueError(f"Rango de red inválido: {e}")
+        purdue_level = self._validate_purdue_level(purdue_level)
 
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -1663,9 +1917,9 @@ class ScanStorage:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE networks
-                SET network_name = ?, network_range = ?, system_name = ?
+                SET network_name = ?, network_range = ?, system_name = ?, purdue_level = ?
                 WHERE id = ?
-            """, (network_name, normalized_range, system_name, network_id))
+            """, (network_name, normalized_range, system_name, purdue_level, network_id))
             
             rows = cursor.rowcount
             
@@ -1704,10 +1958,166 @@ class ScanStorage:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM networks WHERE id = ?", (network_id,))
             rows = cursor.rowcount
+            if rows > 0:
+                for row in cursor.execute("""
+                    SELECT id, accessible_network_ids_json
+                    FROM network_devices
+                    WHERE accessible_network_ids_json IS NOT NULL
+                """).fetchall():
+                    ids = self._normalize_id_list(row[1])
+                    if network_id not in ids:
+                        continue
+                    ids = [item for item in ids if item != network_id]
+                    cursor.execute("""
+                        UPDATE network_devices
+                        SET accessible_network_ids_json = ?
+                        WHERE id = ?
+                    """, (json.dumps(ids), row[0]))
             conn.commit()
             return rows > 0
         finally:
             conn.close()
+
+    # ------------------------------------------------------------------ #
+    #  ELECTRÓNICA DE RED                                                  #
+    # ------------------------------------------------------------------ #
+
+    def get_network_devices(self, organization: str) -> List[dict]:
+        """Devuelve firewalls, routers y switches declarados para una organización."""
+        conn = self._get_connection()
+        rows = conn.execute("""
+            SELECT id, organization_name, system_name, name, device_type, management_ip,
+                   accessible_network_ids_json, origin_locations_json,
+                   connected_device_ids_json, notes, created_at
+            FROM network_devices
+            WHERE UPPER(organization_name) = UPPER(?)
+            ORDER BY system_name, device_type, name
+        """, (organization,)).fetchall()
+        conn.close()
+
+        devices = []
+        for row in rows:
+            item = dict(row)
+            item["accessible_network_ids"] = self._normalize_id_list(
+                item.pop("accessible_network_ids_json", None)
+            )
+            item["origin_locations"] = self._normalize_text_list(
+                item.pop("origin_locations_json", None)
+            )
+            item["connected_device_ids"] = self._normalize_id_list(
+                item.pop("connected_device_ids_json", None)
+            )
+            devices.append(item)
+        return devices
+
+    def add_network_device(self, organization: str, name: str, device_type: str,
+                           system_name: str = None, management_ip: str = None,
+                           accessible_network_ids=None, origin_locations=None,
+                           connected_device_ids=None, notes: str = None) -> int:
+        """Añade un firewall, router o switch a la arquitectura declarada."""
+        device_type = (device_type or "").strip().lower()
+        if device_type not in {"firewall", "router", "switch"}:
+            raise ValueError("El tipo debe ser firewall, router o switch.")
+
+        accessible_ids = self._normalize_id_list(accessible_network_ids)
+        origin_values = self._normalize_text_list(origin_locations, uppercase=True)
+        connected_ids = self._normalize_id_list(connected_device_ids)
+
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute(
+            "INSERT OR IGNORE INTO organizations (name, description) VALUES (?, '')",
+            (organization.upper(),)
+        )
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO network_devices
+                (organization_name, system_name, name, device_type, management_ip,
+                 accessible_network_ids_json, origin_locations_json,
+                 connected_device_ids_json, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            organization.upper(),
+            system_name,
+            name.strip(),
+            device_type,
+            (management_ip or "").strip() or None,
+            json.dumps(accessible_ids),
+            json.dumps(origin_values),
+            json.dumps(connected_ids),
+            notes,
+        ))
+        new_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return new_id
+
+    def update_network_device(self, device_id: int, name: str, device_type: str,
+                              system_name: str = None, management_ip: str = None,
+                              accessible_network_ids=None, origin_locations=None,
+                              connected_device_ids=None, notes: str = None) -> bool:
+        """Actualiza un firewall, router o switch declarado."""
+        device_type = (device_type or "").strip().lower()
+        if device_type not in {"firewall", "router", "switch"}:
+            raise ValueError("El tipo debe ser firewall, router o switch.")
+
+        accessible_ids = self._normalize_id_list(accessible_network_ids)
+        origin_values = self._normalize_text_list(origin_locations, uppercase=True)
+        connected_ids = self._normalize_id_list(connected_device_ids)
+
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE network_devices
+                SET system_name = ?, name = ?, device_type = ?, management_ip = ?,
+                    accessible_network_ids_json = ?, origin_locations_json = ?,
+                    connected_device_ids_json = ?, notes = ?
+                WHERE id = ?
+            """, (
+                system_name,
+                name.strip(),
+                device_type,
+                (management_ip or "").strip() or None,
+                json.dumps(accessible_ids),
+                json.dumps(origin_values),
+                json.dumps(connected_ids),
+                notes,
+                device_id,
+            ))
+            rows = cursor.rowcount
+            conn.commit()
+            return rows > 0
+        finally:
+            conn.close()
+
+    def delete_network_device(self, device_id: int) -> bool:
+        """Elimina un activo de electrónica de red."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM network_devices WHERE id = ?", (device_id,))
+        rows = cursor.rowcount
+        if rows > 0:
+            for row in cursor.execute("""
+                SELECT id, connected_device_ids_json
+                FROM network_devices
+                WHERE connected_device_ids_json IS NOT NULL
+            """).fetchall():
+                ids = self._normalize_id_list(row[1])
+                if device_id not in ids:
+                    continue
+                ids = [item for item in ids if item != device_id]
+                cursor.execute("""
+                    UPDATE network_devices
+                    SET connected_device_ids_json = ?
+                    WHERE id = ?
+                """, (json.dumps(ids), row[0]))
+        conn.commit()
+        conn.close()
+        return rows > 0
 
     def delete_organization(self, organization: str) -> dict:
         """Elimina una organización completa y todos sus datos."""
@@ -1924,17 +2334,17 @@ class ScanStorage:
         """Devuelve los dispositivos críticos de una organización."""
         conn = self._get_connection()
         rows = conn.execute(
-            """SELECT id, organization_name, name, ips, reason, created_at
+            """SELECT id, organization_name, system_name, name, ips, reason, created_at
                FROM critical_devices
                WHERE UPPER(organization_name) = UPPER(?)
-               ORDER BY created_at DESC""",
+               ORDER BY system_name, created_at DESC""",
             (organization,)
         ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
 
     def add_critical_device(self, organization: str, name: str,
-                            ips: str, reason: str) -> int:
+                            ips: str, reason: str, system_name: str = None) -> int:
         """Añade un dispositivo crítico. Devuelve el id insertado."""
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -1945,16 +2355,17 @@ class ScanStorage:
         )
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO critical_devices (organization_name, name, ips, reason)
-               VALUES (?, ?, ?, ?)""",
-            (organization.upper(), name, ips.strip(), reason)
+            """INSERT INTO critical_devices (organization_name, system_name, name, ips, reason)
+               VALUES (?, ?, ?, ?, ?)""",
+            (organization.upper(), system_name, name, ips.strip(), reason)
         )
         new_id = cursor.lastrowid
         conn.commit()
         conn.close()
         return new_id
 
-    def update_critical_device(self, device_id: int, name: str, ips: str, reason: str) -> bool:
+    def update_critical_device(self, device_id: int, name: str, ips: str,
+                               reason: str, system_name: str = None) -> bool:
         """Actualiza un dispositivo crítico."""
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -1962,9 +2373,9 @@ class ScanStorage:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE critical_devices
-                SET name = ?, ips = ?, reason = ?
+                SET system_name = ?, name = ?, ips = ?, reason = ?
                 WHERE id = ?
-            """, (name, ips.strip(), reason, device_id))
+            """, (system_name, name, ips.strip(), reason, device_id))
             rows = cursor.rowcount
             conn.commit()
             return rows > 0

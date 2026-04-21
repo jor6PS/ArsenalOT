@@ -1,16 +1,33 @@
 import csv
 import io
+import ipaddress
 import json
 import sqlite3
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
-from arsenal.web.core.models import NetworkCreateRequest, NetworkUpdateRequest, CriticalDeviceRequest, CriticalDeviceUpdateRequest
+from arsenal.web.core.models import (
+    NetworkCreateRequest,
+    NetworkUpdateRequest,
+    CriticalDeviceRequest,
+    CriticalDeviceUpdateRequest,
+    NetworkDeviceRequest,
+    NetworkDeviceUpdateRequest,
+)
 from arsenal.web.core.deps import storage
 
 router = APIRouter()
+
+
+def _success_response(message: str, **extra):
+    return {"status": "success", **extra, "message": message}
+
+
+def _not_found_unless(found: bool, detail: str):
+    if not found:
+        raise HTTPException(status_code=404, detail=detail)
 
 @router.get("/api/stats")
 async def get_stats(
@@ -390,7 +407,9 @@ async def export_networks(organization: str):
         for sys in sorted_systems:
             lines.append(f"[{sys}]")
             for net in grouped[sys]:
-                lines.append(f"  - {net['network_name']}: {net['network_range']}")
+                purdue = net.get('purdue_level')
+                purdue_text = f" · Purdue L{purdue}" if purdue is not None else ""
+                lines.append(f"  - {net['network_name']}: {net['network_range']}{purdue_text}")
             lines.append("")
             
         content = "\n".join(lines)
@@ -415,9 +434,10 @@ async def create_network(request: NetworkCreateRequest):
                 organization=request.organization.upper(),
                 network_name=request.network_name,
                 network_range=request.network_range,
-                system_name=request.system_name
+                system_name=request.system_name,
+                purdue_level=request.purdue_level,
             )
-        return {"status": "success", "message": "Red añadida correctamente"}
+        return _success_response("Red añadida correctamente")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -432,10 +452,8 @@ async def delete_network(network_id: int):
         else:
             deleted = False
             
-        if deleted:
-            return {"status": "success", "message": "Red eliminada correctamente"}
-        else:
-            raise HTTPException(status_code=404, detail="Red no encontrada")
+        _not_found_unless(deleted, "Red no encontrada")
+        return _success_response("Red eliminada correctamente")
     except HTTPException:
         raise
     except Exception as e:
@@ -450,12 +468,11 @@ async def update_network(network_id: int, request: NetworkUpdateRequest):
                 network_id=network_id,
                 network_name=request.network_name,
                 network_range=request.network_range,
-                system_name=request.system_name
+                system_name=request.system_name,
+                purdue_level=request.purdue_level,
             )
-            if updated:
-                return {"status": "success", "message": "Red actualizada correctamente"}
-            else:
-                raise HTTPException(status_code=404, detail="Red no encontrada")
+            _not_found_unless(updated, "Red no encontrada")
+            return _success_response("Red actualizada correctamente")
         else:
             raise HTTPException(status_code=501, detail="update_network no implementado en storage")
     except ValueError as e:
@@ -489,8 +506,9 @@ async def create_critical_device(req: CriticalDeviceRequest):
             name=req.name,
             ips=req.ips,
             reason=req.reason,
+            system_name=req.system_name,
         )
-        return {"status": "success", "id": new_id, "message": "Dispositivo crítico añadido"}
+        return _success_response("Dispositivo crítico añadido", id=new_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -504,11 +522,85 @@ async def update_critical_device(device_id: int, req: CriticalDeviceUpdateReques
             name=req.name,
             ips=req.ips,
             reason=req.reason,
+            system_name=req.system_name,
         )
-        if updated:
-            return {"status": "success", "message": "Dispositivo crítico actualizado"}
-        else:
-            raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+        _not_found_unless(updated, "Dispositivo no encontrado")
+        return _success_response("Dispositivo crítico actualizado")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ------------------------------------------------------------------ #
+#  ELECTRÓNICA DE RED                                                 #
+# ------------------------------------------------------------------ #
+
+@router.get("/api/network-devices")
+async def get_network_devices(organization: str):
+    """Obtiene firewalls, routers y switches declarados para una organización."""
+    try:
+        return storage.get_network_devices(organization)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/network-devices")
+async def create_network_device(req: NetworkDeviceRequest):
+    """Añade un activo de electrónica de red."""
+    try:
+        new_id = storage.add_network_device(
+            organization=req.organization,
+            system_name=req.system_name,
+            name=req.name,
+            device_type=req.device_type,
+            management_ip=req.management_ip,
+            accessible_network_ids=req.accessible_network_ids,
+            origin_locations=req.origin_locations,
+            connected_device_ids=req.connected_device_ids,
+            notes=req.notes,
+        )
+        return _success_response("Activo de red añadido", id=new_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/api/network-devices/{device_id}")
+async def update_network_device(device_id: int, req: NetworkDeviceUpdateRequest):
+    """Actualiza un activo de electrónica de red."""
+    try:
+        updated = storage.update_network_device(
+            device_id=device_id,
+            system_name=req.system_name,
+            name=req.name,
+            device_type=req.device_type,
+            management_ip=req.management_ip,
+            accessible_network_ids=req.accessible_network_ids,
+            origin_locations=req.origin_locations,
+            connected_device_ids=req.connected_device_ids,
+            notes=req.notes,
+        )
+        _not_found_unless(updated, "Activo de red no encontrado")
+        return _success_response("Activo de red actualizado")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/api/network-devices/{device_id}")
+async def delete_network_device(device_id: int):
+    """Elimina un activo de electrónica de red por ID."""
+    try:
+        deleted = storage.delete_network_device(device_id)
+        _not_found_unless(deleted, "Activo de red no encontrado")
+        return _success_response("Activo de red eliminado")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -517,13 +609,540 @@ async def delete_critical_device(device_id: int):
     """Elimina un dispositivo crítico por ID."""
     try:
         deleted = storage.delete_critical_device(device_id)
-        if deleted:
-            return {"status": "success", "message": "Dispositivo crítico eliminado"}
-        raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+        _not_found_unless(deleted, "Dispositivo no encontrado")
+        return _success_response("Dispositivo crítico eliminado")
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ------------------------------------------------------------------ #
+#  IMPORT / EXPORT DASHBOARD RECONOCIMIENTO                           #
+# ------------------------------------------------------------------ #
+
+def _system_value(raw) -> Optional[str]:
+    value = str(raw or "").strip()
+    return value or None
+
+
+def _network_label(network: dict) -> str:
+    return f"{network['network_name']} ({network['network_range']})"
+
+
+def _split_ips(value) -> str:
+    if isinstance(value, list):
+        return ", ".join(str(item).strip() for item in value if str(item).strip())
+    return str(value or "").strip()
+
+
+def _find_existing_network(networks: List[dict], system_name: Optional[str],
+                           name: str, network_range: str) -> Optional[dict]:
+    try:
+        normalized_range = str(ipaddress.ip_network(network_range, strict=False))
+    except ValueError:
+        normalized_range = network_range
+    for network in networks:
+        if (network.get("system_name") or None) != system_name:
+            continue
+        if network.get("network_name", "").strip().lower() != name.strip().lower():
+            continue
+        if network.get("network_range") == normalized_range:
+            return network
+    return None
+
+
+def _diagram_origin_label(value: str) -> str:
+    return str(value or "").strip().upper()
+
+
+def _diagram_target_networks(value: str) -> list:
+    networks = []
+    for token in str(value or "").replace(",", " ").split():
+        cleaned = token.strip().strip("[](){};")
+        if not cleaned:
+            continue
+        if cleaned.count(":") == 1 and "." in cleaned:
+            cleaned = cleaned.rsplit(":", 1)[0]
+        try:
+            networks.append(ipaddress.ip_network(cleaned, strict=False))
+        except ValueError:
+            continue
+    return networks
+
+
+def _diagram_add_link(links: list, seen: set, source: str, target: str,
+                      link_type: str, label: str = ""):
+    key = (source, target, link_type, label)
+    if not source or not target or key in seen:
+        return
+    seen.add(key)
+    links.append({
+        "source": source,
+        "target": target,
+        "type": link_type,
+        "label": label,
+    })
+
+
+@router.get("/api/access-vector-diagram")
+async def get_access_vector_diagram(organization: str):
+    """Devuelve datos normalizados para dibujar vectores de acceso sin depender de servicios externos."""
+    try:
+        org = organization.upper()
+        networks = storage.get_networks(org)
+        network_devices = storage.get_network_devices(org)
+        critical_devices = storage.get_critical_devices(org)
+
+        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        scans = conn.execute("""
+            SELECT id, organization_name, location, target_range, status,
+                   scan_mode, scan_type, started_at
+            FROM scans
+            WHERE UPPER(organization_name) = UPPER(?)
+            ORDER BY started_at DESC
+        """, (org,)).fetchall()
+        conn.close()
+
+        network_by_id = {int(item["id"]): dict(item) for item in networks}
+        device_by_id = {int(item["id"]): dict(item) for item in network_devices}
+
+        systems = set()
+        for item in networks + network_devices + critical_devices:
+            systems.add(item.get("system_name") or "")
+        if not systems:
+            systems.add("")
+
+        origins = {}
+        for scan in scans:
+            origin_label = _diagram_origin_label(scan["location"])
+            if not origin_label:
+                continue
+            entry = origins.setdefault(origin_label, {
+                "id": f"origin:{origin_label}",
+                "name": origin_label,
+                "scan_count": 0,
+                "running_count": 0,
+                "targets": [],
+                "linked": False,
+            })
+            entry["scan_count"] += 1
+            if scan["status"] == "running":
+                entry["running_count"] += 1
+            target_range = str(scan["target_range"] or "").strip()
+            if target_range and target_range not in entry["targets"]:
+                entry["targets"].append(target_range)
+
+        for device in network_devices:
+            for origin in device.get("origin_locations") or []:
+                origin_label = _diagram_origin_label(origin)
+                if not origin_label:
+                    continue
+                origins.setdefault(origin_label, {
+                    "id": f"origin:{origin_label}",
+                    "name": origin_label,
+                    "scan_count": 0,
+                    "running_count": 0,
+                    "targets": [],
+                    "linked": False,
+                })
+
+        links = []
+        seen_links = set()
+
+        for device in network_devices:
+            device_id = f"device:{device['id']}"
+            for origin in device.get("origin_locations") or []:
+                origin_label = _diagram_origin_label(origin)
+                if not origin_label:
+                    continue
+                origins[origin_label]["linked"] = True
+                _diagram_add_link(
+                    links, seen_links, f"origin:{origin_label}", device_id,
+                    "origin_device", "origen declarado"
+                )
+
+            for network_id in device.get("accessible_network_ids") or []:
+                if int(network_id) in network_by_id:
+                    _diagram_add_link(
+                        links, seen_links, device_id, f"network:{int(network_id)}",
+                        "device_network", "red accesible"
+                    )
+
+            for peer_id in device.get("connected_device_ids") or []:
+                if int(peer_id) in device_by_id:
+                    _diagram_add_link(
+                        links, seen_links, device_id, f"device:{int(peer_id)}",
+                        "device_device", "conectado"
+                    )
+
+        parsed_networks = []
+        for network in networks:
+            try:
+                parsed = ipaddress.ip_network(network["network_range"], strict=False)
+            except ValueError:
+                parsed = None
+            parsed_networks.append((network, parsed))
+
+        for scan in scans:
+            origin_label = _diagram_origin_label(scan["location"])
+            target_range = str(scan["target_range"] or "").strip()
+            if not origin_label or not target_range:
+                continue
+            for target_net in _diagram_target_networks(target_range):
+                for network, parsed in parsed_networks:
+                    if parsed and target_net.overlaps(parsed):
+                        _diagram_add_link(
+                            links, seen_links, f"origin:{origin_label}", f"network:{network['id']}",
+                            "scan_target", "objetivo escaneado"
+                        )
+
+        return {
+            "organization": org,
+            "systems": [
+                {
+                    "id": f"system:{system or '__none__'}",
+                    "name": system or "Sin sistema",
+                    "raw_name": system or None,
+                }
+                for system in sorted(systems, key=lambda value: (value == "", value.lower()))
+            ],
+            "origins": sorted(origins.values(), key=lambda item: item["name"]),
+            "networks": [
+                {
+                    "id": f"network:{item['id']}",
+                    "raw_id": item["id"],
+                    "system_name": item.get("system_name") or None,
+                    "name": item["network_name"],
+                    "range": item["network_range"],
+                    "purdue_level": item.get("purdue_level"),
+                }
+                for item in networks
+            ],
+            "network_devices": [
+                {
+                    "id": f"device:{item['id']}",
+                    "raw_id": item["id"],
+                    "system_name": item.get("system_name") or None,
+                    "name": item["name"],
+                    "device_type": item["device_type"],
+                    "management_ip": item.get("management_ip") or "",
+                    "origin_locations": item.get("origin_locations") or [],
+                    "accessible_network_ids": item.get("accessible_network_ids") or [],
+                    "connected_device_ids": item.get("connected_device_ids") or [],
+                    "notes": item.get("notes") or "",
+                }
+                for item in network_devices
+            ],
+            "critical_devices": [
+                {
+                    "id": f"critical:{item['id']}",
+                    "raw_id": item["id"],
+                    "system_name": item.get("system_name") or None,
+                    "name": item["name"],
+                    "ips": item.get("ips") or "",
+                    "reason": item.get("reason") or "",
+                }
+                for item in critical_devices
+            ],
+            "links": links,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando diagrama de vectores: {e}")
+
+
+@router.get("/api/recon-dashboard/export")
+async def export_recon_dashboard(organization: str):
+    """Exporta el Dashboard de reconocimiento en JSON editable por el cliente."""
+    try:
+        org = organization.upper()
+        networks = storage.get_networks(org)
+        critical_devices = storage.get_critical_devices(org)
+        network_devices = storage.get_network_devices(org)
+
+        systems = set()
+        for item in networks + critical_devices + network_devices:
+            systems.add(item.get("system_name") or "")
+        if not systems:
+            systems.add("")
+
+        network_by_id = {n["id"]: n for n in networks}
+        device_by_id = {d["id"]: d for d in network_devices}
+        exported_systems = []
+
+        for system in sorted(systems, key=lambda value: (value == "", value.lower())):
+            system_name = system or None
+            system_networks = [n for n in networks if (n.get("system_name") or None) == system_name]
+            system_critical = [
+                d for d in critical_devices
+                if (d.get("system_name") or None) == system_name
+            ]
+            system_electronics = [
+                d for d in network_devices
+                if (d.get("system_name") or None) == system_name
+            ]
+
+            exported_systems.append({
+                "system_name": system_name or "",
+                "networks": [
+                    {
+                        "name": n["network_name"],
+                        "range": n["network_range"],
+                        "purdue_level": n.get("purdue_level"),
+                    }
+                    for n in system_networks
+                ],
+                "critical_devices": [
+                    {
+                        "name": d["name"],
+                        "ips": [ip.strip() for ip in d["ips"].split(",") if ip.strip()],
+                        "reason": d["reason"],
+                    }
+                    for d in system_critical
+                ],
+                "network_electronics": [
+                    {
+                        "name": d["name"],
+                        "type": d["device_type"],
+                        "management_ip": d.get("management_ip") or "",
+                        "connected_to": [
+                            device_by_id[item_id]["name"]
+                            for item_id in d.get("connected_device_ids", [])
+                            if item_id in device_by_id
+                        ],
+                        "accessible_networks": [
+                            _network_label(network_by_id[item_id])
+                            for item_id in d.get("accessible_network_ids", [])
+                            if item_id in network_by_id
+                        ],
+                        "scan_origins": d.get("origin_locations", []),
+                        "notes": d.get("notes") or "",
+                    }
+                    for d in system_electronics
+                ],
+            })
+
+        payload = {
+            "format": "arsenalot-recon-dashboard-v1",
+            "organization": org,
+            "instructions": (
+                "Editar este JSON y volver a importarlo en ArsenalOT. "
+                "Tipos de electrónica válidos: firewall, router, switch. "
+                "purdue_level admite valores 0, 1, 2, 3, 4 o 5."
+            ),
+            "systems": exported_systems,
+        }
+        data = json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
+        headers = {
+            "Content-Disposition": f"attachment; filename=recon_dashboard_{org.lower()}.json"
+        }
+        return StreamingResponse(io.BytesIO(data), media_type="application/json", headers=headers)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error exportando Dashboard: {e}")
+
+
+@router.post("/api/recon-dashboard/import")
+async def import_recon_dashboard(file: UploadFile = File(...), organization: Optional[str] = None):
+    """Importa un JSON de Dashboard de reconocimiento y rellena sus secciones."""
+    try:
+        raw = await file.read()
+        payload = json.loads(raw.decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"JSON inválido: {e}")
+
+    org = (organization or payload.get("organization") or "").strip().upper()
+    if not org:
+        raise HTTPException(status_code=400, detail="El JSON debe incluir organization o debe enviarse por query.")
+
+    stats = {
+        "networks": 0,
+        "critical_devices": 0,
+        "network_devices": 0,
+    }
+    try:
+        storage.create_organization(org)
+
+        # 1) Redes, para poder resolver referencias por nombre en electrónica.
+        networks = storage.get_networks(org)
+        network_lookup = {}
+        for network in networks:
+            network_lookup[network["network_name"].strip().lower()] = network["id"]
+            network_lookup[_network_label(network).strip().lower()] = network["id"]
+
+        for system in payload.get("systems", []):
+            system_name = _system_value(system.get("system_name") or system.get("name"))
+            for item in system.get("networks", []):
+                name = (item.get("network_name") or item.get("name") or "").strip()
+                network_range = (item.get("network_range") or item.get("range") or "").strip()
+                if not name or not network_range:
+                    continue
+                purdue_level = item.get("purdue_level", item.get("purdue"))
+                existing = _find_existing_network(networks, system_name, name, network_range)
+                if existing:
+                    storage.update_network(
+                        existing["id"],
+                        name,
+                        network_range,
+                        system_name=system_name,
+                        purdue_level=purdue_level,
+                    )
+                    network_id = existing["id"]
+                else:
+                    network_id = storage.add_network(
+                        org,
+                        name,
+                        network_range,
+                        system_name=system_name,
+                        purdue_level=purdue_level,
+                    )
+                refreshed = storage.get_networks(org)
+                networks = refreshed
+                network = next((n for n in refreshed if n["id"] == network_id), None)
+                if network:
+                    network_lookup[network["network_name"].strip().lower()] = network_id
+                    network_lookup[_network_label(network).strip().lower()] = network_id
+                stats["networks"] += 1
+
+        # 2) Dispositivos críticos.
+        critical_devices = storage.get_critical_devices(org)
+        for system in payload.get("systems", []):
+            system_name = _system_value(system.get("system_name") or system.get("name"))
+            for item in system.get("critical_devices", []):
+                name = (item.get("name") or "").strip()
+                ips = _split_ips(item.get("ips"))
+                reason = (item.get("reason") or "").strip()
+                if not name or not ips:
+                    continue
+                existing = next((
+                    d for d in critical_devices
+                    if (d.get("system_name") or None) == system_name
+                    and d.get("name", "").strip().lower() == name.lower()
+                    and d.get("ips", "").replace(" ", "") == ips.replace(" ", "")
+                ), None)
+                if existing:
+                    storage.update_critical_device(
+                        existing["id"], name, ips, reason, system_name=system_name
+                    )
+                else:
+                    storage.add_critical_device(
+                        org, name, ips, reason, system_name=system_name
+                    )
+                critical_devices = storage.get_critical_devices(org)
+                stats["critical_devices"] += 1
+
+        # 3) Electrónica de red en dos pasadas para resolver conexiones físicas por nombre.
+        network_devices = storage.get_network_devices(org)
+        device_lookup = {}
+        for device in network_devices:
+            key = ((device.get("system_name") or ""), device["name"].strip().lower())
+            device_lookup[key] = device["id"]
+            device_lookup[("", device["name"].strip().lower())] = device["id"]
+
+        pending_connections = []
+        for system in payload.get("systems", []):
+            system_name = _system_value(system.get("system_name") or system.get("name"))
+            system_key = system_name or ""
+            for item in system.get("network_electronics", []):
+                name = (item.get("name") or "").strip()
+                device_type = (item.get("device_type") or item.get("type") or "").strip()
+                if not name or not device_type:
+                    continue
+                refs = item.get("accessible_network_ids") or item.get("accessible_networks") or []
+                if isinstance(refs, str):
+                    refs = [refs]
+                accessible_ids = []
+                for ref in refs:
+                    if isinstance(ref, int):
+                        accessible_ids.append(ref)
+                    else:
+                        resolved = network_lookup.get(str(ref).strip().lower())
+                        if resolved:
+                            accessible_ids.append(resolved)
+
+                origins = item.get("origin_locations") or item.get("scan_origins") or []
+                key = (system_key, name.lower())
+                existing_id = device_lookup.get(key)
+                if existing_id:
+                    storage.update_network_device(
+                        existing_id,
+                        name=name,
+                        device_type=device_type,
+                        system_name=system_name,
+                        management_ip=item.get("management_ip"),
+                        accessible_network_ids=accessible_ids,
+                        origin_locations=origins,
+                        connected_device_ids=[],
+                        notes=item.get("notes"),
+                    )
+                    device_id = existing_id
+                else:
+                    device_id = storage.add_network_device(
+                        org,
+                        name=name,
+                        device_type=device_type,
+                        system_name=system_name,
+                        management_ip=item.get("management_ip"),
+                        accessible_network_ids=accessible_ids,
+                        origin_locations=origins,
+                        connected_device_ids=[],
+                        notes=item.get("notes"),
+                    )
+                device_lookup[(system_key, name.lower())] = device_id
+                device_lookup[("", name.lower())] = device_id
+                pending_connections.append({
+                    "id": device_id,
+                    "system_key": system_key,
+                    "name": name,
+                    "device_type": device_type,
+                    "system_name": system_name,
+                    "management_ip": item.get("management_ip"),
+                    "accessible_ids": accessible_ids,
+                    "origins": origins,
+                    "notes": item.get("notes"),
+                    "connected_to": (
+                        item.get("connected_device_ids")
+                        or item.get("connected_to")
+                        or []
+                    ),
+                })
+                stats["network_devices"] += 1
+
+        for item in pending_connections:
+            refs = item["connected_to"]
+            if isinstance(refs, str):
+                refs = [refs]
+            connected_ids = []
+            for ref in refs:
+                if isinstance(ref, int):
+                    connected_ids.append(ref)
+                else:
+                    name = str(ref).strip().lower()
+                    resolved = (
+                        device_lookup.get((item["system_key"], name))
+                        or device_lookup.get(("", name))
+                    )
+                    if resolved and resolved != item["id"]:
+                        connected_ids.append(resolved)
+            storage.update_network_device(
+                item["id"],
+                name=item["name"],
+                device_type=item["device_type"],
+                system_name=item["system_name"],
+                management_ip=item["management_ip"],
+                accessible_network_ids=item["accessible_ids"],
+                origin_locations=item["origins"],
+                connected_device_ids=connected_ids,
+                notes=item["notes"],
+            )
+
+        return {"status": "success", "organization": org, "stats": stats}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error importando Dashboard: {e}")
 
 
 # ------------------------------------------------------------------ #

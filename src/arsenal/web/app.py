@@ -328,8 +328,22 @@ async def start_scan(config: ScanConfig):
     # Determinar myip usando la interfaz pasada
     myip = config.myip if config.myip else get_interface_ip(config.interface)
     
-    # Forzar desactivación de ciertos flags si no es modo activo
+    # Forzar desactivación de fases activas si no es modo activo. El formulario
+    # puede conservar checkboxes ocultos al cambiar de modo y una petición manual
+    # también podría enviar estos flags.
     is_active = config.scan_mode == "active"
+    if not is_active:
+        config.host_discovery = False
+        config.nmap_icmp = False
+        config.nmap = False
+        config.nmap_versions = False
+        config.nmap_vulns = False
+        config.nmap_ot_ports = False
+        config.nmap_it_ports = False
+        config.custom_ports = None
+        config.custom_host_discovery_command = None
+        config.custom_ping_command = None
+        config.custom_nmap_command = None
     
     scan_id = storage.start_scan(
         organization=config.organization,
@@ -1063,6 +1077,33 @@ async def delete_location(organization: str, location: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error eliminando ubicación: {str(e)}")
+
+class LocationRenameRequest(BaseModel):
+    organization: str
+    old_location: str
+    new_location: str
+
+@app.patch("/api/location")
+async def rename_location(request: LocationRenameRequest):
+    """Renombra un origen y propaga el cambio a resultados, bitácora y referencias."""
+    try:
+        result = storage.rename_location(
+            request.organization,
+            request.old_location,
+            request.new_location,
+        )
+        return {
+            "status": "success",
+            "message": (
+                f"Origen '{result['old_location']}' renombrado a "
+                f"'{result['new_location']}'"
+            ),
+            **result,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error renombrando origen: {str(e)}")
 
 @app.delete("/api/organization/{organization}")
 async def delete_organization(organization: str):
@@ -2232,4 +2273,3 @@ if name_var == main_str:
         port=port,
         log_level="warning"  # Solo warnings y errores
     )
-

@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 /* Reset y Variables - Estilo Moderno Glassmorphism Dark */
 * {
     margin: 0;
@@ -476,6 +474,23 @@ body {
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-soft);
     overflow-x: auto;
+}
+
+.results-table-panel {
+    overflow: visible;
+}
+
+.results-search-toolbar {
+    position: sticky;
+    top: calc(var(--results-sticky-offset, 176px) + 0.75rem);
+    z-index: 90;
+    padding: 0.75rem;
+    background: rgba(22, 27, 34, 0.94);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--border-highlight);
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
 table {

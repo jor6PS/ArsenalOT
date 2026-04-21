@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 
 class ScanConfig(BaseModel):
     organization: str
@@ -39,19 +39,44 @@ class NetworkCreateRequest(BaseModel):
     network_name: str
     network_range: str
     system_name: Optional[str] = None
+    purdue_level: Optional[int] = None
 
 class NetworkUpdateRequest(BaseModel):
     network_name: str
     network_range: str
     system_name: Optional[str] = None
+    purdue_level: Optional[int] = None
 
 class CriticalDeviceRequest(BaseModel):
     organization: str
+    system_name: Optional[str] = None
     name: str
     ips: str         # IPs separadas por comas: "192.168.1.1, 10.0.0.5"
     reason: str
 
 class CriticalDeviceUpdateRequest(BaseModel):
+    system_name: Optional[str] = None
     name: str
     ips: str
     reason: str
+
+class NetworkDeviceRequest(BaseModel):
+    organization: str
+    system_name: Optional[str] = None
+    name: str
+    device_type: str
+    management_ip: Optional[str] = None
+    accessible_network_ids: List[int] = []
+    origin_locations: List[str] = []
+    connected_device_ids: List[int] = []
+    notes: Optional[str] = None
+
+class NetworkDeviceUpdateRequest(BaseModel):
+    system_name: Optional[str] = None
+    name: str
+    device_type: str
+    management_ip: Optional[str] = None
+    accessible_network_ids: List[int] = []
+    origin_locations: List[str] = []
+    connected_device_ids: List[int] = []
+    notes: Optional[str] = None
