@@ -7,10 +7,91 @@
 {% set active_section = 'dashboard' %}
 {% include "org_tabs.html" %}
 
-<div class="dashboard" style="margin-top: 1.5rem;">
+<div class="dashboard recon-dashboard" style="margin-top: 1.5rem;">
     <input type="hidden" id="filterOrg" value="{{ org_name }}">
+    <input type="hidden" id="filterScan" value="">
+
+    <!-- Progreso de Escaneos en Ejecución -->
+    <div id="runningScansProgress" class="recon-running-panel" style="display: none; margin-bottom: 2rem;">
+        <!-- Se llenará dinámicamente con escaneos en ejecución -->
+    </div>
+
+    <!-- Import / Export Dashboard -->
+    <div class="glass-card recon-hero" style="margin-bottom: 2rem; padding: 1.25rem; border-left: 3px solid #22c55e;">
+        <div class="recon-hero-main">
+            <div class="recon-hero-copy">
+                <div class="recon-eyebrow">Reconocimiento</div>
+                <h2>Dashboard de alcance y arquitectura</h2>
+                <p>
+                    Exporta una ficha JSON editable para el cliente o importa una ficha cumplimentada.
+                    Cruza sistemas, orígenes, escaneos, redes y activos críticos desde una sola vista.
+                </p>
+            </div>
+            <div class="recon-hero-actions">
+                <button class="btn recon-action success" onclick="exportReconDashboard()">
+                    📤 Exportar formulario
+                </button>
+                <button class="btn recon-action primary" onclick="document.getElementById('reconDashboardImportFile').click()">
+                    📥 Importar formulario
+                </button>
+                <input type="file" id="reconDashboardImportFile" accept=".json,application/json"
+                    onchange="importReconDashboard(event)" style="display: none;">
+            </div>
+        </div>
+    </div>
+
+    <!-- Vista unificada por sistemas -->
+    <div class="glass-card recon-architecture-panel" style="margin-bottom: 2rem; padding: 1.5rem; border-left: 3px solid #38bdf8;">
+        <div class="recon-section-head">
+            <div>
+                <h3
+                    style="margin: 0 0 0.35rem 0; color: #7dd3fc; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                    <span>🧭</span> Arquitectura por sistemas
+                </h3>
+                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
+                    Vista agrupada de redes, electrónica y activos críticos declarados para cada sistema.
+                </p>
+            </div>
+            <div class="recon-panel-actions">
+                <button class="btn btn-sm recon-action success" onclick="addReconSystem()">
+                    ➕ Añadir sistema
+                </button>
+                <button class="btn btn-sm recon-action info" onclick="refreshReconSystemSections()">
+                    🔄 Actualizar
+                </button>
+            </div>
+        </div>
+        <div id="systemsReconList" class="systems-recon-list"
+            style="display: flex; flex-direction: column; gap: 1rem;">
+            <div class="loading">Cargando arquitectura por sistemas...</div>
+        </div>
+    </div>
+
+    <div id="reconItemModal" style="display: none; position: fixed; inset: 0; z-index: 2000; background: rgba(2,6,23,0.78); backdrop-filter: blur(6px); align-items: center; justify-content: center; padding: 1rem;">
+        <div style="width: min(720px, 96vw); max-height: 90vh; overflow-y: auto; background: #0f172a; border: 1px solid #334155; border-radius: 8px; box-shadow: 0 24px 80px rgba(0,0,0,0.45);">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid #334155;">
+                <div>
+                    <h3 id="reconItemModalTitle" style="margin: 0; color: var(--text-primary); font-size: 1.1rem;">Añadir elemento</h3>
+                    <p id="reconItemModalSubtitle" style="margin: 0.25rem 0 0 0; color: var(--text-secondary); font-size: 0.85rem;"></p>
+                </div>
+                <button type="button" onclick="closeReconItemModal()" aria-label="Cerrar"
+                    style="background: none; border: none; color: #cbd5e1; cursor: pointer; font-size: 1.3rem;">✕</button>
+            </div>
+            <form id="reconItemModalForm" onsubmit="event.preventDefault(); submitReconItemModal();"
+                style="display: grid; gap: 0.85rem; padding: 1.25rem;">
+                <div id="reconItemModalFields" style="display: grid; gap: 0.85rem;"></div>
+                <div style="display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.25rem;">
+                    <button type="button" class="btn" onclick="closeReconItemModal()"
+                        style="padding: 0.55rem 0.9rem; background: #475569; color: white; border-color: #64748b;">Cancelar</button>
+                    <button id="reconItemModalSubmit" type="submit" class="btn"
+                        style="padding: 0.55rem 0.9rem; background: #2563eb; color: white; border-color: #3b82f6;">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Panel de Redes -->
-    <div class="networks-section glass-card" style="margin-bottom: 2rem; padding: 1.5rem;">
+    <div class="networks-section glass-card" style="display: none; margin-bottom: 2rem; padding: 1.5rem;">
         <h3
             style="margin-top: 0; margin-bottom: 1.5rem; color: #60a5fa; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
             <span>🌐</span> Redes de la Organización
@@ -30,6 +111,16 @@
                         style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
                     <input type="text" id="networkRange" placeholder="Rango (ej. 192.168.1.0/24)" required
                         style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                    <select id="purdueLevel"
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        <option value="">Nivel Purdue (opcional)</option>
+                        <option value="5">Nivel 5 - Empresa</option>
+                        <option value="4">Nivel 4 - Sistemas corporativos</option>
+                        <option value="3">Nivel 3 - Operaciones de planta</option>
+                        <option value="2">Nivel 2 - Supervisión</option>
+                        <option value="1">Nivel 1 - Control básico</option>
+                        <option value="0">Nivel 0 - Proceso físico</option>
+                    </select>
                     <button type="submit" class="btn"
                         style="margin-top: 0.5rem; padding: 0.6rem; background: #2563eb; color: white; transition: 0.2s;">➕
                         Añadir
@@ -38,7 +129,7 @@
             </div>
 
             <!-- Lista de Redes -->
-            <div style="flex: 2; min-width: 300px;">
+            <div style="display: none; flex: 2; min-width: 300px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <h4 style="margin: 0; font-size: 1rem; color: var(--text-primary);">Redes Registradas</h4>
                     <button class="btn btn-sm" onclick="exportNetworksTxt()"
@@ -53,8 +144,67 @@
         </div>
     </div>
 
+    <!-- Electrónica de Red -->
+    <div class="glass-card" style="display: none; margin-bottom: 2rem; padding: 1.5rem; border-left: 3px solid #f59e0b;">
+        <h3
+            style="margin-top: 0; margin-bottom: 1.5rem; color: #fbbf24; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+            <span>🔀</span> Arquitectura de Electrónica de Red
+        </h3>
+        <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+            <div
+                style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid #4a2f06;">
+                <h4 id="networkDeviceFormTitle"
+                    style="margin-top: 0; font-size: 1rem; color: var(--text-primary); margin-bottom: 1rem;">
+                    Añadir electrónica de red
+                </h4>
+                <form id="addNetworkDeviceForm" onsubmit="event.preventDefault(); saveNetworkDevice();"
+                    style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <input type="text" id="networkDeviceSystem" placeholder="Sistema (ej. SCADA Línea 1)"
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                    <input type="text" id="networkDeviceName" placeholder="Nombre (ej. FW1, SW1)" required
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                    <select id="networkDeviceType" required
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        <option value="">Tipo de activo</option>
+                        <option value="firewall">Firewall</option>
+                        <option value="router">Router</option>
+                        <option value="switch">Switch</option>
+                    </select>
+                    <input type="text" id="networkDeviceManagementIp" placeholder="IP de gestión (opcional)"
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                    <label style="color: var(--text-secondary); font-size: 0.85rem;">Redes a las que da acceso</label>
+                    <select id="networkDeviceNetworks" multiple size="5"
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; min-height: 8rem;"></select>
+                    <label style="color: var(--text-secondary); font-size: 0.85rem;">Orígenes de escaneo asociados</label>
+                    <select id="networkDeviceOrigins" multiple size="4"
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; min-height: 6rem;"></select>
+                    <label style="color: var(--text-secondary); font-size: 0.85rem;">Conexiones físicas directas</label>
+                    <select id="networkDeviceConnections" multiple size="4"
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; min-height: 6rem;"></select>
+                    <textarea id="networkDeviceNotes" placeholder="Notas (opcional)" rows="2"
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; resize: vertical;"></textarea>
+                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                        <button id="networkDeviceSubmitBtn" type="submit" class="btn"
+                            style="flex: 1; margin-top: 0.25rem; padding: 0.6rem; background: #92400e; color: white; border-color: #f59e0b;">
+                            🔀 Añadir activo
+                        </button>
+                        <button id="networkDeviceCancelBtn" type="button" class="btn" onclick="resetNetworkDeviceForm()"
+                            style="display: none; margin-top: 0.25rem; padding: 0.6rem; background: #475569; color: white; border-color: #64748b;">
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div style="display: none; flex: 2; min-width: 320px;">
+                <div id="networkDevicesList" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div class="loading">Cargando electrónica de red...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Dispositivos Críticos -->
-    <div class="glass-card" style="margin-bottom: 2rem; padding: 1.5rem; border-left: 3px solid #ef4444;">
+    <div class="glass-card" style="display: none; margin-bottom: 2rem; padding: 1.5rem; border-left: 3px solid #ef4444;">
         <h3
             style="margin-top: 0; margin-bottom: 1.5rem; color: #f87171; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
             <span>🚨</span> Dispositivos Críticos
@@ -67,6 +217,8 @@
                     Dispositivo Crítico</h4>
                 <form id="addCriticalForm" onsubmit="event.preventDefault(); addCriticalDevice();"
                     style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <input type="text" id="criticalSystemName" placeholder="Sistema (ej. SCADA Línea 1)"
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
                     <input type="text" id="criticalName" placeholder="Nombre (ej. PLC Línea 1)" required
                         style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
                     <input type="text" id="criticalIps"
@@ -82,7 +234,7 @@
                 </form>
             </div>
             <!-- Lista -->
-            <div style="flex: 2; min-width: 300px;">
+            <div style="display: none; flex: 2; min-width: 300px;">
                 <div id="criticalDevicesList" style="display: flex; flex-direction: column; gap: 0.75rem;">
                     <div class="loading">Cargando dispositivos críticos...</div>
                 </div>
@@ -90,45 +242,31 @@
         </div>
     </div>
 
-    <!-- Sistema de Filtros Visuales (Pills) -->
-    <div class="visual-filters" style="margin-bottom: 2rem; display: flex; gap: 1.5rem; flex-wrap: wrap;">
-        <!-- Container Ubicaciones -->
-        <div style="flex: 1; min-width: 300px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                <label
-                    style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">📍
-                    Filtrar por Origen (From)</label>
+    <!-- Orígenes de reconocimiento -->
+    <div class="visual-filters recon-filters" style="margin-bottom: 2rem; display: flex; gap: 1.5rem; flex-wrap: wrap;">
+        <div class="recon-filter-group" style="flex: 1; min-width: 300px;">
+            <div class="recon-filter-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <div>
+                    <label
+                        style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">📍
+                        Orígenes de reconocimiento</label>
+                    <p class="recon-origin-help">Gestiona los nombres de los orígenes y corrige cualquier etiqueta antes de que aparezca en resultados o bitácora.</p>
+                </div>
                 <button id="deleteLocationBtn" class="btn btn-sm" onclick="deleteLocation()"
                     style="display: none; padding: 0.2rem 0.5rem; font-size: 0.75rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;">🗑️
                     Eliminar</button>
             </div>
-            <div id="locationPills"
+            <div id="locationPills" class="recon-pillbox"
                 style="display: flex; flex-wrap: wrap; gap: 0.5rem; background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); min-height: 56px;">
                 <div class="loading" style="font-size: 0.85rem;">Cargando orígenes...</div>
             </div>
             <input type="hidden" id="filterLocation" value="">
         </div>
-
-        <!-- Container Escaneos -->
-        <div style="flex: 2; min-width: 300px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                <label
-                    style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">🎯
-                    Filtrar por Escaneo</label>
-                <button id="deleteScanBtn" class="btn btn-sm" onclick="deleteScan()"
-                    style="display: none; padding: 0.2rem 0.5rem; font-size: 0.75rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;">🗑️
-                    Eliminar</button>
-            </div>
-            <div id="scanPills"
-                style="display: flex; overflow-x: auto; padding-bottom: 0.5rem; gap: 0.75rem; background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); min-height: 56px;">
-                <div class="loading" style="font-size: 0.85rem;">Cargando escaneos...</div>
-            </div>
-            <input type="hidden" id="filterScan" value="">
-        </div>
+        <div id="scanPills" style="display: none;"></div>
     </div>
 
     <!-- Estadísticas -->
-    <div class="stats-section glass-card" style="margin-bottom: 2rem; padding: 1.5rem;">
+    <div class="stats-section glass-card recon-stats-panel" style="margin-bottom: 2rem; padding: 1.5rem;">
         <h3
             style="margin-top: 0; margin-bottom: 1.5rem; color: var(--text-primary); font-size: 1.25rem; font-weight: 600;">
             📊 Estadísticas</h3>
@@ -210,29 +348,445 @@
     </div>
 
     <style>
+        .recon-dashboard {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.25rem;
+            align-items: start;
+            margin-top: 4.75rem !important;
+            overflow: visible;
+        }
+
+        .recon-dashboard > * {
+            min-width: 0;
+            box-sizing: border-box;
+        }
+
+        .recon-hero {
+            grid-column: 1 / -1;
+            order: 1;
+            margin-bottom: 0.75rem !important;
+            padding: 1rem 1.25rem !important;
+            background:
+                linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(56, 189, 248, 0.08)),
+                rgba(15, 23, 42, 0.82) !important;
+            border: 1px solid rgba(148, 163, 184, 0.18) !important;
+            border-left: 0 !important;
+            border-radius: 8px;
+        }
+
+        .recon-hero-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+        }
+
+        .recon-eyebrow {
+            color: #86efac;
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 0.35rem;
+        }
+
+        .recon-hero-copy h2 {
+            margin: 0;
+            color: #f8fafc;
+            font-size: 1.45rem;
+            line-height: 1.15;
+        }
+
+        .recon-hero-copy p {
+            margin: 0.45rem 0 0 0;
+            color: #cbd5e1;
+            max-width: 760px;
+            font-size: 0.94rem;
+        }
+
+        .recon-hero-actions,
+        .recon-panel-actions {
+            display: flex;
+            gap: 0.65rem;
+            flex-wrap: wrap;
+        }
+
+        .recon-action {
+            border-radius: 8px !important;
+            padding: 0.55rem 0.85rem !important;
+            font-weight: 700;
+            box-shadow: none !important;
+        }
+
+        .recon-action.success {
+            background: rgba(34, 197, 94, 0.16) !important;
+            color: #bbf7d0 !important;
+            border: 1px solid rgba(34, 197, 94, 0.42) !important;
+        }
+
+        .recon-action.primary {
+            background: rgba(59, 130, 246, 0.16) !important;
+            color: #bfdbfe !important;
+            border: 1px solid rgba(59, 130, 246, 0.45) !important;
+        }
+
+        .recon-action.info {
+            background: rgba(56, 189, 248, 0.14) !important;
+            color: #bae6fd !important;
+            border: 1px solid rgba(56, 189, 248, 0.42) !important;
+        }
+
+        .recon-architecture-panel {
+            grid-column: 1 / -1;
+            order: 4;
+            border-left: 0 !important;
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.72) !important;
+            border: 1px solid rgba(125, 211, 252, 0.16) !important;
+        }
+
+        .recon-section-head {
+            display: flex !important;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .recon-filters {
+            grid-column: 1 / -1;
+            order: 2;
+            display: grid !important;
+            gap: 1rem !important;
+            margin-bottom: 0 !important;
+            position: static;
+            z-index: auto;
+            min-width: 0;
+        }
+
+        .recon-filter-group {
+            min-width: 0 !important;
+            max-width: 100%;
+            overflow: hidden;
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(125, 211, 252, 0.16);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .recon-filter-head {
+            margin-bottom: 0.7rem !important;
+        }
+
+        .recon-filter-head label {
+            font-size: 0.78rem !important;
+            letter-spacing: 0.06em !important;
+            color: #cbd5e1 !important;
+        }
+
+        .recon-origin-help {
+            margin: 0.35rem 0 0 0;
+            color: var(--text-secondary);
+            font-size: 0.86rem;
+            line-height: 1.45;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .recon-pillbox {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 0.75rem !important;
+            max-width: 100%;
+            background: transparent !important;
+            border: 0 !important;
+            border-radius: 8px !important;
+            padding: 0 !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+        }
+
+        .recon-pillbox-scroll {
+            max-height: none;
+            overflow: visible !important;
+            align-content: flex-start;
+        }
+
+        .recon-stats-panel {
+            grid-column: 2;
+            order: 2;
+            display: none !important;
+            margin-bottom: 0 !important;
+            background: rgba(15, 23, 42, 0.66) !important;
+            border: 1px solid rgba(148, 163, 184, 0.16) !important;
+            border-radius: 8px;
+        }
+
+        .recon-stats-panel h3 {
+            margin-bottom: 1rem !important;
+            font-size: 1rem !important;
+            color: #e2e8f0 !important;
+        }
+
+        .recon-stats-panel .stats-grid {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+            gap: 0.75rem !important;
+            margin-bottom: 0 !important;
+        }
+
+        .recon-stats-panel .stat-card {
+            min-height: 76px;
+            padding: 0.85rem !important;
+            border-radius: 8px !important;
+            background: rgba(2, 6, 23, 0.34) !important;
+            border: 1px solid rgba(148, 163, 184, 0.13) !important;
+            box-shadow: none !important;
+            display: flex !important;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .recon-stats-panel .stat-icon {
+            font-size: 1.25rem !important;
+            margin-bottom: 0;
+        }
+
+        .recon-stats-panel .stat-info h3 {
+            font-size: 1.25rem !important;
+            margin: 0 !important;
+        }
+
+        .recon-stats-panel .stat-info p {
+            font-size: 0.74rem !important;
+            margin-top: 0.15rem !important;
+            line-height: 1.2;
+        }
+
+        .recon-running-panel,
+        .recon-recent-panel {
+            grid-column: 1 / -1;
+        }
+
+        .recon-running-panel {
+            grid-column: 1 / -1;
+            order: 0;
+        }
+
+        .recon-recent-panel {
+            order: 6;
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.72) !important;
+            border: 1px solid rgba(148, 163, 184, 0.16) !important;
+        }
+
+        .recon-table-container {
+            max-height: 540px !important;
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            border-radius: 8px;
+            background: rgba(2, 6, 23, 0.24);
+        }
+
+        .recon-table-container table th {
+            background: rgba(15, 23, 42, 0.96);
+            color: #cbd5e1;
+            font-size: 0.76rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .recon-table-container table td {
+            vertical-align: top;
+        }
+
+        .systems-recon-list {
+            gap: 0.75rem !important;
+        }
+
+        .recon-system-card {
+            background: rgba(2, 6, 23, 0.22) !important;
+            border: 1px solid rgba(125, 211, 252, 0.14) !important;
+            border-radius: 8px !important;
+            padding: 0.95rem !important;
+            box-shadow: none;
+        }
+
+        .recon-system-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            margin-bottom: 0.75rem;
+        }
+
+        .recon-system-title-row,
+        .recon-system-actions,
+        .recon-system-badges {
+            display: flex;
+            gap: 0.55rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .recon-system-title-row h4 {
+            margin: 0;
+            color: #e0f2fe;
+            font-size: 1.1rem;
+            font-weight: 750;
+        }
+
+        .recon-system-action {
+            padding: 0.25rem 0.55rem !important;
+            border-radius: 999px !important;
+            font-size: 0.78rem !important;
+        }
+
+        .recon-system-badge {
+            border-radius: 999px;
+            padding: 0.25rem 0.55rem;
+            color: #cbd5e1;
+            font-size: 0.8rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(15, 23, 42, 0.42);
+        }
+
+        .recon-system-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.65rem;
+        }
+
+        .recon-system-column {
+            min-width: 0;
+            display: grid;
+            grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+            gap: 0.85rem;
+            align-items: start;
+            background: rgba(15, 23, 42, 0.2);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+
+        .recon-system-column-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.5rem;
+            align-items: center;
+            margin-bottom: 0;
+        }
+
+        .recon-system-column-head h5 {
+            margin: 0;
+            font-size: 0.92rem;
+            font-weight: 750;
+        }
+
+        .recon-column-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0.65rem;
+            min-height: 48px;
+            border-radius: 8px;
+            transition: background 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .network-drop-zone {
+            padding: 0.15rem;
+        }
+
+        .network-drop-zone.drag-over {
+            background: rgba(56, 189, 248, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.32);
+        }
+
+        .recon-empty-state {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border: 1px dashed rgba(148, 163, 184, 0.24);
+            border-radius: 8px;
+            padding: 0.7rem 0.8rem;
+            background: rgba(2, 6, 23, 0.18);
+        }
+
+        .recon-item-card,
+        .network-card {
+            min-height: 0;
+            padding: 0.8rem !important;
+        }
+
+        .network-card {
+            cursor: grab;
+        }
+
+        .network-card.dragging {
+            opacity: 0.48;
+            cursor: grabbing;
+        }
+
         .pill {
-            padding: 0.4rem 1rem;
-            border-radius: 20px;
-            background: #1e293b;
-            border: 1px solid #334155;
-            color: #94a3b8;
+            padding: 0.8rem 0.9rem;
+            border-radius: 8px;
+            background: rgba(2, 6, 23, 0.24);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            color: #cbd5e1;
             cursor: pointer;
             font-size: 0.85rem;
             transition: all 0.2s ease;
-            white-space: nowrap;
+            white-space: normal;
+            max-width: 100%;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pill.location-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.45rem;
+        }
+
+        .location-pill span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pill-edit {
+            width: 1.35rem;
+            height: 1.35rem;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(15, 23, 42, 0.6);
+            color: #cbd5e1;
+            cursor: pointer;
+            font-size: 0.75rem;
+            line-height: 1;
+        }
+
+        .pill-edit:hover {
+            background: rgba(59, 130, 246, 0.22);
+            border-color: rgba(96, 165, 250, 0.7);
+            color: #ffffff;
         }
 
         .pill:hover {
-            background: #334155;
+            background: rgba(15, 23, 42, 0.72);
             color: #f8fafc;
+            border-color: rgba(148, 163, 184, 0.36);
         }
 
         .pill.active {
-            background: #3b82f6;
+            background: rgba(37, 99, 235, 0.28);
             color: #ffffff;
-            border-color: #60a5fa;
+            border-color: rgba(147, 197, 253, 0.72);
             font-weight: 600;
-            box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
         }
 
         .network-card {
@@ -259,24 +813,69 @@
         .network-delete-btn:hover {
             background: rgba(239, 68, 68, 0.4);
         }
+
+        @media (max-width: 1100px) {
+            .recon-dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .recon-hero,
+            .recon-filters,
+            .recon-stats-panel,
+            .recon-architecture-panel,
+            .recon-running-panel,
+            .recon-recent-panel {
+                grid-column: 1;
+            }
+
+            .recon-filters {
+                position: static;
+            }
+
+            .recon-system-grid {
+                grid-template-columns: 1fr !important;
+            }
+
+            .recon-system-column {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .recon-hero-main,
+            .recon-section-head {
+                align-items: stretch;
+            }
+
+            .recon-hero-actions,
+            .recon-panel-actions {
+                width: 100%;
+            }
+
+            .recon-action {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .recon-stats-panel .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 
-    <!-- Progreso de Escaneos en Ejecución -->
-    <div id="runningScansProgress" style="display: none; margin-bottom: 2rem;">
-        <!-- Se llenará dinámicamente con escaneos en ejecución -->
-    </div>
-
     <!-- Escaneos Recientes -->
-    <div class="dashboard-section glass-card" style="padding: 1.5rem; margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h2 style="margin: 0; color: var(--text-primary); font-size: 1.25rem; font-weight: 600;">📋 Escaneos
-                Recientes</h2>
+    <div class="dashboard-section glass-card recon-recent-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+        <div class="recon-section-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <div>
+                <h2 style="margin: 0; color: var(--text-primary); font-size: 1.25rem; font-weight: 600;">📋 Escaneos recientes</h2>
+                <p style="margin: 0.25rem 0 0 0; color: var(--text-secondary); font-size: 0.88rem;">Últimas ejecuciones filtradas por organización, origen o escaneo.</p>
+            </div>
             <button id="cleanupZombiesBtn" class="btn btn-secondary" onclick="cleanupZombies()"
                 style="display: none; padding: 0.5rem 1rem;">
                 🧹 Limpiar Zombies
             </button>
         </div>
-        <div class="table-container" style="overflow-y: auto; overflow-x: auto; max-height: 70vh;">
+        <div class="table-container recon-table-container" style="overflow-y: auto; overflow-x: auto; max-height: 70vh;">
             <table id="recentScansTable" style="width: 100%;">
                 <thead style="position: sticky; top: 0; z-index: 10;">
                     <tr>
@@ -305,6 +904,654 @@
         location: '',
         scan_id: ''
     };
+    let cachedNetworks = [];
+    let cachedLocations = [];
+    let cachedNetworkDevices = [];
+    let cachedCriticalDevices = [];
+    let manualReconSystems = [];
+    let editingNetworkDeviceId = null;
+    let draggedNetworkId = null;
+    let reconItemModalState = { kind: null, systemName: null, itemId: null };
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function systemLabel(systemName) {
+        return systemName || 'Sin Sistema Asociado';
+    }
+
+    function purdueLabel(level) {
+        if (level === null || level === undefined || level === '') return 'Sin Purdue';
+        return `Purdue L${level}`;
+    }
+
+    function systemSort(a, b) {
+        const empty = 'Sin Sistema Asociado';
+        if (a === empty) return 1;
+        if (b === empty) return -1;
+        return a.localeCompare(b);
+    }
+
+    function currentOrgValue() {
+        return currentFilters.organization || document.getElementById('filterOrg')?.value || "{{ org_name | default('') }}";
+    }
+
+    function systemStorageKey() {
+        return `arsenalot.reconSystems.${currentOrgValue() || 'global'}`;
+    }
+
+    function loadManualReconSystems() {
+        try {
+            manualReconSystems = JSON.parse(localStorage.getItem(systemStorageKey()) || '[]')
+                .filter(Boolean)
+                .map(item => String(item).trim())
+                .filter(Boolean);
+        } catch (error) {
+            manualReconSystems = [];
+        }
+    }
+
+    function saveManualReconSystems() {
+        localStorage.setItem(systemStorageKey(), JSON.stringify([...new Set(manualReconSystems)]));
+    }
+
+    function normalizePromptList(value) {
+        return String(value || '')
+            .split(',')
+            .map(item => item.trim())
+            .filter(Boolean);
+    }
+
+    function networkChoiceText(systemName = null) {
+        const scoped = cachedNetworks.filter(net => (net.system_name || '') === (systemName || ''));
+        const source = scoped.length ? scoped : cachedNetworks;
+        if (!source.length) return '';
+        return source.map(net => `${net.id}: ${net.network_name} (${net.network_range})`).join('\n');
+    }
+
+    function deviceChoiceText(systemName = null) {
+        const scoped = cachedNetworkDevices.filter(device => (device.system_name || '') === (systemName || ''));
+        const source = scoped.length ? scoped : cachedNetworkDevices;
+        if (!source.length) return '';
+        return source.map(device => `${device.id}: ${device.name} (${device.device_type})`).join('\n');
+    }
+
+    function formControlStyle(extra = '') {
+        return `padding: 0.65rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; ${extra}`;
+    }
+
+    function optionSelected(values, value) {
+        return (values || []).map(String).includes(String(value)) ? 'selected' : '';
+    }
+
+    function modalSystemValue() {
+        return systemValueFromLabel(reconItemModalState.systemName);
+    }
+
+    function closeReconItemModal() {
+        document.getElementById('reconItemModal').style.display = 'none';
+        document.getElementById('reconItemModalFields').innerHTML = '';
+        reconItemModalState = { kind: null, systemName: null, itemId: null };
+    }
+
+    function openReconItemModal(kind, systemName, itemId = null) {
+        const modal = document.getElementById('reconItemModal');
+        const title = document.getElementById('reconItemModalTitle');
+        const subtitle = document.getElementById('reconItemModalSubtitle');
+        const fields = document.getElementById('reconItemModalFields');
+        const submit = document.getElementById('reconItemModalSubmit');
+        const systemValue = systemValueFromLabel(systemName);
+        reconItemModalState = { kind, systemName, itemId };
+
+        const item = kind === 'network'
+            ? cachedNetworks.find(entry => entry.id === itemId)
+            : kind === 'device'
+                ? cachedNetworkDevices.find(entry => entry.id === itemId)
+                : cachedCriticalDevices.find(entry => entry.id === itemId);
+
+        const action = item ? 'Editar' : 'Añadir';
+        const labels = {
+            system: 'sistema',
+            systemRename: 'sistema',
+            network: 'rango IP',
+            device: 'electrónica de red',
+            critical: 'activo crítico'
+        };
+        title.textContent = `${action} ${labels[kind]}`;
+        subtitle.textContent = `Sistema: ${systemName}`;
+        submit.textContent = item ? 'Guardar cambios' : 'Añadir';
+
+        if (kind === 'system') {
+            subtitle.textContent = 'Crear una sección de sistema sin alterar resultados ni escaneos.';
+            fields.innerHTML = `
+                <input type="text" id="modalSystemName" placeholder="Nombre del sistema (ej. DMZ, SCADA Línea 1)" required style="${formControlStyle()}">
+            `;
+        } else if (kind === 'systemRename') {
+            title.textContent = 'Renombrar sistema';
+            subtitle.textContent = `Sistema actual: ${systemName}`;
+            submit.textContent = 'Guardar cambios';
+            fields.innerHTML = `
+                <input type="text" id="modalSystemRenameName" placeholder="Nuevo nombre del sistema" required value="${escapeHtml(systemValueFromLabel(systemName) || '')}" style="${formControlStyle()}">
+            `;
+        } else if (kind === 'network') {
+            fields.innerHTML = `
+                <input type="text" id="modalNetworkName" placeholder="Nombre de red" required value="${escapeHtml(item?.network_name || '')}" style="${formControlStyle()}">
+                <input type="text" id="modalNetworkRange" placeholder="Rango CIDR (ej. 192.168.1.0/24)" required value="${escapeHtml(item?.network_range || '')}" style="${formControlStyle()}">
+                <select id="modalPurdueLevel" style="${formControlStyle()}">
+                    <option value="">Nivel Purdue (opcional)</option>
+                    ${[5, 4, 3, 2, 1, 0].map(level => `<option value="${level}" ${String(item?.purdue_level ?? '') === String(level) ? 'selected' : ''}>Nivel ${level}</option>`).join('')}
+                </select>
+            `;
+        } else if (kind === 'device') {
+            fields.innerHTML = `
+                <input type="text" id="modalDeviceName" placeholder="Nombre (ej. FW1, SW1)" required value="${escapeHtml(item?.name || '')}" style="${formControlStyle()}">
+                <select id="modalDeviceType" required style="${formControlStyle()}">
+                    <option value="">Tipo de activo</option>
+                    ${['firewall', 'router', 'switch'].map(type => `<option value="${type}" ${item?.device_type === type ? 'selected' : ''}>${type.charAt(0).toUpperCase() + type.slice(1)}</option>`).join('')}
+                </select>
+                <input type="text" id="modalDeviceManagementIp" placeholder="IP de gestión (opcional)" value="${escapeHtml(item?.management_ip || '')}" style="${formControlStyle()}">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">Redes a las que da acceso</label>
+                <select id="modalDeviceNetworks" multiple size="6" style="${formControlStyle('min-height: 9rem;')}">
+                    ${cachedNetworks.map(net => `<option value="${net.id}" ${optionSelected(item?.accessible_network_ids, net.id)}>${escapeHtml(`${net.network_name} (${net.network_range}) · ${systemLabel(net.system_name)} · ${purdueLabel(net.purdue_level)}`)}</option>`).join('')}
+                </select>
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">Orígenes de escaneo asociados</label>
+                <select id="modalDeviceOrigins" multiple size="4" style="${formControlStyle('min-height: 6rem;')}">
+                    ${cachedLocations.map(location => `<option value="${escapeHtml(location)}" ${optionSelected(item?.origin_locations, location)}>${escapeHtml(location)}</option>`).join('')}
+                </select>
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">Conexiones físicas directas</label>
+                <select id="modalDeviceConnections" multiple size="5" style="${formControlStyle('min-height: 7rem;')}">
+                    ${cachedNetworkDevices.filter(device => !itemId || device.id !== itemId).map(device => `<option value="${device.id}" ${optionSelected(item?.connected_device_ids, device.id)}>${escapeHtml(`${device.name} (${device.device_type}) · ${systemLabel(device.system_name)}`)}</option>`).join('')}
+                </select>
+                <textarea id="modalDeviceNotes" placeholder="Notas (opcional)" rows="3" style="${formControlStyle('resize: vertical;')}">${escapeHtml(item?.notes || '')}</textarea>
+            `;
+        } else {
+            fields.innerHTML = `
+                <input type="text" id="modalCriticalName" placeholder="Nombre (ej. PLC Línea 1)" required value="${escapeHtml(item?.name || '')}" style="${formControlStyle()}">
+                <input type="text" id="modalCriticalIps" placeholder="IPs separadas por coma" required value="${escapeHtml(item?.ips || '')}" style="${formControlStyle()}">
+                <textarea id="modalCriticalReason" placeholder="Motivo de criticidad" required rows="4" style="${formControlStyle('resize: vertical;')}">${escapeHtml(item?.reason || '')}</textarea>
+            `;
+        }
+
+        modal.style.display = 'flex';
+        modal.querySelector('input, select, textarea')?.focus();
+    }
+
+    async function submitReconItemModal() {
+        const org = currentOrgValue();
+        if (!org) {
+            alert('Debe haber una organización seleccionada.');
+            return;
+        }
+        const { kind, itemId } = reconItemModalState;
+        const systemName = modalSystemValue();
+        try {
+            if (kind === 'system') {
+                const systemName = document.getElementById('modalSystemName').value.trim();
+                if (!systemName) return;
+                if (systemName === 'Sin Sistema Asociado') {
+                    alert('Ese nombre está reservado para elementos sin sistema.');
+                    return;
+                }
+                manualReconSystems.push(systemName);
+                manualReconSystems = [...new Set(manualReconSystems)];
+                saveManualReconSystems();
+                closeReconItemModal();
+                renderReconSystemSections();
+            } else if (kind === 'systemRename') {
+                const newName = document.getElementById('modalSystemRenameName').value.trim();
+                const oldSystemName = reconItemModalState.systemName;
+                closeReconItemModal();
+                await applyReconSystemRename(oldSystemName, newName);
+            } else if (kind === 'network') {
+                const purdueValue = document.getElementById('modalPurdueLevel').value;
+                const payload = {
+                    network_name: document.getElementById('modalNetworkName').value.trim(),
+                    network_range: document.getElementById('modalNetworkRange').value.trim(),
+                    system_name: systemName,
+                    purdue_level: purdueValue === '' ? null : parseInt(purdueValue, 10)
+                };
+                if (!payload.network_name || !payload.network_range) return;
+                const response = await fetch(itemId ? `/api/networks/${itemId}` : '/api/networks', {
+                    method: itemId ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(itemId ? payload : { organization: org, ...payload })
+                });
+                if (!response.ok) throw new Error(await response.text());
+                if (systemName) removeManualSystem(systemName);
+                closeReconItemModal();
+                await loadNetworks(org);
+                await loadNetworkArchitecture(org);
+            } else if (kind === 'device') {
+                const payload = {
+                    system_name: systemName,
+                    name: document.getElementById('modalDeviceName').value.trim(),
+                    device_type: document.getElementById('modalDeviceType').value,
+                    management_ip: document.getElementById('modalDeviceManagementIp').value.trim() || null,
+                    accessible_network_ids: selectedIntegerValues('modalDeviceNetworks'),
+                    origin_locations: selectedValues('modalDeviceOrigins'),
+                    connected_device_ids: selectedIntegerValues('modalDeviceConnections'),
+                    notes: document.getElementById('modalDeviceNotes').value.trim() || null
+                };
+                if (!payload.name || !payload.device_type) return;
+                const response = await fetch(itemId ? `/api/network-devices/${itemId}` : '/api/network-devices', {
+                    method: itemId ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(itemId ? payload : { organization: org, ...payload })
+                });
+                if (!response.ok) throw new Error(await response.text());
+                if (systemName) removeManualSystem(systemName);
+                closeReconItemModal();
+                await loadNetworkArchitecture(org);
+            } else if (kind === 'critical') {
+                const payload = {
+                    system_name: systemName,
+                    name: document.getElementById('modalCriticalName').value.trim(),
+                    ips: document.getElementById('modalCriticalIps').value.trim(),
+                    reason: document.getElementById('modalCriticalReason').value.trim()
+                };
+                if (!payload.name || !payload.ips || !payload.reason) return;
+                const response = await fetch(itemId ? `/api/critical-devices/${itemId}` : '/api/critical-devices', {
+                    method: itemId ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(itemId ? payload : { organization: org, ...payload })
+                });
+                if (!response.ok) throw new Error(await response.text());
+                if (systemName) removeManualSystem(systemName);
+                closeReconItemModal();
+                await loadCriticalDevices();
+            }
+        } catch (error) {
+            alert('Error guardando: ' + error.message);
+        }
+    }
+
+    function systemValueFromLabel(systemName) {
+        return systemName === 'Sin Sistema Asociado' ? null : systemName;
+    }
+
+    function removeManualSystem(systemName) {
+        manualReconSystems = manualReconSystems.filter(item => item !== systemName);
+        saveManualReconSystems();
+    }
+
+    function ensureManualSystem(systemName) {
+        if (!systemName) return;
+        manualReconSystems.push(systemName);
+        manualReconSystems = [...new Set(manualReconSystems)];
+        saveManualReconSystems();
+    }
+
+    async function addReconSystem() {
+        const org = currentOrgValue();
+        if (!org) {
+            alert('Debe haber una organización seleccionada.');
+            return;
+        }
+        openReconItemModal('system', 'Nuevo sistema');
+    }
+
+    async function deleteEmptyReconSystem(systemName) {
+        if (!confirm(`¿Eliminar el sistema vacío "${systemName}" de la vista?`)) return;
+        removeManualSystem(systemName);
+        renderReconSystemSections();
+    }
+
+    async function applyReconSystemRename(systemName, newName) {
+        const oldValue = systemValueFromLabel(systemName);
+        const newValue = newName.trim() || null;
+        if ((oldValue || '') === (newValue || '')) return;
+
+        const matchingNetworks = cachedNetworks.filter(item => (item.system_name || null) === oldValue);
+        const matchingDevices = cachedNetworkDevices.filter(item => (item.system_name || null) === oldValue);
+        const matchingCritical = cachedCriticalDevices.filter(item => (item.system_name || null) === oldValue);
+        const total = matchingNetworks.length + matchingDevices.length + matchingCritical.length;
+
+        if (total > 0 && !confirm(`Renombrar/mover ${total} elementos al sistema "${newValue || 'Sin Sistema Asociado'}"?`)) {
+            return;
+        }
+
+        try {
+            for (const net of matchingNetworks) {
+                const response = await fetch(`/api/networks/${net.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        network_name: net.network_name,
+                        network_range: net.network_range,
+                        system_name: newValue,
+                        purdue_level: net.purdue_level ?? null
+                    })
+                });
+                if (!response.ok) throw new Error(await response.text());
+            }
+            for (const device of matchingDevices) {
+                const response = await fetch(`/api/network-devices/${device.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        system_name: newValue,
+                        name: device.name,
+                        device_type: device.device_type,
+                        management_ip: device.management_ip || null,
+                        accessible_network_ids: device.accessible_network_ids || [],
+                        origin_locations: device.origin_locations || [],
+                        connected_device_ids: device.connected_device_ids || [],
+                        notes: device.notes || null
+                    })
+                });
+                if (!response.ok) throw new Error(await response.text());
+            }
+            for (const device of matchingCritical) {
+                const response = await fetch(`/api/critical-devices/${device.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        system_name: newValue,
+                        name: device.name,
+                        ips: device.ips,
+                        reason: device.reason
+                    })
+                });
+                if (!response.ok) throw new Error(await response.text());
+            }
+
+            if (oldValue) removeManualSystem(oldValue);
+            if (newValue) {
+                manualReconSystems.push(newValue);
+                manualReconSystems = [...new Set(manualReconSystems)];
+                saveManualReconSystems();
+            }
+            await refreshReconSystemSections();
+        } catch (error) {
+            alert('Error renombrando sistema: ' + error.message);
+        }
+    }
+
+    async function renameReconSystem(systemName) {
+        openReconItemModal('systemRename', systemName);
+    }
+
+    async function addNetworkToSystem(systemName) {
+        openReconItemModal('network', systemName);
+    }
+
+    async function addNetworkDeviceToSystem(systemName) {
+        openReconItemModal('device', systemName);
+    }
+
+    async function addCriticalToSystem(systemName) {
+        openReconItemModal('critical', systemName);
+    }
+
+    async function deleteReconSystem(systemName) {
+        const org = currentOrgValue();
+        if (!org) {
+            alert('Debe haber una organización seleccionada.');
+            return;
+        }
+        const targetSystem = systemValueFromLabel(systemName);
+        const matchingNetworks = cachedNetworks.filter(item => (item.system_name || null) === targetSystem);
+        const matchingDevices = cachedNetworkDevices.filter(item => (item.system_name || null) === targetSystem);
+        const matchingCritical = cachedCriticalDevices.filter(item => (item.system_name || null) === targetSystem);
+        const total = matchingNetworks.length + matchingDevices.length + matchingCritical.length;
+
+        if (!total) {
+            await deleteEmptyReconSystem(systemName);
+            return;
+        }
+        if (!confirm(
+            `¿Borrar el sistema "${systemName}" completo?\n\n` +
+            `Se eliminarán:\n- ${matchingNetworks.length} rangos IP\n- ${matchingDevices.length} activos de electrónica\n- ${matchingCritical.length} activos críticos\n\n` +
+            'Esta acción no borra resultados de escaneos, pero sí la arquitectura declarada del sistema.'
+        )) {
+            return;
+        }
+
+        try {
+            for (const device of matchingDevices) {
+                const response = await fetch(`/api/network-devices/${device.id}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error(await response.text());
+            }
+            for (const device of matchingCritical) {
+                const response = await fetch(`/api/critical-devices/${device.id}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error(await response.text());
+            }
+            for (const net of matchingNetworks) {
+                const response = await fetch(`/api/networks/${net.id}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error(await response.text());
+            }
+            if (targetSystem) removeManualSystem(targetSystem);
+            await loadNetworks(org);
+            await loadNetworkArchitecture(org);
+            await loadCriticalDevices();
+        } catch (error) {
+            alert('Error borrando sistema: ' + error.message);
+        }
+    }
+
+    function networkCardHtml(net) {
+        return `
+            <div class="network-card" draggable="true" data-network-id="${net.id}" ondragstart="handleNetworkDragStart(event, ${net.id})" ondragend="handleNetworkDragEnd(event)">
+                <button class="network-delete-btn" onclick="event.stopPropagation(); deleteNetwork(${net.id})">🗑️</button>
+                <button onclick='event.stopPropagation(); openReconItemModal("network", ${JSON.stringify(systemLabel(net.system_name))}, ${net.id})' style="position: absolute; top: 0.5rem; right: 2rem; background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: none; border-radius: 4px; cursor: pointer; padding: 0.2rem 0.5rem; font-size: 0.8rem;" title="Editar">✏️</button>
+                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem; padding-right: 3.2rem;">${escapeHtml(net.network_name)}</div>
+                <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8;">${escapeHtml(net.network_range)}</div>
+                <div style="font-size: 0.8rem; color: #fbbf24; margin-top: 0.35rem;">${purdueLabel(net.purdue_level)}</div>
+            </div>
+        `;
+    }
+
+    function networkDeviceCardHtml(device, networkById, deviceById) {
+        const networks = (device.accessible_network_ids || [])
+            .map(id => networkById[id])
+            .filter(Boolean)
+            .map(net => `${net.network_name} (${net.network_range})`);
+        const connectionIds = new Set(device.connected_device_ids || []);
+        cachedNetworkDevices.forEach(candidate => {
+            if ((candidate.connected_device_ids || []).includes(device.id)) {
+                connectionIds.add(candidate.id);
+            }
+        });
+        const connections = Array.from(connectionIds)
+            .map(id => deviceById[id])
+            .filter(Boolean)
+            .map(item => item.name);
+        const typeLabels = { firewall: 'Firewall', router: 'Router', switch: 'Switch' };
+        return `
+            <div class="recon-item-card" style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.22); border-radius: 8px; padding: 1rem; position: relative;">
+                <button onclick="deleteNetworkDevice(${device.id})" title="Eliminar"
+                    style="position: absolute; top: 0.55rem; right: 0.55rem; background: none; border: none; color: #f87171; cursor: pointer; font-size: 1rem;">🗑️</button>
+                <button onclick='openReconItemModal("device", ${JSON.stringify(systemLabel(device.system_name))}, ${device.id})' title="Editar"
+                    style="position: absolute; top: 0.55rem; right: 2.2rem; background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 1rem;">✏️</button>
+                <div style="font-weight: 700; color: #fbbf24; margin-bottom: 0.35rem; padding-right: 3.2rem;">${escapeHtml(device.name)}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.45rem;">${typeLabels[device.device_type] || escapeHtml(device.device_type)}${device.management_ip ? ` · ${escapeHtml(device.management_ip)}` : ''}</div>
+                <div style="font-size: 0.85rem; color: #bfdbfe; margin-bottom: 0.35rem;"><strong>Redes:</strong> ${networks.length ? escapeHtml(networks.join(', ')) : '—'}</div>
+                <div style="font-size: 0.85rem; color: #c4b5fd; margin-bottom: 0.35rem;"><strong>Orígenes:</strong> ${(device.origin_locations || []).length ? escapeHtml(device.origin_locations.join(', ')) : '—'}</div>
+                <div style="font-size: 0.85rem; color: #fed7aa; margin-bottom: 0.35rem;"><strong>Conectado a:</strong> ${connections.length ? escapeHtml(connections.join(', ')) : '—'}</div>
+                ${device.notes ? `<div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.5rem;">${escapeHtml(device.notes)}</div>` : ''}
+            </div>
+        `;
+    }
+
+    function criticalDeviceCardHtml(device) {
+        return `
+            <div class="recon-item-card" style="background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; padding: 1rem; position: relative;">
+                <button onclick="deleteCriticalDevice(${device.id})" title="Eliminar"
+                    style="position: absolute; top: 0.6rem; right: 0.6rem; background: none; border: none; color: #f87171; cursor: pointer; font-size: 1rem;">🗑️</button>
+                <button onclick='openReconItemModal("critical", ${JSON.stringify(systemLabel(device.system_name))}, ${device.id})' title="Editar"
+                    style="position: absolute; top: 0.6rem; right: 2.2rem; background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 1rem;">✏️</button>
+                <div style="font-weight: 600; color: #f87171; margin-bottom: 0.3rem; padding-right: 3.2rem;">🚨 ${escapeHtml(device.name)}</div>
+                <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8; margin-bottom: 0.4rem;">${escapeHtml(device.ips)}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary);">${escapeHtml(device.reason)}</div>
+            </div>
+        `;
+    }
+
+    function handleNetworkDragStart(event, networkId) {
+        draggedNetworkId = Number(networkId);
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(networkId));
+        event.currentTarget.classList.add('dragging');
+    }
+
+    function handleNetworkDragEnd(event) {
+        draggedNetworkId = null;
+        event.currentTarget.classList.remove('dragging');
+        document.querySelectorAll('.network-drop-zone.drag-over').forEach(zone => zone.classList.remove('drag-over'));
+    }
+
+    function handleNetworkDragOver(event) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        event.currentTarget.classList.add('drag-over');
+    }
+
+    function handleNetworkDragLeave(event) {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+            event.currentTarget.classList.remove('drag-over');
+        }
+    }
+
+    async function handleNetworkDrop(event, targetSystemLabel) {
+        event.preventDefault();
+        event.currentTarget.classList.remove('drag-over');
+        const networkId = Number(event.dataTransfer.getData('text/plain') || draggedNetworkId);
+        if (!networkId) return;
+        await moveNetworkToSystem(networkId, targetSystemLabel);
+    }
+
+    async function moveNetworkToSystem(networkId, targetSystemLabel) {
+        const org = currentOrgValue();
+        const network = cachedNetworks.find(item => Number(item.id) === Number(networkId));
+        if (!org || !network) return;
+
+        const sourceSystem = network.system_name || null;
+        const targetSystem = systemValueFromLabel(targetSystemLabel);
+        if ((sourceSystem || null) === (targetSystem || null)) return;
+
+        const sourceWillBeEmpty = sourceSystem
+            && !cachedNetworks.some(item => Number(item.id) !== Number(networkId) && (item.system_name || null) === sourceSystem)
+            && !cachedNetworkDevices.some(item => (item.system_name || null) === sourceSystem)
+            && !cachedCriticalDevices.some(item => (item.system_name || null) === sourceSystem);
+
+        try {
+            const response = await fetch(`/api/networks/${network.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    network_name: network.network_name,
+                    network_range: network.network_range,
+                    system_name: targetSystem,
+                    purdue_level: network.purdue_level ?? null
+                })
+            });
+            if (!response.ok) throw new Error(await response.text());
+
+            if (sourceWillBeEmpty) ensureManualSystem(sourceSystem);
+            if (targetSystem) removeManualSystem(targetSystem);
+
+            network.system_name = targetSystem;
+            renderReconSystemSections();
+            await loadNetworks(org);
+            await loadNetworkArchitecture(org);
+        } catch (error) {
+            alert('Error moviendo red: ' + error.message);
+            await refreshReconSystemSections();
+        }
+    }
+
+    function emptySystemColumn(label) {
+        return `<div class="recon-empty-state">Sin ${label} registrados.</div>`;
+    }
+
+    function renderReconSystemSections() {
+        const container = document.getElementById('systemsReconList');
+        if (!container) return;
+
+        const systems = new Set();
+        manualReconSystems.forEach(item => systems.add(systemLabel(item)));
+        cachedNetworks.forEach(item => systems.add(systemLabel(item.system_name)));
+        cachedNetworkDevices.forEach(item => systems.add(systemLabel(item.system_name)));
+        cachedCriticalDevices.forEach(item => systems.add(systemLabel(item.system_name)));
+
+        if (!systems.size) {
+            container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.9rem;">No hay redes, electrónica ni activos críticos registrados para esta organización.</div>';
+            return;
+        }
+
+        const networkById = Object.fromEntries(cachedNetworks.map(net => [net.id, net]));
+        const deviceById = Object.fromEntries(cachedNetworkDevices.map(device => [device.id, device]));
+
+        container.innerHTML = Array.from(systems).sort(systemSort).map(sys => {
+            const networks = cachedNetworks.filter(item => systemLabel(item.system_name) === sys);
+            const networkDevices = cachedNetworkDevices.filter(item => systemLabel(item.system_name) === sys);
+            const criticalDevices = cachedCriticalDevices.filter(item => systemLabel(item.system_name) === sys);
+            const hasItems = networks.length || networkDevices.length || criticalDevices.length;
+            return `
+                <section class="recon-system-card">
+                    <div class="recon-system-head">
+                        <div class="recon-system-title-row">
+                            <h4>${escapeHtml(sys)}</h4>
+                            <div class="recon-system-actions">
+                                <button class="btn btn-sm recon-system-action" onclick='renameReconSystem(${JSON.stringify(sys)})'
+                                style="padding: 0.25rem 0.55rem; background: rgba(59,130,246,0.16); color: #93c5fd; border: 1px solid rgba(59,130,246,0.45); font-size: 0.8rem;">✏️ Renombrar</button>
+                                <button class="btn btn-sm recon-system-action" onclick='deleteReconSystem(${JSON.stringify(sys)})'
+                                style="padding: 0.25rem 0.55rem; background: rgba(239,68,68,0.12); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); font-size: 0.8rem;">🗑️ Borrar sistema</button>
+                                ${!hasItems && sys !== 'Sin Sistema Asociado' ? `<button class="btn btn-sm recon-system-action" onclick='deleteEmptyReconSystem(${JSON.stringify(sys)})'
+                                style="padding: 0.25rem 0.55rem; background: rgba(239,68,68,0.12); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); font-size: 0.8rem;">🗑️ Quitar vacío</button>` : ''}
+                            </div>
+                        </div>
+                        <div class="recon-system-badges">
+                            <span class="recon-system-badge" style="border-color: rgba(56,189,248,0.25);">${networks.length} redes</span>
+                            <span class="recon-system-badge" style="border-color: rgba(245,158,11,0.25);">${networkDevices.length} electrónica</span>
+                            <span class="recon-system-badge" style="border-color: rgba(239,68,68,0.25);">${criticalDevices.length} críticos</span>
+                        </div>
+                    </div>
+                    <div class="recon-system-grid">
+                        <div class="recon-system-column">
+                            <div class="recon-system-column-head">
+                                <h5 style="color: #7dd3fc;">Rangos IP</h5>
+                                <button class="btn btn-sm" onclick='addNetworkToSystem(${JSON.stringify(sys)})'
+                                    style="padding: 0.25rem 0.5rem; background: rgba(56,189,248,0.12); color: #7dd3fc; border: 1px solid rgba(56,189,248,0.4); font-size: 0.78rem;">➕</button>
+                            </div>
+                            <div class="recon-column-items network-drop-zone" data-system="${escapeHtml(sys)}" ondragover="handleNetworkDragOver(event)" ondragleave="handleNetworkDragLeave(event)" ondrop="handleNetworkDrop(event, this.dataset.system)">${networks.length ? networks.map(networkCardHtml).join('') : emptySystemColumn('rangos IP')}</div>
+                        </div>
+                        <div class="recon-system-column">
+                            <div class="recon-system-column-head">
+                                <h5 style="color: #fbbf24;">Electrónica de red</h5>
+                                <button class="btn btn-sm" onclick='addNetworkDeviceToSystem(${JSON.stringify(sys)})'
+                                    style="padding: 0.25rem 0.5rem; background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); font-size: 0.78rem;">➕</button>
+                            </div>
+                            <div class="recon-column-items">${networkDevices.length ? networkDevices.map(device => networkDeviceCardHtml(device, networkById, deviceById)).join('') : emptySystemColumn('electrónica')}</div>
+                        </div>
+                        <div class="recon-system-column">
+                            <div class="recon-system-column-head">
+                                <h5 style="color: #fca5a5;">Activos críticos</h5>
+                                <button class="btn btn-sm" onclick='addCriticalToSystem(${JSON.stringify(sys)})'
+                                    style="padding: 0.25rem 0.5rem; background: rgba(239,68,68,0.12); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); font-size: 0.78rem;">➕</button>
+                            </div>
+                            <div class="recon-column-items">${criticalDevices.length ? criticalDevices.map(criticalDeviceCardHtml).join('') : emptySystemColumn('activos críticos')}</div>
+                        </div>
+                    </div>
+                </section>
+            `;
+        }).join('');
+    }
+
+    async function refreshReconSystemSections() {
+        const org = currentFilters.organization || document.getElementById('filterOrg').value;
+        if (!org) return;
+        await loadNetworks(org);
+        await loadNetworkArchitecture(org);
+        await loadCriticalDevices();
+        renderReconSystemSections();
+    }
 
     async function loadOrganizations() {
         try {
@@ -335,17 +1582,23 @@
                 : '/api/locations';
             const response = await fetch(url);
             const locations = await response.json();
+            cachedLocations = locations.map(loc => loc.location);
+            renderNetworkDeviceSelectors();
 
             const container = document.getElementById('locationPills');
 
-            let html = `<div class="pill ${!currentFilters.location ? 'active' : ''}" onclick="setLocationFilter('')">Todas</div>`;
+            let html = '';
 
             locations.forEach(loc => {
                 const isActive = currentFilters.location === loc.location;
-                html += `<div class="pill ${isActive ? 'active' : ''}" onclick="setLocationFilter('${loc.location}')">${loc.location}</div>`;
+                html += `
+                    <div class="pill location-pill ${isActive ? 'active' : ''}" data-location="${escapeHtml(loc.location)}" onclick="setLocationFilter(this.dataset.location)">
+                        <span>${escapeHtml(loc.location)}</span>
+                        <button type="button" class="pill-edit" title="Renombrar origen" onclick="renameLocation(event, this.closest('.location-pill').dataset.location)">✎</button>
+                    </div>`;
             });
 
-            container.innerHTML = html;
+            container.innerHTML = html || '<div class="recon-empty-state">No hay orígenes registrados todavía.</div>';
 
             if (currentFilters.location) {
                 document.getElementById('filterLocation').value = currentFilters.location;
@@ -365,21 +1618,72 @@
         document.getElementById('filterScan').value = '';
 
         loadLocations(currentFilters.organization || null);
-        loadScans(currentFilters.organization || null, loc || null);
         updateDeleteButtons();
         applyFilters();
     }
 
+    async function renameLocation(event, oldLocation) {
+        event.stopPropagation();
+        const org = document.getElementById('filterOrg').value;
+        if (!org || !oldLocation) return;
+
+        const proposed = prompt(`Nuevo nombre para el origen "${oldLocation}"`, oldLocation);
+        if (proposed === null) return;
+
+        const newLocation = proposed.trim();
+        if (!newLocation || newLocation.toUpperCase() === oldLocation.toUpperCase()) return;
+
+        if (!confirm(`Renombrar el origen "${oldLocation}" a "${newLocation}"?\n\nSe actualizarán escaneos, resultados, referencias de arquitectura y bitácora.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/location', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organization: org,
+                    old_location: oldLocation,
+                    new_location: newLocation
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Error renombrando origen');
+            }
+
+            const result = await response.json();
+            const renamed = result.new_location || newLocation.toUpperCase();
+            currentFilters.location = renamed;
+            currentFilters.scan_id = '';
+            document.getElementById('filterLocation').value = renamed;
+            document.getElementById('filterScan').value = '';
+
+            await loadLocations(org);
+            await loadRecentScans();
+            await loadNetworkArchitecture(org);
+
+            const warnings = result.bitacora_note_conflicts
+                ? `\n\nAviso: ${result.bitacora_note_conflicts} nota(s) de bitácora no se renombraron porque ya existía el destino.`
+                : '';
+            alert(`✅ ${result.message}\n\nEscaneos actualizados: ${result.scans_updated}${warnings}`);
+        } catch (error) {
+            console.error('Error renombrando origen:', error);
+            alert('❌ Error renombrando origen: ' + error.message);
+        }
+    }
+
     async function loadScans(organization = null, location = null) {
         try {
+            const container = document.getElementById('scanPills');
+            if (!container) return;
             const params = new URLSearchParams();
             if (organization) params.append('organization', organization);
             if (location) params.append('location', location);
 
             const response = await fetch(`/api/scans/list?${params}`);
             const scans = await response.json();
-
-            const container = document.getElementById('scanPills');
 
             let html = `<div class="pill ${!currentFilters.scan_id ? 'active' : ''}" onclick="setScanFilter('')">Todos</div>`;
 
@@ -416,6 +1720,9 @@
         try {
             const response = await fetch(`/api/networks?organization=${encodeURIComponent(organization)}`);
             const networks = await response.json();
+            cachedNetworks = networks;
+            renderNetworkDeviceSelectors();
+            renderReconSystemSections();
             const container = document.getElementById('networksList');
 
             if (networks.length === 0) {
@@ -444,7 +1751,7 @@
                 html += `
                 <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
                     <h5 style="margin-top: 0; margin-bottom: 1rem; color: #a5b4fc; font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <span>🖥️</span> ${sys}
+                        <span>🖥️</span> ${escapeHtml(sys)}
                     </h5>
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
                 `;
@@ -452,9 +1759,10 @@
                 html += nets.map(net => `
                     <div class="network-card">
                         <button class="network-delete-btn" onclick="deleteNetwork(${net.id})">🗑️</button>
-                        <button onclick='editNetwork(${net.id}, ${JSON.stringify(net.network_name)}, ${JSON.stringify(net.network_range)}, ${JSON.stringify(net.system_name || "")})' style="position: absolute; top: 0.5rem; right: 2rem; background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: none; border-radius: 4px; cursor: pointer; padding: 0.2rem 0.5rem; font-size: 0.8rem;" title="Editar">✏️</button>
-                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem;">${net.network_name}</div>
-                        <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8;">${net.network_range}</div>
+                        <button onclick='editNetwork(${net.id}, ${JSON.stringify(net.network_name)}, ${JSON.stringify(net.network_range)}, ${JSON.stringify(net.system_name || "")}, ${JSON.stringify(net.purdue_level ?? "")})' style="position: absolute; top: 0.5rem; right: 2rem; background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: none; border-radius: 4px; cursor: pointer; padding: 0.2rem 0.5rem; font-size: 0.8rem;" title="Editar">✏️</button>
+                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem;">${escapeHtml(net.network_name)}</div>
+                        <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8;">${escapeHtml(net.network_range)}</div>
+                        <div style="font-size: 0.8rem; color: #fbbf24; margin-top: 0.35rem;">${purdueLabel(net.purdue_level)}</div>
                     </div>
                 `).join('');
 
@@ -482,6 +1790,7 @@
         const sysInput = document.getElementById('systemName');
         const nameInput = document.getElementById('networkName');
         const rangeInput = document.getElementById('networkRange');
+        const purdueInput = document.getElementById('purdueLevel');
 
         try {
             const response = await fetch('/api/networks', {
@@ -491,7 +1800,8 @@
                     organization: org,
                     system_name: sysInput.value || null,
                     network_name: nameInput.value,
-                    network_range: rangeInput.value
+                    network_range: rangeInput.value,
+                    purdue_level: purdueInput.value === '' ? null : parseInt(purdueInput.value, 10)
                 })
             });
 
@@ -500,7 +1810,9 @@
             sysInput.value = '';
             nameInput.value = '';
             rangeInput.value = '';
+            purdueInput.value = '';
             loadNetworks(org);
+            loadNetworkArchitecture(org);
         } catch (error) {
             console.error(error);
             alert('Error al añadir la red');
@@ -516,31 +1828,8 @@
         window.location.href = `/api/networks/export?organization=${encodeURIComponent(org)}`;
     }
 
-    async function editNetwork(id, currentName, currentRange, currentSystem) {
-        const newName = prompt('Nombre de la red:', currentName);
-        if (newName === null) return;
-        const newRange = prompt('Rango (ej: 192.168.1.0/24):', currentRange);
-        if (newRange === null) return;
-        const newSystem = prompt('Sistema Opcional:', currentSystem);
-        if (newSystem === null) return;
-        
-        try {
-            const response = await fetch(`/api/networks/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    network_name: newName,
-                    network_range: newRange,
-                    system_name: newSystem || null
-                })
-            });
-            if (!response.ok) throw new Error(await response.text());
-            const org = currentFilters.organization || document.getElementById('filterOrg').value;
-            loadNetworks(org);
-        } catch (error) {
-            console.error(error);
-            alert('Error al editar red: ' + error.message);
-        }
+    async function editNetwork(id, currentName, currentRange, currentSystem, currentPurdue) {
+        openReconItemModal('network', systemLabel(currentSystem), id);
     }
 
     async function deleteNetwork(id) {
@@ -550,12 +1839,197 @@
             if (!response.ok) throw new Error('Error al eliminar');
             const org = currentFilters.organization || document.getElementById('filterOrg').value;
             loadNetworks(org);
+            loadNetworkArchitecture(org);
         } catch (error) {
             console.error(error);
             alert('Error al eliminar red');
         }
     }
     // --- END REDES LOGIC ---
+
+    // --- ELECTRÓNICA DE RED LOGIC ---
+    function selectedValues(selectId) {
+        const select = document.getElementById(selectId);
+        if (!select) return [];
+        return Array.from(select.selectedOptions).map(option => option.value);
+    }
+
+    function selectedIntegerValues(selectId) {
+        return selectedValues(selectId).map(value => parseInt(value, 10)).filter(Number.isInteger);
+    }
+
+    function renderNetworkDeviceSelectors(selectedNetworks = [], selectedOrigins = [], selectedConnections = [], currentDeviceId = null) {
+        const networksSelect = document.getElementById('networkDeviceNetworks');
+        const originsSelect = document.getElementById('networkDeviceOrigins');
+        const connectionsSelect = document.getElementById('networkDeviceConnections');
+        if (!networksSelect || !originsSelect || !connectionsSelect) return;
+
+        const selectedNetworkSet = new Set((selectedNetworks || []).map(String));
+        networksSelect.innerHTML = cachedNetworks.map(net => {
+            const label = `${net.network_name} (${net.network_range}) · ${systemLabel(net.system_name)} · ${purdueLabel(net.purdue_level)}`;
+            return `<option value="${net.id}" ${selectedNetworkSet.has(String(net.id)) ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+        }).join('');
+
+        const selectedOriginSet = new Set((selectedOrigins || []).map(String));
+        originsSelect.innerHTML = cachedLocations.map(location => (
+            `<option value="${escapeHtml(location)}" ${selectedOriginSet.has(String(location)) ? 'selected' : ''}>${escapeHtml(location)}</option>`
+        )).join('');
+
+        const selectedConnectionSet = new Set((selectedConnections || []).map(String));
+        connectionsSelect.innerHTML = cachedNetworkDevices
+            .filter(device => !currentDeviceId || device.id !== currentDeviceId)
+            .map(device => {
+                const label = `${device.name} (${device.device_type}) · ${systemLabel(device.system_name)}`;
+                return `<option value="${device.id}" ${selectedConnectionSet.has(String(device.id)) ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+            }).join('');
+    }
+
+    async function loadNetworkArchitecture(organization = null) {
+        const org = organization || currentFilters.organization || document.getElementById('filterOrg').value;
+        if (!org) return;
+        try {
+            const response = await fetch(`/api/network-devices?organization=${encodeURIComponent(org)}`);
+            const devices = await response.json();
+            cachedNetworkDevices = devices;
+            renderNetworkDeviceSelectors();
+            renderReconSystemSections();
+
+            const container = document.getElementById('networkDevicesList');
+            if (!devices.length) {
+                container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.9rem;">No hay electrónica de red registrada.</div>';
+                return;
+            }
+
+            const networkById = Object.fromEntries(cachedNetworks.map(net => [net.id, net]));
+            const deviceById = Object.fromEntries(devices.map(device => [device.id, device]));
+            const grouped = {};
+            devices.forEach(device => {
+                const sys = systemLabel(device.system_name);
+                if (!grouped[sys]) grouped[sys] = [];
+                grouped[sys].push(device);
+            });
+
+            const sortedSystems = Object.keys(grouped).sort((a, b) => {
+                if (a === "Sin Sistema Asociado") return 1;
+                if (b === "Sin Sistema Asociado") return -1;
+                return a.localeCompare(b);
+            });
+
+            let html = '';
+            for (const sys of sortedSystems) {
+                html += `
+                    <div style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.2); border-radius: 8px; padding: 1rem;">
+                        <h5 style="margin-top: 0; margin-bottom: 1rem; color: #fbbf24; font-size: 1.05rem;">${escapeHtml(sys)}</h5>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem;">
+                `;
+                html += grouped[sys].map(device => {
+                    const networks = (device.accessible_network_ids || [])
+                        .map(id => networkById[id])
+                        .filter(Boolean)
+                        .map(net => `${net.network_name} (${net.network_range})`);
+                    const connectionIds = new Set(device.connected_device_ids || []);
+                    devices.forEach(candidate => {
+                        if ((candidate.connected_device_ids || []).includes(device.id)) {
+                            connectionIds.add(candidate.id);
+                        }
+                    });
+                    const connections = Array.from(connectionIds)
+                        .map(id => deviceById[id])
+                        .filter(Boolean)
+                        .map(item => item.name);
+                    const typeLabels = { firewall: 'Firewall', router: 'Router', switch: 'Switch' };
+                    return `
+                        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; position: relative;">
+                            <button onclick="deleteNetworkDevice(${device.id})" title="Eliminar"
+                                style="position: absolute; top: 0.55rem; right: 0.55rem; background: none; border: none; color: #f87171; cursor: pointer; font-size: 1rem;">🗑️</button>
+                            <button onclick="editNetworkDevice(${device.id})" title="Editar"
+                                style="position: absolute; top: 0.55rem; right: 2.2rem; background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 1rem;">✏️</button>
+                            <div style="font-weight: 700; color: #fbbf24; margin-bottom: 0.35rem;">${escapeHtml(device.name)}</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.45rem;">${typeLabels[device.device_type] || escapeHtml(device.device_type)}${device.management_ip ? ` · ${escapeHtml(device.management_ip)}` : ''}</div>
+                            <div style="font-size: 0.85rem; color: #bfdbfe; margin-bottom: 0.35rem;"><strong>Redes:</strong> ${networks.length ? escapeHtml(networks.join(', ')) : '—'}</div>
+                            <div style="font-size: 0.85rem; color: #c4b5fd; margin-bottom: 0.35rem;"><strong>Orígenes:</strong> ${(device.origin_locations || []).length ? escapeHtml(device.origin_locations.join(', ')) : '—'}</div>
+                            <div style="font-size: 0.85rem; color: #fed7aa; margin-bottom: 0.35rem;"><strong>Conectado a:</strong> ${connections.length ? escapeHtml(connections.join(', ')) : '—'}</div>
+                            ${device.notes ? `<div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.5rem;">${escapeHtml(device.notes)}</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+                html += '</div></div>';
+            }
+            container.innerHTML = html;
+        } catch (error) {
+            console.error('Error cargando electrónica de red:', error);
+            document.getElementById('networkDevicesList').innerHTML = '<div class="loading">Error cargando electrónica de red</div>';
+        }
+    }
+
+    async function saveNetworkDevice() {
+        const org = currentFilters.organization || document.getElementById('filterOrg').value;
+        if (!org) { alert('Debe haber una organización seleccionada.'); return; }
+
+        const payload = {
+            organization: org,
+            system_name: document.getElementById('networkDeviceSystem').value.trim() || null,
+            name: document.getElementById('networkDeviceName').value.trim(),
+            device_type: document.getElementById('networkDeviceType').value,
+            management_ip: document.getElementById('networkDeviceManagementIp').value.trim() || null,
+            accessible_network_ids: selectedIntegerValues('networkDeviceNetworks'),
+            origin_locations: selectedValues('networkDeviceOrigins'),
+            connected_device_ids: selectedIntegerValues('networkDeviceConnections'),
+            notes: document.getElementById('networkDeviceNotes').value.trim() || null
+        };
+        if (!payload.name || !payload.device_type) return;
+
+        try {
+            const response = await fetch(editingNetworkDeviceId ? `/api/network-devices/${editingNetworkDeviceId}` : '/api/network-devices', {
+                method: editingNetworkDeviceId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error(await response.text());
+            resetNetworkDeviceForm();
+            await loadNetworkArchitecture(org);
+        } catch (error) {
+            alert('❌ Error guardando electrónica de red: ' + error.message);
+        }
+    }
+
+    function editNetworkDevice(id) {
+        const device = cachedNetworkDevices.find(item => item.id === id);
+        if (!device) return;
+        editingNetworkDeviceId = id;
+        document.getElementById('networkDeviceFormTitle').textContent = `Editar ${device.name}`;
+        document.getElementById('networkDeviceSystem').value = device.system_name || '';
+        document.getElementById('networkDeviceName').value = device.name || '';
+        document.getElementById('networkDeviceType').value = device.device_type || '';
+        document.getElementById('networkDeviceManagementIp').value = device.management_ip || '';
+        document.getElementById('networkDeviceNotes').value = device.notes || '';
+        document.getElementById('networkDeviceSubmitBtn').textContent = 'Guardar cambios';
+        document.getElementById('networkDeviceCancelBtn').style.display = 'inline-block';
+        renderNetworkDeviceSelectors(device.accessible_network_ids, device.origin_locations, device.connected_device_ids, id);
+        document.getElementById('addNetworkDeviceForm')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function resetNetworkDeviceForm() {
+        editingNetworkDeviceId = null;
+        document.getElementById('addNetworkDeviceForm').reset();
+        document.getElementById('networkDeviceFormTitle').textContent = 'Añadir electrónica de red';
+        document.getElementById('networkDeviceSubmitBtn').textContent = '🔀 Añadir activo';
+        document.getElementById('networkDeviceCancelBtn').style.display = 'none';
+        renderNetworkDeviceSelectors();
+    }
+
+    async function deleteNetworkDevice(id) {
+        if (!confirm('¿Eliminar este activo de electrónica de red?')) return;
+        try {
+            const response = await fetch(`/api/network-devices/${id}`, { method: 'DELETE' });
+            if (!response.ok) throw new Error(await response.text());
+            const org = currentFilters.organization || document.getElementById('filterOrg').value;
+            await loadNetworkArchitecture(org);
+        } catch (error) {
+            alert('❌ Error eliminando electrónica de red: ' + error.message);
+        }
+    }
+    // --- END ELECTRÓNICA DE RED LOGIC ---
 
     async function loadStats() {
         try {
@@ -843,17 +2317,11 @@
             const response = await fetch(`/api/scans?${params}`);
             const scans = await response.json();
 
-            // Filtrar por location y scan_id en el cliente si es necesario
+            // El dashboard muestra el contexto completo de la organización.
             let filteredScans = scans;
-            if (currentFilters.location) {
-                filteredScans = filteredScans.filter(s => s.location === currentFilters.location);
-            }
-            if (currentFilters.scan_id) {
-                filteredScans = filteredScans.filter(s => s.id == currentFilters.scan_id);
-            }
 
             // Detectar escaneos en ejecución y mostrar su progreso
-            const runningScans = filteredScans.filter(s => s.status === 'running');
+            const runningScans = scans.filter(s => s.status === 'running');
 
             // Iniciar seguimiento de escaneos en ejecución
             for (const scan of runningScans) {
@@ -871,8 +2339,7 @@
 
             const tbody = document.getElementById('recentScansBody');
             if (filteredScans.length === 0) {
-                const filterText = currentFilters.organization || currentFilters.location || currentFilters.scan_id
-                    ? ' con los filtros aplicados' : '';
+                const filterText = currentFilters.organization ? ' para esta organización' : '';
                 tbody.innerHTML = `<tr><td colspan="7" class="empty">No hay escaneos${filterText}</td></tr>`;
             } else {
                 // Mostrar solo los primeros 10
@@ -986,7 +2453,6 @@
         currentFilters.location = document.getElementById('filterLocation').value;
         currentFilters.scan_id = document.getElementById('filterScan').value;
 
-        loadStats();
         loadRecentScans();
     }
 
@@ -1004,8 +2470,6 @@
         document.getElementById('filterScan').value = '';
 
         loadLocations(currentFilters.organization || null);
-        loadScans(currentFilters.organization || null);
-        loadStats();
         loadRecentScans();
     }
 
@@ -1015,10 +2479,15 @@
         currentFilters.organization = org;
         currentFilters.location = '';
         currentFilters.scan_id = '';
+        loadManualReconSystems();
+        renderReconSystemSections();
         document.getElementById('filterLocation').value = '';
         document.getElementById('filterScan').value = '';
         loadLocations(org || null);
-        loadScans(org || null, null);
+        if (org) {
+            loadNetworks(org).then(() => loadNetworkArchitecture(org));
+            loadCriticalDevices();
+        }
         applyFilters();
     });
 
@@ -1029,7 +2498,6 @@
         currentFilters.location = location;
         currentFilters.scan_id = '';
         document.getElementById('filterScan').value = '';
-        loadScans(org || null, location || null);
         applyFilters();
     });
 
@@ -1179,12 +2647,14 @@
     // Cargar datos al inicio
     loadOrganizations();
     const initOrg = currentFilters.organization || (document.getElementById('filterOrg') ? document.getElementById('filterOrg').value : '');
+    loadManualReconSystems();
+    renderReconSystemSections();
     loadLocations(initOrg || null);
     loadScans(initOrg || null, null);
     loadStats();
     loadRecentScans();
     if (initOrg) {
-        loadNetworks(initOrg);
+        loadNetworks(initOrg).then(() => loadNetworkArchitecture(initOrg));
     }
     updateDeleteButtons();
 
@@ -1320,6 +2790,9 @@
                     if (orgNameContext) {
                         loadLocations(orgNameContext);
                         loadScans(orgNameContext, '');
+                        loadNetworks(orgNameContext);
+                        loadCriticalDevices();
+                        loadNetworkArchitecture(orgNameContext);
                         loadStats();
                         loadRecentScans();
                     } else {
@@ -1334,6 +2807,50 @@
             }
         } catch (error) {
             alert(`❌ Error importando datos: ${error.message}`);
+        } finally {
+            event.target.value = '';
+        }
+    }
+
+    function exportReconDashboard() {
+        const org = currentFilters.organization || document.getElementById('filterOrg').value;
+        if (!org) {
+            alert('Debe haber una organización seleccionada para exportar el formulario.');
+            return;
+        }
+        window.location.href = `/api/recon-dashboard/export?organization=${encodeURIComponent(org)}`;
+    }
+
+    async function importReconDashboard(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const org = currentFilters.organization || document.getElementById('filterOrg').value;
+        if (!org) {
+            alert('Debe haber una organización seleccionada para importar el formulario.');
+            event.target.value = '';
+            return;
+        }
+        if (!confirm(`¿Importar la ficha "${file.name}" en ${org}?`)) {
+            event.target.value = '';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const response = await fetch(`/api/recon-dashboard/import?organization=${encodeURIComponent(org)}`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Error importando formulario');
+            alert(`✅ Formulario importado:\n- Redes: ${result.stats.networks}\n- Críticos: ${result.stats.critical_devices}\n- Electrónica: ${result.stats.network_devices}`);
+            await loadNetworks(org);
+            await loadCriticalDevices();
+            await loadNetworkArchitecture(org);
+        } catch (error) {
+            alert('❌ Error importando formulario: ' + error.message);
         } finally {
             event.target.value = '';
         }
@@ -1354,20 +2871,40 @@
         try {
             const resp = await fetch(`/api/critical-devices?organization=${encodeURIComponent(org)}`);
             const devices = await resp.json();
+            cachedCriticalDevices = devices;
+            renderReconSystemSections();
             const container = document.getElementById('criticalDevicesList');
             if (!devices.length) {
                 container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.9rem;">No hay dispositivos críticos registrados.</div>';
                 return;
             }
-            container.innerHTML = devices.map(d => `
-                <div style="background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; padding: 1rem; position: relative;">
-                    <button onclick="deleteCriticalDevice(${d.id})" title="Eliminar"
-                        style="position: absolute; top: 0.6rem; right: 0.6rem; background: none; border: none; color: #f87171; cursor: pointer; font-size: 1rem;">🗑️</button>
-                    <button onclick='editCriticalDevice(${d.id}, ${JSON.stringify(d.name)}, ${JSON.stringify(d.ips)}, ${JSON.stringify(d.reason)})' title="Editar"
-                        style="position: absolute; top: 0.6rem; right: 2.2rem; background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 1rem;">✏️</button>
-                    <div style="font-weight: 600; color: #f87171; margin-bottom: 0.3rem;">🚨 ${d.name}</div>
-                    <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8; margin-bottom: 0.4rem;">${d.ips}</div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary);">${d.reason}</div>
+            const grouped = {};
+            devices.forEach(d => {
+                const sys = systemLabel(d.system_name);
+                if (!grouped[sys]) grouped[sys] = [];
+                grouped[sys].push(d);
+            });
+            const sortedSystems = Object.keys(grouped).sort((a, b) => {
+                if (a === "Sin Sistema Asociado") return 1;
+                if (b === "Sin Sistema Asociado") return -1;
+                return a.localeCompare(b);
+            });
+            container.innerHTML = sortedSystems.map(sys => `
+                <div style="background: rgba(239,68,68,0.04); border: 1px solid rgba(239,68,68,0.16); border-radius: 8px; padding: 1rem;">
+                    <h5 style="margin-top: 0; margin-bottom: 1rem; color: #fca5a5; font-size: 1.05rem;">${escapeHtml(sys)}</h5>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.75rem;">
+                        ${grouped[sys].map(d => `
+                            <div style="background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; padding: 1rem; position: relative;">
+                                <button onclick="deleteCriticalDevice(${d.id})" title="Eliminar"
+                                    style="position: absolute; top: 0.6rem; right: 0.6rem; background: none; border: none; color: #f87171; cursor: pointer; font-size: 1rem;">🗑️</button>
+                                <button onclick='editCriticalDevice(${d.id}, ${JSON.stringify(d.name)}, ${JSON.stringify(d.ips)}, ${JSON.stringify(d.reason)}, ${JSON.stringify(d.system_name || "")})' title="Editar"
+                                    style="position: absolute; top: 0.6rem; right: 2.2rem; background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 1rem;">✏️</button>
+                                <div style="font-weight: 600; color: #f87171; margin-bottom: 0.3rem;">🚨 ${escapeHtml(d.name)}</div>
+                                <div style="font-family: monospace; font-size: 0.9rem; color: #38bdf8; margin-bottom: 0.4rem;">${escapeHtml(d.ips)}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary);">${escapeHtml(d.reason)}</div>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
             `).join('');
         } catch (e) {
@@ -1378,6 +2915,7 @@
     async function addCriticalDevice() {
         const org = currentFilters.organization || "{{ org_name | default('') }}";
         if (!org) { alert('Selecciona una organización primero.'); return; }
+        const systemName = document.getElementById('criticalSystemName').value.trim();
         const name = document.getElementById('criticalName').value.trim();
         const ips = document.getElementById('criticalIps').value.trim();
         const reason = document.getElementById('criticalReason').value.trim();
@@ -1386,7 +2924,7 @@
             const resp = await fetch('/api/critical-devices', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ organization: org, name, ips, reason })
+                body: JSON.stringify({ organization: org, system_name: systemName || null, name, ips, reason })
             });
             if (!resp.ok) throw new Error(await resp.text());
             document.getElementById('addCriticalForm').reset();
@@ -1396,25 +2934,8 @@
         }
     }
 
-    async function editCriticalDevice(id, currentName, currentIps, currentReason) {
-        const newName = prompt('Nombre:', currentName);
-        if (newName === null) return;
-        const newIps = prompt('IPs separadas por coma:', currentIps);
-        if (newIps === null) return;
-        const newReason = prompt('Motivo de criticidad:', currentReason);
-        if (newReason === null) return;
-
-        try {
-            const resp = await fetch(`/api/critical-devices/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newName, ips: newIps, reason: newReason })
-            });
-            if (!resp.ok) throw new Error(await resp.text());
-            loadCriticalDevices();
-        } catch (e) {
-            alert('❌ Error editando dispositivo crítico: ' + e.message);
-        }
+    async function editCriticalDevice(id, currentName, currentIps, currentReason, currentSystem) {
+        openReconItemModal('critical', systemLabel(currentSystem), id);
     }
 
     async function deleteCriticalDevice(id) {

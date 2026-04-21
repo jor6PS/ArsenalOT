@@ -1,0 +1,499 @@
+{% extends "base.html" %}
+
+{% block title %}Diagrama de vectores - {{ org_name }} | ArsenalOT{% endblock %}
+
+{% block content %}
+{% set active_phase = 'recon' %}
+{% set active_section = 'access_vectors' %}
+{% include "org_tabs.html" %}
+
+<style>
+  .vector-page {
+    margin-top: 1.5rem;
+    color: var(--text-primary);
+  }
+
+  .vector-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.72);
+  }
+
+  .vector-toolbar h2 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+
+  .vector-toolbar p {
+    margin: 0.25rem 0 0;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+  }
+
+  .vector-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .vector-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+    white-space: nowrap;
+  }
+
+  .vector-diagram-shell {
+    position: relative;
+    min-height: 560px;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background:
+      linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+      rgba(2, 6, 23, 0.58);
+    background-size: 32px 32px;
+  }
+
+  .vector-diagram {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(230px, 280px) minmax(680px, 1fr);
+    gap: 1.25rem;
+    min-width: 980px;
+    padding: 1.25rem;
+  }
+
+  .vector-links {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .vector-links path {
+    fill: none;
+    stroke: rgba(125, 211, 252, 0.58);
+    stroke-width: 2;
+  }
+
+  .vector-links path[data-type="scan_target"] {
+    stroke: rgba(250, 204, 21, 0.55);
+    stroke-dasharray: 8 6;
+  }
+
+  .vector-links path[data-type="device_device"] {
+    stroke: rgba(167, 139, 250, 0.62);
+  }
+
+  .origin-lane,
+  .system-board {
+    position: relative;
+    z-index: 1;
+  }
+
+  .origin-lane,
+  .system-column {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.82);
+  }
+
+  .lane-header,
+  .system-header {
+    padding: 0.85rem 0.95rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  }
+
+  .lane-header h3,
+  .system-header h3 {
+    margin: 0;
+    font-size: 0.98rem;
+  }
+
+  .lane-header small,
+  .system-header small {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--text-secondary);
+  }
+
+  .origin-list,
+  .system-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.85rem;
+  }
+
+  .system-board {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .vector-node {
+    position: relative;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.92);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+  }
+
+  .vector-node-inner {
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    gap: 0.65rem;
+    align-items: center;
+    padding: 0.75rem;
+  }
+
+  .node-icon {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: rgba(56, 189, 248, 0.12);
+    color: #7dd3fc;
+    font-size: 1.1rem;
+  }
+
+  .node-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+  }
+
+  .node-meta {
+    margin-top: 0.2rem;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    display: block;
+  }
+
+  .origin-node .node-icon {
+    background: rgba(34, 197, 94, 0.12);
+    color: #86efac;
+  }
+
+  .origin-node.unlinked {
+    border-color: rgba(250, 204, 21, 0.32);
+  }
+
+  .device-node .node-icon {
+    background: rgba(167, 139, 250, 0.12);
+    color: #c4b5fd;
+  }
+
+  .network-node .node-icon {
+    background: rgba(14, 165, 233, 0.12);
+    color: #7dd3fc;
+  }
+
+  .critical-node .node-icon {
+    background: rgba(248, 113, 113, 0.12);
+    color: #fca5a5;
+  }
+
+  .node-section-title {
+    margin: 0.1rem 0 0;
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .vector-empty {
+    padding: 2rem;
+    border: 1px dashed rgba(148, 163, 184, 0.32);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .vector-legend {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 0.75rem;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+  }
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .legend-line {
+    width: 26px;
+    height: 0;
+    border-top: 2px solid rgba(125, 211, 252, 0.68);
+  }
+
+  .legend-line.inferred {
+    border-top-color: rgba(250, 204, 21, 0.7);
+    border-top-style: dashed;
+  }
+
+  @media (max-width: 900px) {
+    .vector-toolbar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .vector-diagram {
+      grid-template-columns: 1fr;
+      min-width: 0;
+    }
+
+    .system-board {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="vector-page">
+  <div class="vector-toolbar">
+    <div>
+      <h2>Diagrama de vectores de acceso</h2>
+      <p>Vista offline de or&iacute;genes, sistemas, electr&oacute;nica de red y redes declaradas para {{ org_name }}.</p>
+      <div class="vector-legend">
+        <span class="legend-item"><span class="legend-line"></span>Relaci&oacute;n declarada</span>
+        <span class="legend-item"><span class="legend-line inferred"></span>Inferida por objetivo de escaneo</span>
+      </div>
+    </div>
+    <div class="vector-actions">
+      <label class="vector-toggle">
+        <input type="checkbox" id="showInferredLinks" onchange="drawVectorLinks()">
+        <span>Mostrar inferidas</span>
+      </label>
+      <button class="btn btn-secondary" type="button" onclick="loadAccessVectorDiagram()">Actualizar</button>
+      <button class="btn btn-primary" type="button" onclick="exportVectorJson()">Exportar JSON</button>
+    </div>
+  </div>
+
+  <div class="vector-diagram-shell" id="diagramShell">
+    <div class="vector-diagram" id="vectorDiagram">
+      <svg class="vector-links" id="vectorLinks" aria-hidden="true"></svg>
+      <div class="vector-empty">Cargando diagrama...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const ORG_NAME = "{{ org_name }}";
+  let currentDiagramData = null;
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function nodeId(rawId) {
+    return `diagram-node-${String(rawId).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  }
+
+  function systemKey(value) {
+    return value || '__none__';
+  }
+
+  function deviceIcon(type) {
+    const normalized = String(type || '').toLowerCase();
+    if (normalized === 'firewall') return '🧱';
+    if (normalized === 'router') return '🔀';
+    return '🔌';
+  }
+
+  function renderNode(item, kind, icon, metaLines = []) {
+    const classes = [
+      'vector-node',
+      `${kind}-node`,
+      kind === 'origin' && !item.linked ? 'unlinked' : ''
+    ].filter(Boolean).join(' ');
+    const meta = metaLines.filter(Boolean).map(escapeHtml).join('<br>');
+    return `
+      <div class="${classes}" id="${nodeId(item.id)}" data-node-id="${escapeHtml(item.id)}">
+        <div class="vector-node-inner">
+          <span class="node-icon">${icon}</span>
+          <span>
+            <span class="node-title">${escapeHtml(item.name)}</span>
+            ${meta ? `<span class="node-meta">${meta}</span>` : ''}
+          </span>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderAccessVectorDiagram(data) {
+    currentDiagramData = data;
+    const diagram = document.getElementById('vectorDiagram');
+    const origins = data.origins || [];
+    const systems = data.systems || [];
+    const networks = data.networks || [];
+    const devices = data.network_devices || [];
+    const critical = data.critical_devices || [];
+
+    if (!origins.length && !systems.length && !networks.length && !devices.length && !critical.length) {
+      diagram.innerHTML = '<svg class="vector-links" id="vectorLinks" aria-hidden="true"></svg><div class="vector-empty">Todav&iacute;a no hay datos de arquitectura ni or&iacute;genes para dibujar.</div>';
+      return;
+    }
+
+    const originsHtml = origins.length
+      ? origins.map(origin => renderNode(origin, 'origin', '💻', [
+          `${origin.scan_count || 0} escaneo(s)`,
+          origin.running_count ? `${origin.running_count} en ejecución` : '',
+          origin.targets && origin.targets.length ? `${origin.targets.length} conjunto(s) de objetivos` : '',
+          !origin.linked ? 'Sin enlace directo declarado' : ''
+        ])).join('')
+      : '<div class="vector-empty">No hay or&iacute;genes registrados.</div>';
+
+    const systemHtml = systems.map(system => {
+      const rawName = system.raw_name || null;
+      const systemNetworks = networks.filter(item => systemKey(item.system_name) === systemKey(rawName));
+      const systemDevices = devices.filter(item => systemKey(item.system_name) === systemKey(rawName));
+      const systemCritical = critical.filter(item => systemKey(item.system_name) === systemKey(rawName));
+
+      const devicesHtml = systemDevices.length ? `
+        <p class="node-section-title">Electr&oacute;nica</p>
+        ${systemDevices.map(device => renderNode(device, 'device', deviceIcon(device.device_type), [
+          `${device.device_type || 'dispositivo'}${device.management_ip ? ` · ${device.management_ip}` : ''}`,
+          device.origin_locations && device.origin_locations.length ? `Orígenes: ${device.origin_locations.join(', ')}` : '',
+        ])).join('')}
+      ` : '';
+
+      const networksHtml = systemNetworks.length ? `
+        <p class="node-section-title">Redes</p>
+        ${systemNetworks.map(network => renderNode(network, 'network', '▦', [
+          network.range,
+          network.purdue_level !== null && network.purdue_level !== undefined ? `Purdue L${network.purdue_level}` : ''
+        ])).join('')}
+      ` : '';
+
+      const criticalHtml = systemCritical.length ? `
+        <p class="node-section-title">Activos cr&iacute;ticos</p>
+        ${systemCritical.map(item => renderNode(item, 'critical', '⚠', [
+          item.ips,
+          item.reason
+        ])).join('')}
+      ` : '';
+
+      const emptyHtml = !devicesHtml && !networksHtml && !criticalHtml
+        ? '<div class="vector-empty">Sistema sin elementos declarados.</div>'
+        : '';
+
+      return `
+        <section class="system-column">
+          <div class="system-header">
+            <h3>${escapeHtml(system.name)}</h3>
+            <small>${systemNetworks.length} redes · ${systemDevices.length} electr&oacute;nica · ${systemCritical.length} cr&iacute;ticos</small>
+          </div>
+          <div class="system-content">
+            ${devicesHtml}
+            ${networksHtml}
+            ${criticalHtml}
+            ${emptyHtml}
+          </div>
+        </section>
+      `;
+    }).join('');
+
+    diagram.innerHTML = `
+      <svg class="vector-links" id="vectorLinks" aria-hidden="true"></svg>
+      <aside class="origin-lane">
+        <div class="lane-header">
+          <h3>Or&iacute;genes</h3>
+          <small>Vectores desde donde se ejecutaron pruebas</small>
+        </div>
+        <div class="origin-list">${originsHtml}</div>
+      </aside>
+      <main class="system-board">${systemHtml}</main>
+    `;
+
+    requestAnimationFrame(drawVectorLinks);
+  }
+
+  function drawVectorLinks() {
+    const diagram = document.getElementById('vectorDiagram');
+    const svg = document.getElementById('vectorLinks');
+    if (!diagram || !svg || !currentDiagramData) return;
+
+    const bounds = diagram.getBoundingClientRect();
+    const width = Math.max(diagram.scrollWidth, bounds.width);
+    const height = Math.max(diagram.scrollHeight, bounds.height);
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.innerHTML = '';
+    const showInferred = Boolean(document.getElementById('showInferredLinks')?.checked);
+
+    (currentDiagramData.links || []).forEach(link => {
+      if (link.type === 'scan_target' && !showInferred) return;
+      const source = document.getElementById(nodeId(link.source));
+      const target = document.getElementById(nodeId(link.target));
+      if (!source || !target) return;
+
+      const sourceRect = source.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const x1 = sourceRect.right - bounds.left + diagram.scrollLeft;
+      const y1 = sourceRect.top + sourceRect.height / 2 - bounds.top + diagram.scrollTop;
+      const x2 = targetRect.left - bounds.left + diagram.scrollLeft;
+      const y2 = targetRect.top + targetRect.height / 2 - bounds.top + diagram.scrollTop;
+      const mid = Math.max(60, Math.abs(x2 - x1) * 0.45);
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', `M ${x1} ${y1} C ${x1 + mid} ${y1}, ${x2 - mid} ${y2}, ${x2} ${y2}`);
+      path.dataset.type = link.type || '';
+      svg.appendChild(path);
+    });
+  }
+
+  async function loadAccessVectorDiagram() {
+    const diagram = document.getElementById('vectorDiagram');
+    diagram.innerHTML = '<svg class="vector-links" id="vectorLinks" aria-hidden="true"></svg><div class="vector-empty">Cargando diagrama...</div>';
+    try {
+      const response = await fetch(`/api/access-vector-diagram?organization=${encodeURIComponent(ORG_NAME)}`);
+      if (!response.ok) throw new Error(await response.text());
+      renderAccessVectorDiagram(await response.json());
+    } catch (error) {
+      console.error(error);
+      diagram.innerHTML = '<svg class="vector-links" id="vectorLinks" aria-hidden="true"></svg><div class="vector-empty">No se pudo cargar el diagrama.</div>';
+    }
+  }
+
+  function exportVectorJson() {
+    if (!currentDiagramData) return;
+    const blob = new Blob([JSON.stringify(currentDiagramData, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `diagrama_vectores_${ORG_NAME.toLowerCase()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  window.addEventListener('resize', () => requestAnimationFrame(drawVectorLinks));
+  document.getElementById('diagramShell').addEventListener('scroll', () => requestAnimationFrame(drawVectorLinks));
+  document.addEventListener('DOMContentLoaded', loadAccessVectorDiagram);
+</script>
+{% endblock %}

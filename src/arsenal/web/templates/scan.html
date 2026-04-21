@@ -1291,7 +1291,7 @@
             nmap_vulns: formData.has('nmap_vulns'),
             nmap_ot_ports: formData.has('nmap_ot_ports'),
             nmap_it_ports: formData.has('nmap_it_ports'),
-            nmap_icmp: formData.has('nmap_icmp'),
+            nmap_icmp: scanMode === 'active' ? formData.has('nmap_icmp') : false,
             custom_ports: formData.get('custom_ports') || null,
             ioxid: formData.has('ioxid'),
             screenshots: formData.has('screenshots'),

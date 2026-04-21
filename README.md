@@ -9,6 +9,14 @@ Esta herramienta permite no solo obtener información detallada sobre los puerto
 - **Captura Pasiva**: Soporte para análisis pasivo de tráfico de red (PCAP).
 - **Exportación e Integración**: Almacenamiento local SQLite, exportación a JSON y **volcado directo a Neo4j** para visualización avanzada de grafos de red.
 - **Interfaz Web Moderna**: Centralización de los escaneos gestionados por un backend FastAPI y un entorno visual amigable y centralizado.
+- **Dashboard de Reconocimiento**: Gestión por organización, sistemas, redes, dispositivos críticos y electrónica de red.
+- **Vectores de Acceso**: Diagrama local para relacionar orígenes, redes accesibles, dispositivos y objetivos escaneados.
+- **Integración con PwnDoc**: Creación y sincronización de auditorías, tipos de vulnerabilidad y findings.
+- **Bitácora Obsidian**: Notas por organización con evidencias, visibilidad de escaneo y credenciales enmascaradas cuando corresponde.
+- **Importación NetExec**: Importación controlada de workspaces para credenciales y datos de pentest.
+
+> [!IMPORTANT]
+> ArsenalOT debe utilizarse únicamente en redes propias, laboratorios o entornos donde exista autorización explícita. Los resultados, PCAP, credenciales importadas y bases SQLite pueden contener información sensible.
 
 ---
 
@@ -22,15 +30,40 @@ La forma más sencilla y robusta de ejecutar ArsenalOT junto con Neo4j es utiliz
 ### 2. Inicio
 Desde la carpeta raíz del proyecto, ejecuta:
 ```bash
+cp .env.example .env
+# Edita .env y cambia las contraseñas de ejemplo antes de exponer el entorno.
 docker-compose up -d --build
 ```
 
 ### 3. Acceso
 *   **ArsenalOT Web**: [http://localhost:8000](http://localhost:8000)
 *   **Neo4j Browser**: [http://localhost:7474](http://localhost:7474)
+*   **Neo4j Graph Viewer**: [http://localhost:7777](http://localhost:7777)
+*   **PwnDoc**: [https://localhost:8443](https://localhost:8443)
 
 > [!TIP]
 > Para una guía detallada sobre persistencia de datos y gestión de contenedores, consulta la **[Guía de Inicio con Docker](.system/brain/docker_guide.md)** (o similar en la carpeta de documentación).
+
+---
+
+## 🔐 Buenas Prácticas de Seguridad
+
+- No subas `.env`, `results/`, bases `.db`/`.sqlite`, PCAP, evidencias ni exportaciones de clientes.
+- Cambia `NEO4J_PASSWORD` y `PWNDOC_PASSWORD` en `.env` antes de usar el stack fuera de un laboratorio local.
+- Mantén Neo4j y PwnDoc accesibles solo desde interfaces de confianza.
+- Evita compartir workspaces NetExec o bitácoras con credenciales reales.
+- Revisa el alcance antes de lanzar perfiles agresivos, capturas pasivas o scripts OT.
+- Ejecuta Docker en una red aislada cuando no necesites acceso directo a interfaces físicas.
+
+Variables mínimas recomendadas en `.env`:
+
+- `NEO4J_HOST`: host de Neo4j, normalmente `localhost`.
+- `NEO4J_PORT`: puerto Bolt, normalmente `7687`.
+- `NEO4J_USERNAME`: usuario de Neo4j.
+- `NEO4J_PASSWORD`: contraseña propia y no reutilizada.
+- `PWNDOC_URL`: URL local de la API de PwnDoc.
+- `PWNDOC_USER`: usuario de PwnDoc.
+- `PWNDOC_PASSWORD`: contraseña propia y no reutilizada.
 
 ---
 
@@ -65,6 +98,27 @@ ArsenalOT permite representar los activos detectados en una base de datos de gra
 
 *   **Exportación**: Desde la interfaz web de ArsenalOT, puedes enviar los resultados directamente a Neo4j configurando la IP como `localhost` (ya que comparten red).
 *   **Grafos**: Accede a `http://localhost:7474` para realizar consultas Cypher manuales o visualizar el mapa de red generado.
+
+---
+
+## 🌿 Flujo de Ramas
+
+La rama estable recomendada es `main`. Para publicar el estado validado desde una rama de trabajo:
+
+```bash
+git checkout main
+git pull origin main
+git merge dev
+git push origin main
+```
+
+Cuando `main` esté actualizada y validada, las ramas auxiliares se pueden retirar con:
+
+```bash
+git push origin --delete dev test test2
+```
+
+Esta eliminación debe hacerse solo cuando no haya trabajo pendiente en esas ramas.
 
 ---
 

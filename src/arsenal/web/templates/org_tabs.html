@@ -3,13 +3,13 @@ Partial: org_tabs.html
 Variables esperadas:
 - org_name: str, nombre de la organizacion
 - active_phase: str, 'inicio' | 'recon' | 'acceso' | 'explotacion' | 'explotacion_ot' | 'post_explotacion' | 'bitacora'
-- active_section: str opcional, 'dashboard' | 'scan' | 'results' | 'neo4j' | 'findings'
+- active_section: str opcional, 'dashboard' | 'scan' | 'results' | 'neo4j' | 'findings' | 'access_vectors'
 #}
 
 {% import "icons.html" as icons %}
 {% set org_url = org_name | urlencode %}
 {% set is_pentest_phase = active_phase in ['recon', 'acceso', 'explotacion', 'explotacion_ot', 'post_explotacion'] %}
-{% set is_pentest_result = active_phase == 'bitacora' or active_section in ['results', 'neo4j', 'findings'] %}
+{% set is_pentest_result = active_phase == 'bitacora' or active_section in ['results', 'neo4j', 'findings', 'access_vectors'] %}
 
 {% set phase_context = 'Selecciona una fase' %}
 {% if active_phase == 'recon' %}
@@ -23,6 +23,8 @@ Variables esperadas:
 {% set results_context = 'Ver entregables' %}
 {% if active_phase == 'bitacora' %}
   {% set results_context = 'Bit&aacute;cora' %}
+{% elif active_section == 'access_vectors' %}
+  {% set results_context = 'Vectores de acceso' %}
 {% elif active_section == 'findings' %}
   {% set results_context = 'Findings' %}
 {% elif active_section == 'neo4j' %}
@@ -55,7 +57,7 @@ Variables esperadas:
           <span class="org-nav-caret">{{ icons.icon('chevron-down') }}</span>
         </summary>
         <nav class="org-nav-menu" aria-label="Pentest de infraestructura">
-          <a href="/pentest/{{ org_url }}/recon/scan" class="org-nav-item {% if active_phase == 'recon' %}org-nav-item--active{% endif %}">
+          <a href="/pentest/{{ org_url }}/recon" class="org-nav-item {% if active_phase == 'recon' %}org-nav-item--active{% endif %}">
             <span class="org-nav-item-icon">{{ icons.icon('search') }}</span>
             <span class="org-nav-item-text"><span>Reconocimiento</span><small>Escaneos, descubrimiento y enumeraci&oacute;n</small></span>
           </a>
@@ -98,6 +100,10 @@ Variables esperadas:
           <a href="/pentest/{{ org_url }}/recon/findings" class="org-nav-item {% if active_section == 'findings' %}org-nav-item--active{% endif %}">
             <span class="org-nav-item-icon">{{ icons.icon('finding') }}</span>
             <span class="org-nav-item-text"><span>Findings</span><small>Hallazgos y sincronizaci&oacute;n con PwnDoc</small></span>
+          </a>
+          <a href="/pentest/{{ org_url }}/recon/access-vectors" class="org-nav-item {% if active_section == 'access_vectors' %}org-nav-item--active{% endif %}">
+            <span class="org-nav-item-icon">{{ icons.icon('network') }}</span>
+            <span class="org-nav-item-text"><span>Diagrama de vectores</span><small>Or&iacute;genes, sistemas y redes accesibles</small></span>
           </a>
           <a href="/pentest/{{ org_url }}/recon/neo4j" class="org-nav-item {% if active_section == 'neo4j' %}org-nav-item--active{% endif %}">
             <span class="org-nav-item-icon">{{ icons.icon('database') }}</span>

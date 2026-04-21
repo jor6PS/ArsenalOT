@@ -114,9 +114,10 @@
         </div>
     </div>
 
-    <div class="table-container">
+    <div class="table-container results-table-panel">
         <!-- Barra de búsqueda y filtros de columna -->
-        <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+        <div class="results-search-toolbar"
+            style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
             <input type="text" id="searchInput" placeholder="🔍 Buscar en todos los campos..."
                 style="flex: 1; min-width: 200px; padding: 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem;">
             <select id="columnFilter"
@@ -221,6 +222,18 @@
     </div>
 
     <script>
+        function updateResultsStickyOffset() {
+            const navbar = document.querySelector('.navbar');
+            const orgHeader = document.querySelector('.org-sticky-wrapper');
+            const navHeight = navbar ? navbar.getBoundingClientRect().height : 0;
+            const orgHeight = orgHeader ? orgHeader.getBoundingClientRect().height : 0;
+            document.documentElement.style.setProperty('--results-sticky-offset', `${Math.ceil(navHeight + orgHeight)}px`);
+        }
+
+        window.addEventListener('resize', updateResultsStickyOffset);
+        window.addEventListener('load', updateResultsStickyOffset);
+        updateResultsStickyOffset();
+
         // Set of critical IPs loaded once from API
         let criticalIps = new Set();
 

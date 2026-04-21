@@ -165,6 +165,7 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'passive_conversations': [dict(p) for p in cursor.execute("SELECT * FROM passive_conversations WHERE scan_id = ?", (scan_id,)).fetchall()],
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (scan['organization_name'],)).fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (scan['organization_name'],)).fetchall()],
+                'network_devices':      [dict(d) for d in cursor.execute("SELECT * FROM network_devices WHERE organization_name = ?", (scan['organization_name'],)).fetchall()],
                 'pwndoc_audits':        [dict(p) for p in pwndoc_rows],
                 'arsenalot_pwndoc_findings': arsenalot_pwndoc_rows,
                 'pwndoc_export':         pwndoc_export,
@@ -209,6 +210,7 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'passive_conversations': [dict(p) for p in cursor.execute(f"SELECT * FROM passive_conversations WHERE scan_id IN ({ph_s})", scan_ids).fetchall()] if scan_ids else [],
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (organization.upper(),)).fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (organization.upper(),)).fetchall()],
+                'network_devices':      [dict(d) for d in cursor.execute("SELECT * FROM network_devices WHERE organization_name = ?", (organization.upper(),)).fetchall()],
                 'pwndoc_audits':        [dict(p) for p in pwndoc_rows],
                 'arsenalot_pwndoc_findings': arsenalot_pwndoc_rows,
                 'pwndoc_export':         pwndoc_export,
@@ -248,6 +250,7 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'passive_conversations': [dict(p) for p in cursor.execute(f"SELECT * FROM passive_conversations WHERE scan_id IN ({ph_s})", scan_ids).fetchall()] if scan_ids else [],
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks WHERE organization_name = ?", (organization.upper(),)).fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices WHERE organization_name = ?", (organization.upper(),)).fetchall()],
+                'network_devices':      [dict(d) for d in cursor.execute("SELECT * FROM network_devices WHERE organization_name = ?", (organization.upper(),)).fetchall()],
                 'pwndoc_audits':        [dict(p) for p in pwndoc_rows],
                 'arsenalot_pwndoc_findings': arsenalot_pwndoc_rows,
                 'pwndoc_export':         pwndoc_export,
@@ -281,6 +284,7 @@ def export_data(storage: ScanStorage, organization: Optional[str] = None,
                 'passive_conversations': [dict(p) for p in cursor.execute("SELECT * FROM passive_conversations").fetchall()],
                 'networks':             [dict(n) for n in cursor.execute("SELECT * FROM networks").fetchall()],
                 'critical_devices':     [dict(d) for d in cursor.execute("SELECT * FROM critical_devices").fetchall()],
+                'network_devices':      [dict(d) for d in cursor.execute("SELECT * FROM network_devices").fetchall()],
                 'pwndoc_audits':        [dict(p) for p in cursor.execute("SELECT * FROM pwndoc_audits").fetchall()],
                 'arsenalot_pwndoc_findings': _fetch_rows(cursor, "SELECT * FROM arsenalot_pwndoc_findings"),
                 'pwndoc_export':         _collect_pwndoc_export(cursor, organization_names),
@@ -342,6 +346,7 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
         'pwndoc_findings': 0,
         'pwndoc_findings_skipped': 0,
         'pwndoc_errors': [],
+        'network_devices': 0,
     }
     
     # Crear directorio temporal para extraer
@@ -790,19 +795,42 @@ def _merge_directory(source: Path, dest: Path):
 
 def _import_org_metadata(cursor, export_data: Dict, import_stats: Dict):
     """Importa redes y dispositivos críticos."""
+    network_id_map: Dict[int, int] = {}
+
+    def _remap_json_ids(raw_value, id_map: Dict[int, int]) -> str:
+        try:
+            values = json.loads(raw_value or "[]")
+        except (TypeError, json.JSONDecodeError):
+            values = []
+        if not isinstance(values, list):
+            values = [values]
+        remapped = []
+        for value in values:
+            try:
+                old_id = int(value)
+            except (TypeError, ValueError):
+                continue
+            new_id = id_map.get(old_id, old_id)
+            if new_id not in remapped:
+                remapped.append(new_id)
+        return json.dumps(remapped)
+
     # Importar redes
     for net in export_data.get('networks', []):
         # Normalizar nombre
+        old_id = net.get('id')
         org_name = net['organization_name'].strip().upper()
         cursor.execute("""
             INSERT OR REPLACE INTO networks 
-            (organization_name, system_name, network_name, network_range, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            (organization_name, system_name, network_name, network_range, purdue_level, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
         """, (
             org_name, net.get('system_name'),
-            net['network_name'], net['network_range'],
+            net['network_name'], net['network_range'], net.get('purdue_level'),
             net.get('created_at', datetime.now().isoformat())
         ))
+        if old_id is not None:
+            network_id_map[int(old_id)] = cursor.lastrowid
         if 'networks' not in import_stats:
             import_stats['networks'] = 0
         import_stats['networks'] += 1
@@ -813,16 +841,54 @@ def _import_org_metadata(cursor, export_data: Dict, import_stats: Dict):
         org_name = dev['organization_name'].strip().upper()
         cursor.execute("""
             INSERT OR REPLACE INTO critical_devices
-            (organization_name, name, ips, reason, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            (organization_name, system_name, name, ips, reason, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
         """, (
-            org_name, dev['name'],
+            org_name, dev.get('system_name'), dev['name'],
             dev['ips'], dev['reason'],
             dev.get('created_at', datetime.now().isoformat())
         ))
         if 'critical_devices' not in import_stats:
             import_stats['critical_devices'] = 0
         import_stats['critical_devices'] += 1
+
+    # Importar electrónica de red. Se remapean IDs de redes y dispositivos
+    # porque el importador general crea nuevos IDs al restaurar en destino.
+    network_device_id_map: Dict[int, int] = {}
+    pending_connections = []
+    for dev in export_data.get('network_devices', []):
+        old_id = dev.get('id')
+        org_name = dev['organization_name'].strip().upper()
+        cursor.execute("""
+            INSERT OR REPLACE INTO network_devices
+            (organization_name, system_name, name, device_type, management_ip,
+             accessible_network_ids_json, origin_locations_json,
+             connected_device_ids_json, notes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            org_name,
+            dev.get('system_name'),
+            dev['name'],
+            dev['device_type'],
+            dev.get('management_ip'),
+            _remap_json_ids(dev.get('accessible_network_ids_json'), network_id_map),
+            dev.get('origin_locations_json'),
+            json.dumps([]),
+            dev.get('notes'),
+            dev.get('created_at', datetime.now().isoformat()),
+        ))
+        new_id = cursor.lastrowid
+        if old_id is not None:
+            network_device_id_map[int(old_id)] = new_id
+        pending_connections.append((new_id, dev.get('connected_device_ids_json')))
+        import_stats['network_devices'] = import_stats.get('network_devices', 0) + 1
+
+    for new_id, connected_json in pending_connections:
+        cursor.execute("""
+            UPDATE network_devices
+            SET connected_device_ids_json = ?
+            WHERE id = ?
+        """, (_remap_json_ids(connected_json, network_device_id_map), new_id))
 
     # Importar auditorías PwnDoc (mapping org → audit_id)
     _restore_pwndoc_exports(cursor, export_data, import_stats)
@@ -959,4 +1025,3 @@ def _normalize_pwndoc_scope(scope) -> List[str]:
         if value:
             normalized.append(value)
     return normalized
-

@@ -73,17 +73,19 @@ def build_scan_phases(config: ScanConfig):
         add("pcap_processing", "Procesamiento PCAP", "Analizando conversaciones detectadas")
         return phases
 
-    if config.host_discovery:
+    is_active = config.scan_mode == "active"
+
+    if is_active and config.host_discovery:
         add("host_discovery", "Fase 1 - Descubrimiento ARP", "Buscando hosts activos")
-    if config.nmap_icmp:
+    if is_active and config.nmap_icmp:
         add("ping_discovery", "Fase 2 - Ping Scan", "Confirmando hosts con Nmap -sn")
-    if config.nmap:
+    if is_active and config.nmap:
         add("port_scan", "Fase 3 - Puertos y servicios", "Escaneando puertos y servicios")
-    if (config.screenshots or config.source_code) and not config.nmap:
+    if (config.screenshots or config.source_code) and not (is_active and config.nmap):
         add("specific_capture", "Capturas especificas", "Probando servicios web indicados")
     if hasattr(config, "ioxid") and config.ioxid:
         add("ioxid", "IOXIDResolver", "Buscando interfaces DCOM")
-    if (config.screenshots or config.source_code) and config.scan_mode != "specific" and config.nmap:
+    if (config.screenshots or config.source_code) and config.scan_mode != "specific" and is_active and config.nmap:
         add("web_enrichment", "Evidencias web", "Capturas y codigo fuente de servicios web")
 
     if not phases:
@@ -415,12 +417,16 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
 
         # Dict IP -> {mac_address, vendor} — Phase 1 popula MAC/vendor, fases 2+ sólo añaden IPs
         discovered_ips: dict = {}
+        is_active_mode = config.scan_mode == "active"
+        run_host_discovery = is_active_mode and config.host_discovery
+        run_ping_discovery = is_active_mode and config.nmap_icmp
+        run_port_scan = is_active_mode and config.nmap
 
 
         # ============================================================================
         # PASO 1: HOST DISCOVERY (si está habilitado)
         # ============================================================================
-        if config.host_discovery:
+        if run_host_discovery:
             set_phase(scan_id, "host_discovery", status="running", progress=10, detail="Ejecutando descubrimiento ARP", started=True)
             print(f"[Scan {scan_id}] 🔍 Iniciando descubrimiento de hosts...")
             try:
@@ -492,7 +498,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # ============================================================================
         # PASO 2: NMAP PING DISCOVERY (FASE 2)
         # ============================================================================
-        if config.nmap_icmp:
+        if run_ping_discovery:
             set_phase(scan_id, "ping_discovery", status="running", progress=10, detail="Ejecutando Nmap ping scan", started=True)
             print(f"[Scan {scan_id}] 📍 Iniciando Fase 2: Ping Scan...")
             
@@ -589,7 +595,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # ============================================================================
         # PASO 3: NMAP PORT SCAN (FASE 3)
         # ============================================================================
-        if config.nmap:
+        if run_port_scan:
             set_phase(scan_id, "port_scan", status="running", progress=10, detail="Ejecutando Nmap contra los objetivos", started=True)
             print(f"[Scan {scan_id}] 🔌 Iniciando Fase 3: Escaneo de Puertos...")
             
@@ -824,7 +830,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # ============================================================================
         if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE:
             # Si Nmap no se ejecutó, necesitamos procesar los targets manualmente
-            if not config.nmap:
+            if not run_port_scan:
                 set_phase(scan_id, "specific_capture", status="running", progress=10, detail="Preparando objetivos web", started=True)
                 print(f"[Scan {scan_id}] 📸 Iniciando capturas específicas sin escaneo Nmap previo...")
                 
@@ -925,7 +931,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # ============================================================================
         # PASO 3: IOXIDRESOLVER (si está habilitado)
         # ============================================================================
-        if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE and not config.nmap:
+        if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE and not run_port_scan:
             try:
                 phase = next((p for p in storage.get_scan_phases(scan_id) if p.get("phase_key") == "specific_capture"), None)
                 if phase and phase.get("status") == "running":
@@ -997,7 +1003,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         # PASO 4: ENRIQUECIMIENTO STANDALONE (si está habilitado y no se hizo en Modo Específico)
         # ============================================================================
         if (config.screenshots or config.source_code) and WEB_PROTOCOLS_AVAILABLE and config.scan_mode != "specific":
-            if config.nmap:
+            if run_port_scan:
                 set_phase(scan_id, "web_enrichment", status="running", progress=15, detail="Buscando servicios web para evidencias", started=True)
             print(f"[Scan {scan_id}] 🌐 Iniciando fase de enriquecimiento standalone...")
             
@@ -1122,7 +1128,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 except Exception as e:
                     print(f"[Scan {scan_id}] ⚠️  Error en fase EyeWitness: {e}")
             else:
-                if not config.nmap and not config.host_discovery:
+                if not run_port_scan and not run_host_discovery:
                     msg = f"No se han encontrado activos o servicios web en el rango {config.target_range} para procesar. Se recomienda ejecutar acompañado de un escaneo Nmap o descubrimiento de hosts."
                     print(f"[Scan {scan_id}] ⚠️ {msg}")
                     try:

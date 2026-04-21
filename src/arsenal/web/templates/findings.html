@@ -584,13 +584,13 @@ function updateEditorState() {
   } else if (editorMode === 'library') {
     badge.textContent = 'Biblioteca';
     title.textContent = 'Nuevo finding desde biblioteca';
-    hint.textContent = 'Se subira a la auditoria; la biblioteca PwnDoc no se modifica.';
+    hint.textContent = 'Se subira a la auditoria enlazado al tipo de vulnerabilidad PwnDoc seleccionado.';
     save.textContent = 'Subir a auditoria';
     del.style.display = 'none';
   } else {
     badge.textContent = 'Manual';
     title.textContent = 'Nuevo finding manual';
-    hint.textContent = 'Se creara solo en la auditoria PwnDoc, no en la biblioteca.';
+    hint.textContent = 'Se creara en la auditoria y se registrara en la biblioteca PwnDoc si no existe.';
     save.textContent = 'Subir a auditoria';
     del.style.display = 'none';
   }
@@ -619,7 +619,7 @@ async function saveFinding() {
     remediation: document.getElementById('fRem').value.trim(),
     cvssv3: document.getElementById('fCvss').value.trim(),
     category: editorMode === 'library' && selectedVuln ? (selectedVuln.category || 'No Category') : 'Manual',
-    vuln_type_id: editorMode === 'library' && selectedVuln ? (selectedVuln.title || null) : null,
+    vuln_type_id: editorMode === 'library' && selectedVuln ? (selectedVuln.id || null) : null,
     language: document.getElementById('acLang').value || 'es',
     audit_type: document.getElementById('acType').value || null,
   };

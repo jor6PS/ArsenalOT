@@ -148,6 +148,52 @@ class PwnDocClient:
                     return vuln
         return datas
 
+    def find_vulnerability(self, title: str = None, vuln_id: str = None) -> Optional[Dict]:
+        """Busca una vulnerabilidad de biblioteca por id o por título localizado."""
+        wanted_id = str(vuln_id or "").strip()
+        wanted_title = (title or "").strip().lower()
+        if not wanted_id and not wanted_title:
+            return None
+        for vuln in self.list_vulnerabilities():
+            current_id = str(vuln.get("_id") or vuln.get("id") or "")
+            if wanted_id and current_id == wanted_id:
+                return vuln
+            if wanted_title:
+                for detail in vuln.get("details", []) or []:
+                    if (detail.get("title") or "").strip().lower() == wanted_title:
+                        return vuln
+        return None
+
+    def ensure_vulnerability(
+        self,
+        title: str,
+        description: str = "",
+        observation: str = "",
+        remediation: str = "",
+        locale: str = "es",
+        category: str = "",
+        cvssv3: str = "",
+        references: list = None,
+    ) -> Dict:
+        """Devuelve una vulnerabilidad de biblioteca existente o la crea."""
+        existing = self.find_vulnerability(title=title)
+        if existing:
+            return existing
+        created = self.create_vulnerability(
+            title=title,
+            description=description,
+            observation=observation,
+            remediation=remediation,
+            locale=locale,
+            category=category,
+            cvssv3=cvssv3,
+            references=references,
+        )
+        created_id = str(created.get("_id") or created.get("id") or "")
+        if created_id:
+            return created
+        return self.find_vulnerability(title=title) or created
+
     # ─── Auditorías ────────────────────────────────────────────
 
     def list_audit_types(self) -> List[Dict]:

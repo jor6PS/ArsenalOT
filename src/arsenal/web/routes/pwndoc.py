@@ -51,6 +51,53 @@ def _library_titles_by_id(client: PwnDocClient) -> tuple[set[str], set[str]]:
     return ids, titles
 
 
+def _normalize_vuln_type_id(client: PwnDocClient, value: Optional[str]) -> Optional[str]:
+    """Return a PwnDoc vulnerability id from either an id or a localized title."""
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    raw_lower = raw.lower()
+    try:
+        for vuln in client.list_vulnerabilities():
+            vuln_id = str(vuln.get("_id") or vuln.get("id") or "")
+            if vuln_id and vuln_id == raw:
+                return vuln_id
+            for detail in vuln.get("details", []) or []:
+                if (detail.get("title") or "").strip().lower() == raw_lower:
+                    return vuln_id or raw
+    except Exception:
+        pass
+    return raw
+
+
+def _ensure_finding_vuln_type_id(
+    client: PwnDocClient,
+    title: str,
+    description: str = "",
+    observation: str = "",
+    remediation: str = "",
+    category: str = "",
+    cvssv3: str = "",
+    vuln_type_id: Optional[str] = None,
+    locale: str = "es",
+) -> Optional[str]:
+    """Ensure every ArsenalOT finding points to a manageable PwnDoc library item."""
+    normalized = _normalize_vuln_type_id(client, vuln_type_id)
+    if normalized:
+        return normalized
+    vuln = client.ensure_vulnerability(
+        title=title,
+        description=description,
+        observation=observation,
+        remediation=remediation,
+        locale=locale or "es",
+        category=category or "Manual",
+        cvssv3=cvssv3,
+    )
+    ensured_id = str(vuln.get("_id") or vuln.get("id") or "")
+    return ensured_id or None
+
+
 # ── Pydantic models ────────────────────────────────────────────
 
 class NewVulnRequest(BaseModel):
@@ -280,7 +327,17 @@ async def add_finding(org_name: str, body: AddFindingRequest):
             observation = body.observation,
             remediation = body.remediation,
             cvssv3      = body.cvssv3,
-            vuln_type_id= body.vuln_type_id,
+            vuln_type_id= _ensure_finding_vuln_type_id(
+                c,
+                title=body.title,
+                description=body.description,
+                observation=body.observation,
+                remediation=body.remediation,
+                category=body.category,
+                cvssv3=body.cvssv3,
+                vuln_type_id=body.vuln_type_id,
+                locale=body.language,
+            ),
             category    = body.category,
         )
         finding_id = str(finding.get("_id") or finding.get("id") or "")
@@ -314,11 +371,12 @@ async def add_finding(org_name: str, body: AddFindingRequest):
 @router.put("/{org_name}/findings/{finding_id}")
 async def update_finding(org_name: str, finding_id: str, body: UpdateFindingRequest):
     """Actualiza un finding de la auditoría PwnDoc enlazada a esta org."""
-    audit_id = _get_or_link_audit_id(org_name)
+    client = _client()
+    audit_id = _get_or_link_audit_id(org_name, client)
     if not audit_id:
         raise HTTPException(status_code=404, detail="No hay auditoría PwnDoc enlazada a esta organización.")
     try:
-        result = _client().update_finding(
+        result = client.update_finding(
             audit_id=audit_id,
             finding_id=finding_id,
             title=body.title,
@@ -326,7 +384,16 @@ async def update_finding(org_name: str, finding_id: str, body: UpdateFindingRequ
             observation=body.observation,
             remediation=body.remediation,
             cvssv3=body.cvssv3,
-            vuln_type_id=body.vuln_type_id,
+            vuln_type_id=_ensure_finding_vuln_type_id(
+                client,
+                title=body.title,
+                description=body.description,
+                observation=body.observation,
+                remediation=body.remediation,
+                category=body.category,
+                cvssv3=body.cvssv3,
+                vuln_type_id=body.vuln_type_id,
+            ),
             category=body.category,
         )
         storage.save_arsenalot_pwndoc_finding(org_name, audit_id, finding_id, body.title)

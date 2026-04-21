@@ -12,6 +12,7 @@ Cada organización tiene su carpeta dentro del vault compartido:
 """
 
 import os
+import re
 import shutil
 import hashlib
 import sqlite3
@@ -387,6 +388,74 @@ class BitacoraManager:
         hits = sorted(bitacoras.glob(f"*VE - {location}.md"))
         return hits[0] if hits else None
 
+    def rename_location_notes(self, org_name: str, old_location: str,
+                              new_location: str) -> Dict[str, int]:
+        """
+        Renombra las notas de bitácora asociadas a un origen.
+
+        Conserva el prefijo de fecha y el sufijo de IP, y evita sobrescribir
+        notas existentes. El contenido manual se mantiene; solo se reemplazan
+        referencias directas al nombre antiguo dentro del fichero renombrado.
+        """
+        old_location = (old_location or '').strip().upper()
+        new_location = (new_location or '').strip().upper()
+        stats = {"matched": 0, "renamed": 0, "conflicts": 0}
+        if not old_location or not new_location or old_location == new_location:
+            return stats
+
+        bitacoras = self.get_org_dir(org_name) / "PENTEST IT OT" / "Bitacoras"
+        if not bitacoras.exists():
+            return stats
+
+        for note_path in sorted(bitacoras.glob("*.md")):
+            if " - VE - " not in note_path.stem:
+                continue
+            prefix, location_part = note_path.stem.split(" - VE - ", 1)
+            location_upper = location_part.upper()
+            if location_upper != old_location and not location_upper.startswith(f"{old_location} ("):
+                continue
+
+            stats["matched"] += 1
+            suffix = location_part[len(old_location):]
+            new_name = f"{prefix} - VE - {new_location}{suffix}.md"
+            new_path = note_path.with_name(new_name)
+            if new_path.exists() and new_path != note_path:
+                stats["conflicts"] += 1
+                continue
+
+            content = note_path.read_text(encoding='utf-8')
+            old_escaped = re.escape(old_location)
+            new_content = re.sub(
+                rf"VE - {old_escaped}",
+                f"VE - {new_location}",
+                content,
+                flags=re.IGNORECASE,
+            )
+            new_content = re.sub(
+                rf"`{old_escaped}`",
+                f"`{new_location}`",
+                new_content,
+                flags=re.IGNORECASE,
+            )
+            new_content = re.sub(
+                rf"{old_escaped} \(",
+                f"{new_location} (",
+                new_content,
+                flags=re.IGNORECASE,
+            )
+
+            if new_content != content:
+                note_path.write_text(new_content, encoding='utf-8')
+
+            if new_path != note_path:
+                note_path.rename(new_path)
+                _open_permissions(new_path)
+                stats["renamed"] += 1
+            else:
+                _open_permissions(note_path)
+
+        return stats
+
     # Orden y etiquetas de las técnicas de descubrimiento. La capa indica
     # qué tipo de visibilidad implica desde el origen hasta el segmento:
     # L2 (mismo dominio de broadcast) vs L3 (alcance enrutado) vs L7.
@@ -689,7 +758,7 @@ class BitacoraManager:
 
             # Redes registradas para la organización
             net_rows = conn.execute(
-                """SELECT system_name, network_name, network_range
+                """SELECT system_name, network_name, network_range, purdue_level
                    FROM networks
                    WHERE UPPER(organization_name) = UPPER(?)
                    ORDER BY system_name, network_name""",
@@ -702,10 +771,19 @@ class BitacoraManager:
                         'obj':    _ipa.ip_network(n['network_range'], strict=False),
                         'name':   n['network_name'] or '—',
                         'system': n['system_name'] or '—',
+                        'purdue': n['purdue_level'] if n['purdue_level'] is not None else '—',
                         'range':  n['network_range'],
                     })
                 except ValueError:
                     pass
+
+            critical_rows = conn.execute(
+                """SELECT system_name, name, ips, reason
+                   FROM critical_devices
+                   WHERE UPPER(organization_name) = UPPER(?)
+                   ORDER BY system_name, name""",
+                (org_name,)
+            ).fetchall()
 
             # Agregar hosts y puertos de todos los escaneos de esta location
             all_hosts: Dict = {}   # ip → {hostname, mac, vendor}
@@ -822,6 +900,7 @@ class BitacoraManager:
                 if host_ip in n['obj']:
                     net_count.setdefault(n['range'], {
                         'name': n['name'], 'system': n['system'],
+                        'purdue': n['purdue'],
                         'hosts': [], 'known': True,
                     })['hosts'].append(ip_str)
                     net_methods.setdefault(n['range'], set()).update(techs)
@@ -868,7 +947,7 @@ class BitacoraManager:
         # Tabla de redes
         all_nets = (
             [{'range': r, **v} for r, v in net_count.items()] +
-            [{'range': r, 'name': '—', 'system': '—', 'hosts': ips, 'known': False}
+            [{'range': r, 'name': '—', 'system': '—', 'purdue': '—', 'hosts': ips, 'known': False}
              for r, ips in unknown.items()]
         )
         if all_nets:
@@ -879,17 +958,49 @@ class BitacoraManager:
                 ('> _Visibilidad por capa — **ARP (L2)**: descubrimiento por capa 2'
                  ' (mismo segmento broadcast); **Ping (L3)** / **Ports (L3)**:'
                  ' visibilidad por capa 3 (enrutada); **Pasivo**: tráfico observado'
-                 ' en captura; **IOXID (L7)**: enumeración DCOM._'),
+                ' en captura; **IOXID (L7)**: enumeración DCOM._'),
                 '',
-                '| Red | Nombre | Sistema | Tipo | Visibilidad | Hosts únicos |',
-                '|:---|:---|:---|:---|:---|---:|',
+                '| Red | Nombre | Sistema | Purdue | Tipo | Visibilidad | Hosts únicos |',
+                '|:---|:---|:---|:---:|:---|:---|---:|',
             ]
             for n in all_nets:
                 tipo = '✅ Conocida' if n['known'] else '⚠️ Desconocida'
                 vis = self._format_techniques(net_methods.get(n['range'], set()))
                 lines.append(
                     f"| `{n['range']}` | {n['name']} | {n['system']}"
-                    f" | {tipo} | {vis} | {len(n['hosts'])} |"
+                    f" | {n['purdue']} | {tipo} | {vis} | {len(n['hosts'])} |"
+                )
+            lines.append('')
+
+        critical_access = []
+        for dev in critical_rows:
+            for ip_text in str(dev['ips'] or '').split(','):
+                ip_text = ip_text.strip()
+                if not ip_text or ip_text not in all_hosts:
+                    continue
+                ports = sorted(
+                    port_map.get(ip_text, set()),
+                    key=lambda p: int(p.split('/')[0]) if p.split('/')[0].isdigit() else 0,
+                )
+                critical_access.append({
+                    'name': dev['name'] or '—',
+                    'ip': ip_text,
+                    'system': dev['system_name'] or '—',
+                    'reason': dev['reason'] or '—',
+                    'services': ', '.join(ports[:8]) or '—',
+                })
+
+        if critical_access:
+            lines += [
+                '##### Activos Críticos Accesibles desde este Origen',
+                '',
+                '| Activo | IP | Sistema | Motivo | Servicios detectados |',
+                '|:---|:---|:---|:---|:---|',
+            ]
+            for dev in critical_access:
+                lines.append(
+                    f"| {dev['name']} | `{dev['ip']}` | {dev['system']}"
+                    f" | {dev['reason']} | {dev['services']} |"
                 )
             lines.append('')
 
