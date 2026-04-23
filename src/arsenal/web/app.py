@@ -52,7 +52,7 @@ def get_interface_ip(ifname: str) -> str:
         return None
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -64,7 +64,6 @@ import threading
 import sqlite3
 from pathlib import Path
 from datetime import datetime
-import uuid
 
 from arsenal.core.storage import ScanStorage
 from arsenal.scripts.check_env import check_dependencies
@@ -111,6 +110,13 @@ app.include_router(exploitation_router)
 app.include_router(exploitation_nxc_router)
 app.include_router(bitacora_router)
 app.include_router(pwndoc_router)
+
+
+@app.get("/marlinspike", include_in_schema=False)
+async def open_marlinspike():
+    """Open the configured MarlinSpike UI."""
+    url = os.getenv("MARLINSPIKE_PUBLIC_URL", "http://127.0.0.1:5001").strip()
+    return RedirectResponse(url=url or "http://127.0.0.1:5001")
 
 @app.post("/api/scans/cleanup-zombies")
 async def cleanup_zombie_scans_endpoint(max_hours: float = 2.0):
@@ -284,6 +290,12 @@ async def start_scan(config: ScanConfig):
             status_code=400, 
             detail=f"Modo de escaneo inválido: '{config.scan_mode}'. Debe ser 'active', 'passive' o 'specific'"
         )
+
+    if config.scan_mode == "passive":
+        raise HTTPException(
+            status_code=400,
+            detail="El escaneo pasivo se gestiona directamente en MarlinSpike. Abre /marlinspike para cargar PCAPs y analizarlos alli."
+        )
     
     # Validar target_range para escaneos activos o específicos
     if config.scan_mode in ["active", "specific"]:
@@ -294,38 +306,14 @@ async def start_scan(config: ScanConfig):
         if config.screenshots or config.source_code:
             if not check_dependencies(check_optional=False, check_screenshots=config.screenshots):
                 raise HTTPException(status_code=400, detail="Dependencias críticas faltantes para capturas")
-                
-    elif config.scan_mode == "passive":
-        # Para escaneos pasivos, target_range no es crítico (usar por defecto si no se proporciona)
-        if not config.target_range or config.target_range.strip() == "":
-            config.target_range = "0.0.0.0/0"
-        # Verificar que tshark esté disponible
-        from arsenal.scripts.check_env import DependencyChecker
-        checker = DependencyChecker()
-        tshark_found = checker.check_command(
-            'tshark',
-            'tshark (Wireshark)',
-            'Necesario para escaneos pasivos de tráfico de red',
-            critical=True,
-            install_instructions=checker._get_tshark_install()
-        )
-        if not tshark_found:
-            install_cmd = checker._get_tshark_install()
-            raise HTTPException(
-                status_code=400,
-                detail=f"tshark (Wireshark) es requerido para escaneos pasivos pero no está instalado. Instala ejecutando: {install_cmd}"
-            )
     
     # Determinar scan_type según el modo
     if config.scan_mode == "active":
         scan_type = config.nmap_speed
-    elif config.scan_mode == "specific":
-        scan_type = "specific"
     else:
-        scan_type = "passive"
+        scan_type = "specific"
     
-    # Crear escaneo en BD
-    # Determinar myip usando la interfaz pasada
+    # Preparar metadatos de ejecución.
     myip = config.myip if config.myip else get_interface_ip(config.interface)
     
     # Forzar desactivación de fases activas si no es modo activo. El formulario
@@ -344,7 +332,7 @@ async def start_scan(config: ScanConfig):
         config.custom_host_discovery_command = None
         config.custom_ping_command = None
         config.custom_nmap_command = None
-    
+
     scan_id = storage.start_scan(
         organization=config.organization,
         location=config.location,
@@ -360,11 +348,8 @@ async def start_scan(config: ScanConfig):
     )
     
     # Registrar en diccionarios de ejecución según el tipo
-    if config.scan_mode == "passive":
-        target_func = scans_module.run_passive_scan_background
-    else:
-        # Modo 'active' y 'specific' usan run_scan_background
-        target_func = scans_module.run_scan_background
+    # Modo 'active' y 'specific' usan run_scan_background.
+    target_func = scans_module.run_scan_background
 
     scan_thread = threading.Thread(
         target=target_func,
@@ -416,6 +401,7 @@ async def stop_scan(scan_id: int):
         return {"status": "success", "message": "Escaneo detenido correctamente (datos conservados)"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deteniendo escaneo: {str(e)}")
+
 
 @app.post("/api/scan/{scan_id}/cancel")
 async def cancel_scan(scan_id: int):
@@ -664,101 +650,11 @@ async def import_pcap(
     myip: Optional[str] = Form(None),
     interface: Optional[str] = Form(None)
 ):
-    """Importa uno o varios escaneos pasivos desde archivos PCAP."""
-    import_results = []
-    
-    for p_file in pcap_file:
-        try:
-            # Validar que el archivo es PCAP
-            filename_lower = p_file.filename.lower()
-            if not (filename_lower.endswith('.pcap') or filename_lower.endswith('.pcapng')):
-                import_results.append({
-                    "filename": p_file.filename,
-                    "status": "error",
-                    "message": "El archivo debe ser un PCAP o PCAPNG"
-                })
-                continue
-            
-            # Crear escaneo en BD con modo pasivo
-            scan_id = storage.start_scan(
-                organization=organization,
-                location=location,
-                scan_type='imported',
-                target_range='0.0.0.0/0',
-                interface=interface or 'N/A',
-                myip=myip,
-                nmap_command='imported_pcap',
-                enable_version_detection=False,
-                enable_vulnerability_scan=False,
-                enable_screenshots=False,
-                enable_source_code=False,
-                scan_mode='passive',
-                pcap_file=None
-            )
-            
-            # Obtener directorio del escaneo
-            scan_dir = storage.get_scan_directory(organization, location, scan_id)
-            evidence_dir = scan_dir / "evidence"
-            evidence_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Determinar extensión del archivo
-            file_ext = '.pcap' if filename_lower.endswith('.pcap') else '.pcapng'
-            pcap_path = evidence_dir / f"capture{file_ext}"
-            
-            # Guardar el archivo PCAP
-            with open(pcap_path, 'wb') as f:
-                shutil.copyfileobj(p_file.file, f)
-            
-            # Actualizar el registro del scan
-            conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-            conn.execute("PRAGMA journal_mode=WAL")
-            cursor = conn.cursor()
-            cursor.execute("UPDATE scans SET pcap_file = ? WHERE id = ?", (str(pcap_path), scan_id))
-            conn.commit()
-            conn.close()
-            
-            # Procesar el PCAP
-            scans_module.process_pcap_file(scan_id, str(pcap_path), organization, location)
-            
-            # Contar hosts y puertos finales
-            conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-            conn.execute("PRAGMA journal_mode=WAL")
-            cursor = conn.cursor()
-            
-            hosts_count = cursor.execute("""
-                SELECT COUNT(DISTINCT host_id) FROM scan_results WHERE scan_id = ?
-            """, (scan_id,)).fetchone()[0]
-            
-            ports_count = cursor.execute("""
-                SELECT COUNT(*) FROM scan_results WHERE scan_id = ? AND port IS NOT NULL
-            """, (scan_id,)).fetchone()[0]
-            
-            conn.close()
-            
-            # Marcar escaneo como completado
-            storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count)
-            
-            import_results.append({
-                "filename": p_file.filename,
-                "status": "success",
-                "scan_id": scan_id,
-                "stats": {
-                    "hosts_processed": hosts_count,
-                    "ports_processed": ports_count
-                }
-            })
-        except Exception as e:
-            import_results.append({
-                "filename": p_file.filename,
-                "status": "error",
-                "message": str(e)
-            })
-
-    return {
-        "status": "success" if any(r["status"] == "success" for r in import_results) else "error",
-        "results": import_results,
-        "message": f"Se procesaron {len(pcap_file)} archivos."
-    }
+    """Los PCAPs pasivos se cargan directamente desde la UI de MarlinSpike."""
+    raise HTTPException(
+        status_code=400,
+        detail="La importacion de PCAPs pasivos se gestiona directamente en MarlinSpike. Abre /marlinspike."
+    )
 
 @app.get("/api/scan/{scan_id}/results/live")
 async def get_scan_results_live(scan_id: int):
@@ -780,9 +676,11 @@ async def get_scan_results_live(scan_id: int):
     query = """
         SELECT
             h.ip_address,
-            COALESCE(m.hostname, h.hostname) as hostname,
-            COALESCE(m.mac_address, h.mac_address) as mac_address,
-            COALESCE(m.vendor, h.vendor) as vendor,
+            COALESCE(NULLIF(TRIM(m.hostname), ''), NULLIF(TRIM(h.hostname), '')) as hostname,
+            NULLIF(TRIM(m.mac_address), '') as mac_address,
+            NULLIF(TRIM(h.mac_address), '') as known_mac_address,
+            NULLIF(TRIM(m.vendor), '') as vendor,
+            NULLIF(TRIM(h.vendor), '') as known_vendor,
             m.os_info_json,
             sr.port,
             sr.protocol,
@@ -791,29 +689,32 @@ async def get_scan_results_live(scan_id: int):
             sr.version,
             s.organization_name,
             s.location,
+            s.myip as source_ip,
             s.id as scan_id,
             sr.id as scan_result_id,
             sr.state,
-            h.interfaces_json,
+            m.interfaces_json,
+            h.interfaces_json as known_interfaces_json,
+            CASE
+                WHEN NULLIF(TRIM(m.mac_address), '') IS NOT NULL THEN 'scan'
+                WHEN NULLIF(TRIM(h.mac_address), '') IS NOT NULL THEN 'known'
+                ELSE NULL
+            END as mac_source,
             COALESCE(sr.discovery_method, 'unknown') as discovery_method
         FROM scan_results sr
         JOIN hosts h ON h.id = sr.host_id
         JOIN scans s ON s.id = sr.scan_id
         LEFT JOIN host_scan_metadata m ON m.scan_id = sr.scan_id AND m.host_id = sr.host_id
         WHERE s.id = ?
+        AND COALESCE(s.scan_mode, 'active') != 'passive'
+        AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'
         ORDER BY h.ip_address, COALESCE(sr.port, 0)
         LIMIT 5000
     """
     
-    results = cursor.execute(query, (scan_id,)).fetchall()
-    
-    # Obtener el estado del escaneo para devolverlo también
-    scan_status = scan['status']
-    
     # Inicializar variables para evitar UnboundLocalError
     active_results = []
     passive_results = []
-    stats = None
     
     # Determinar si el escaneo tiene modo pasivo habilitado
     # Un escaneo puede tener ambos si se implementa en el futuro, pero por ahora suele ser uno u otro
@@ -828,23 +729,23 @@ async def get_scan_results_live(scan_id: int):
         result_dict['has_source_code'] = any(e['enrichment_type'] == 'Websource' for e in enrichments)
         active_results.append(result_dict)
     
-    # 2. Obtener resultados pasivos (si aplica o si hay datos)
-    raw_passive = storage.get_passive_results(scan_id=scan_id)
-    if raw_passive:
-        passive_results = raw_passive
-    
+    # 2. ArsenalOT no muestra resultados pasivos locales.
+    passive_results = []
+
     # 3. Estadísticas
     hosts_count = 0
     ports_count = 0
     if is_passive_mode:
-        stats_data = storage.get_passive_stats(scan_id)
-        hosts_count = stats_data.get('hosts_count', 0)
-        ports_count = stats_data.get('conversations_count', 0)
+        hosts_count = 0
+        ports_count = 0
     else:
         stats_row = cursor.execute("""
             SELECT COUNT(DISTINCT h.id) as hosts_count, COUNT(sr.id) as ports_count
             FROM scan_results sr JOIN hosts h ON h.id = sr.host_id
+            JOIN scans s ON s.id = sr.scan_id
             WHERE sr.scan_id = ?
+              AND COALESCE(s.scan_mode, 'active') != 'passive'
+              AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'
         """, (scan_id,)).fetchone()
         if stats_row:
             hosts_count = stats_row['hosts_count']
@@ -937,9 +838,11 @@ async def get_results(
     query = """
         SELECT
             h.ip_address,
-            COALESCE(m.hostname, h.hostname) as hostname,
-            COALESCE(m.mac_address, h.mac_address) as mac_address,
-            COALESCE(m.vendor, h.vendor) as vendor,
+            COALESCE(NULLIF(TRIM(m.hostname), ''), NULLIF(TRIM(h.hostname), '')) as hostname,
+            NULLIF(TRIM(m.mac_address), '') as mac_address,
+            NULLIF(TRIM(h.mac_address), '') as known_mac_address,
+            NULLIF(TRIM(m.vendor), '') as vendor,
+            NULLIF(TRIM(h.vendor), '') as known_vendor,
             m.os_info_json,
             sr.port,
             sr.protocol,
@@ -948,16 +851,24 @@ async def get_results(
             sr.version,
             s.organization_name,
             s.location,
+            s.myip as source_ip,
             s.id as scan_id,
             sr.id as scan_result_id,
             sr.state,
-            h.interfaces_json,
+            m.interfaces_json,
+            h.interfaces_json as known_interfaces_json,
+            CASE
+                WHEN NULLIF(TRIM(m.mac_address), '') IS NOT NULL THEN 'scan'
+                WHEN NULLIF(TRIM(h.mac_address), '') IS NOT NULL THEN 'known'
+                ELSE NULL
+            END as mac_source,
             COALESCE(sr.discovery_method, 'unknown') as discovery_method
         FROM scan_results sr
         JOIN hosts h ON h.id = sr.host_id
         JOIN scans s ON s.id = sr.scan_id
         LEFT JOIN host_scan_metadata m ON m.scan_id = sr.scan_id AND m.host_id = sr.host_id
         WHERE 1=1
+        AND COALESCE(s.scan_mode, 'active') != 'passive'
         AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'
     """
     params = []
@@ -974,7 +885,7 @@ async def get_results(
         query += " AND s.id = ?"
         params.append(scan_id)
     
-    query += " ORDER BY s.started_at DESC, h.ip_address, COALESCE(sr.port, 0) LIMIT 1000"
+    query += " ORDER BY s.started_at DESC, h.ip_address, COALESCE(sr.port, 0)"
     
     # 1. Obtener resultados activos
     results = cursor.execute(query, params).fetchall()
@@ -1045,13 +956,8 @@ async def get_passive_results_api(
     location: Optional[str] = None,
     scan_id: Optional[int] = None
 ):
-    """Obtiene resultados de conversaciones pasivas directamente."""
-    try:
-        passive_data = storage.get_passive_results(scan_id=scan_id, organization=organization, location=location)
-        return passive_data
-    except Exception as e:
-        print(f"Error obteniendo resultados pasivos: {e}")
-        return []
+    """Compatibilidad: ArsenalOT no expone resultados pasivos locales."""
+    return []
 
 @app.delete("/api/scan/{scan_id}")
 async def delete_scan(scan_id: int):
@@ -1499,6 +1405,32 @@ async def import_scans(file: UploadFile = File(...)):
         
         # Importar datos
         import_stats = import_data(storage, temp_path)
+
+        imported_scan_ids = list(import_stats.get("imported_scan_ids", []))
+        passive_scan_ids = []
+        if imported_scan_ids:
+            conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+            conn.row_factory = sqlite3.Row
+            try:
+                for imported_scan_id in imported_scan_ids:
+                    row = conn.execute(
+                        "SELECT scan_mode FROM scans WHERE id = ?",
+                        (imported_scan_id,),
+                    ).fetchone()
+                    if row and (row["scan_mode"] or "active") == "passive":
+                        passive_scan_ids.append(imported_scan_id)
+            finally:
+                conn.close()
+
+        for imported_scan_id in passive_scan_ids:
+            storage.delete_scan(imported_scan_id)
+
+        if passive_scan_ids:
+            import_stats["passive_scans_skipped"] = len(passive_scan_ids)
+            import_stats["passive_scan_ids_removed"] = passive_scan_ids
+            import_stats["imported_scan_ids"] = [
+                scan_id for scan_id in imported_scan_ids if scan_id not in set(passive_scan_ids)
+            ]
         
         # Eliminar archivo temporal
         if temp_path.exists():
@@ -1506,7 +1438,7 @@ async def import_scans(file: UploadFile = File(...)):
         
         response = {
             "message": "Datos importados correctamente",
-            "stats": import_stats
+            "stats": import_stats,
         }
         return JSONResponse(content=response)
     except Exception as e:

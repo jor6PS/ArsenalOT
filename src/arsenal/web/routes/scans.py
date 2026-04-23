@@ -10,7 +10,7 @@ import time
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
@@ -107,6 +107,7 @@ def set_phase(scan_id: int, phase_key: str, status: str = None, progress: int = 
     except Exception as e:
         print(f"[Scan {scan_id}] Error actualizando fase {phase_key}: {e}")
 
+
 def parse_specific_web_targets(target_range: str):
     """Parse a user supplied list of IP, IP:port or URL targets for EyeWitness."""
     targets = []
@@ -154,7 +155,11 @@ async def get_scans_list(organization: Optional[str] = None, location: Optional[
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        query = "SELECT id, organization_name, location, target_range, started_at, scan_mode, scan_type FROM scans WHERE 1=1"
+        query = """
+            SELECT id, organization_name, location, target_range, started_at, scan_mode, scan_type
+            FROM scans
+            WHERE COALESCE(scan_mode, 'active') != 'passive'
+        """
         params = []
         
         if organization:
@@ -297,7 +302,7 @@ async def get_scans(
         print(f"🧹 Limpiados {len(zombies)} escaneo(s) zombie automáticamente")
     
     # Obtener escaneos
-    query = "SELECT * FROM scans WHERE 1=1"
+    query = "SELECT * FROM scans WHERE COALESCE(scan_mode, 'active') != 'passive'"
     params = []
     
     if organization:
@@ -1201,6 +1206,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
             running_processes.pop(str(scan_id), None)
             running_scans.pop(str(scan_id), None)
 
+
 def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
     """Ejecuta un escaneo pasivo capturando tráfico usando PassiveCapture."""
     import time
@@ -1389,7 +1395,7 @@ def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         except Exception as e:
             print(f"[Scan {scan_id}] ⚠️  Error contando resultados finales: {e}")
             storage.complete_scan(scan_id)
-            
+
     except Exception as e:
         error_msg = f"Error ejecutando escaneo pasivo: {str(e)}"
         print(f"\n[Scan {scan_id}] ❌ ERROR CRÍTICO")

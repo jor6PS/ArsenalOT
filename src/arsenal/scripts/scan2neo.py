@@ -133,8 +133,8 @@ def get_scans_data(db_path: str, org: str = None, location: str = None,
                     }
     except: pass
 
-    # 2. Filtrar escaneos (incluir pasivos aunque no estén 'completed' para mayor visibilidad)
-    query_scans = "SELECT * FROM scans WHERE (status = 'completed' OR (scan_mode IN ('passive','netexec') AND status != 'failed'))"
+    # 2. Filtrar escaneos. Los pasivos se gestionan en MarlinSpike y no se exportan a Neo4j.
+    query_scans = "SELECT * FROM scans WHERE COALESCE(scan_mode, 'active') != 'passive' AND (status = 'completed' OR (scan_mode = 'netexec' AND status != 'failed'))"
     params = []
     if org:
         query_scans += " AND UPPER(organization_name) = UPPER(?)"

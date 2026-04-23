@@ -43,26 +43,20 @@ async def get_stats(
     scan_filter = "WHERE 1=1"
     scan_params = []
     
-    result_filter = "WHERE 1=1"
-    result_params = []
-    
     if organization:
         scan_filter += " AND UPPER(s.organization_name) = UPPER(?)"
         scan_params.append(organization)
-        result_filter += " AND UPPER(s.organization_name) = UPPER(?)"
-        result_params.append(organization)
 
     if location:
         scan_filter += " AND UPPER(s.location) = UPPER(?)"
         scan_params.append(location)
-        result_filter += " AND UPPER(s.location) = UPPER(?)"
-        result_params.append(location)
         
     if scan_id:
         scan_filter += " AND s.id = ?"
         scan_params.append(scan_id)
-        result_filter += " AND sr.scan_id = ?"
-        result_params.append(scan_id)
+
+    scan_filter += " AND COALESCE(s.scan_mode, 'active') != 'passive'"
+    active_result_filter = " AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'"
     
     # Organizaciones
     if organization:
@@ -90,64 +84,26 @@ async def get_stats(
     completed_scans   = scans_row[1] or 0
     running_scans_count = scans_row[2] or 0
     
-    # Determinar si el escaneo solicitado es pasivo
-    is_single_passive = False
-    if scan_id:
-        mode_row = cursor.execute("SELECT scan_mode FROM scans WHERE id = ?", (scan_id,)).fetchone()
-        is_single_passive = mode_row and mode_row[0] == 'passive'
-
     # Hosts
-    if is_single_passive:
-        hosts_query = """
-            SELECT COUNT(DISTINCT ip) FROM (
-                SELECT src_ip as ip FROM passive_conversations WHERE scan_id = ?
-                UNION
-                SELECT dst_ip as ip FROM passive_conversations WHERE scan_id = ?
-            )
-        """
-        hosts_count = cursor.execute(hosts_query, (scan_id, scan_id)).fetchone()[0]
-    else:
-        # Hosts activos + Hosts de otros escaneos pasivos si no hay scan_id
-        hosts_query = f"""
-            SELECT COUNT(DISTINCT h.id) 
-            FROM hosts h
-            JOIN scan_results sr ON sr.host_id = h.id
-            JOIN scans s ON s.id = sr.scan_id
-            {scan_filter}
-        """
-        hosts_count = cursor.execute(hosts_query, scan_params).fetchone()[0]
-        
-        # Si no hay scan_id, sumar hosts de conversaciones pasivas
-        if not scan_id:
-            passive_hosts_query = f"""
-                SELECT COUNT(DISTINCT ip) FROM (
-                    SELECT src_ip as ip FROM passive_conversations pc JOIN scans s ON s.id = pc.scan_id {scan_filter.replace('s.', 's.')}
-                    UNION
-                    SELECT dst_ip as ip FROM passive_conversations pc JOIN scans s ON s.id = pc.scan_id {scan_filter.replace('s.', 's.')}
-                )
-            """
-            # Nota: Esto es una aproximación, idealmente sería un UNION total de IPs para evitar duplicados entre tablas
-            # pero por simplicidad y siguiendo la "separación total", los tratamos como conjuntos distintos o los sumamos.
-            # El usuario pidió separación, así que contarlos por separado o sumarlos es aceptable.
-            hosts_count += cursor.execute(passive_hosts_query, scan_params * 2).fetchone()[0]
+    hosts_query = f"""
+        SELECT COUNT(DISTINCT h.id)
+        FROM hosts h
+        JOIN scan_results sr ON sr.host_id = h.id
+        JOIN scans s ON s.id = sr.scan_id
+        {scan_filter}
+        {active_result_filter}
+    """
+    hosts_count = cursor.execute(hosts_query, scan_params).fetchone()[0]
     
-    # Puertos / Conversaciones
-    if is_single_passive:
-        ports_count = cursor.execute(
-            "SELECT COUNT(*) FROM passive_conversations WHERE scan_id = ?", (scan_id,)
-        ).fetchone()[0]
-    else:
-        ports_query = f"""
-            SELECT COUNT(*) 
-            FROM scan_results sr
-            JOIN scans s ON s.id = sr.scan_id
-            {scan_filter}
-        """
-        ports_count = cursor.execute(ports_query, scan_params).fetchone()[0]
-        
-        if not scan_id:
-            passive_conv_query = f"SELECT COUNT(*) FROM passive_conversations pc JOIN scans s ON s.id = pc.scan_id {scan_filter}"
-            ports_count += cursor.execute(passive_conv_query, scan_params).fetchone()[0]
+    # Puertos
+    ports_query = f"""
+        SELECT COUNT(*)
+        FROM scan_results sr
+        JOIN scans s ON s.id = sr.scan_id
+        {scan_filter}
+        {active_result_filter}
+    """
+    ports_count = cursor.execute(ports_query, scan_params).fetchone()[0]
     
     # Vulnerabilidades (Solo activas por ahora)
     vulns_query = f"""
@@ -156,6 +112,7 @@ async def get_stats(
         JOIN scan_results sr ON sr.id = v.scan_result_id
         JOIN scans s ON s.id = sr.scan_id
         {scan_filter}
+        {active_result_filter}
     """
     vulns_count = cursor.execute(vulns_query, scan_params).fetchone()[0]
     
@@ -165,7 +122,9 @@ async def get_stats(
         FROM enrichments e
         JOIN scan_results sr ON sr.id = e.scan_result_id
         JOIN scans s ON s.id = sr.scan_id
-        {scan_filter} AND e.enrichment_type = 'Screenshot'
+        {scan_filter}
+        {active_result_filter}
+        AND e.enrichment_type = 'Screenshot'
     """
     screenshots_count = cursor.execute(screenshots_query, scan_params).fetchone()[0]
     
@@ -175,7 +134,9 @@ async def get_stats(
         FROM enrichments e
         JOIN scan_results sr ON sr.id = e.scan_result_id
         JOIN scans s ON s.id = sr.scan_id
-        {scan_filter} AND e.enrichment_type = 'Websource'
+        {scan_filter}
+        {active_result_filter}
+        AND e.enrichment_type = 'Websource'
     """
     sources_count = cursor.execute(sources_query, scan_params).fetchone()[0]
     
@@ -636,6 +597,22 @@ def _split_ips(value) -> str:
     return str(value or "").strip()
 
 
+def _coerce_list(value) -> list:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _dashboard_systems(payload: dict) -> list:
+    return payload.get("systems") or []
+
+
+def _dashboard_system_name(system: dict) -> Optional[str]:
+    return _system_value(system.get("system_name") or system.get("name"))
+
+
 def _find_existing_network(networks: List[dict], system_name: Optional[str],
                            name: str, network_range: str) -> Optional[dict]:
     try:
@@ -650,6 +627,53 @@ def _find_existing_network(networks: List[dict], system_name: Optional[str],
         if network.get("network_range") == normalized_range:
             return network
     return None
+
+
+def _register_network_lookup(network_lookup: dict, network: dict):
+    network_id = network["id"]
+    network_lookup[network["network_name"].strip().lower()] = network_id
+    network_lookup[_network_label(network).strip().lower()] = network_id
+
+
+def _network_lookup(networks: List[dict]) -> dict:
+    lookup = {}
+    for network in networks:
+        _register_network_lookup(lookup, network)
+    return lookup
+
+
+def _resolve_lookup_refs(refs, lookup: dict) -> list:
+    resolved_ids = []
+    for ref in _coerce_list(refs):
+        if isinstance(ref, int):
+            resolved_ids.append(ref)
+            continue
+        resolved = lookup.get(str(ref).strip().lower())
+        if resolved:
+            resolved_ids.append(resolved)
+    return resolved_ids
+
+
+def _device_lookup_key(system_key: str, name: str) -> tuple:
+    return (system_key or "", name.strip().lower())
+
+
+def _register_device_lookup(device_lookup: dict, device_id: int,
+                            system_key: str, name: str):
+    device_lookup[_device_lookup_key(system_key, name)] = device_id
+    device_lookup[_device_lookup_key("", name)] = device_id
+
+
+def _device_lookup(devices: List[dict]) -> dict:
+    lookup = {}
+    for device in devices:
+        _register_device_lookup(
+            lookup,
+            device["id"],
+            device.get("system_name") or "",
+            device["name"],
+        )
+    return lookup
 
 
 def _diagram_origin_label(value: str) -> str:
@@ -965,13 +989,10 @@ async def import_recon_dashboard(file: UploadFile = File(...), organization: Opt
 
         # 1) Redes, para poder resolver referencias por nombre en electrónica.
         networks = storage.get_networks(org)
-        network_lookup = {}
-        for network in networks:
-            network_lookup[network["network_name"].strip().lower()] = network["id"]
-            network_lookup[_network_label(network).strip().lower()] = network["id"]
+        network_lookup = _network_lookup(networks)
 
-        for system in payload.get("systems", []):
-            system_name = _system_value(system.get("system_name") or system.get("name"))
+        for system in _dashboard_systems(payload):
+            system_name = _dashboard_system_name(system)
             for item in system.get("networks", []):
                 name = (item.get("network_name") or item.get("name") or "").strip()
                 network_range = (item.get("network_range") or item.get("range") or "").strip()
@@ -1000,14 +1021,13 @@ async def import_recon_dashboard(file: UploadFile = File(...), organization: Opt
                 networks = refreshed
                 network = next((n for n in refreshed if n["id"] == network_id), None)
                 if network:
-                    network_lookup[network["network_name"].strip().lower()] = network_id
-                    network_lookup[_network_label(network).strip().lower()] = network_id
+                    _register_network_lookup(network_lookup, network)
                 stats["networks"] += 1
 
         # 2) Dispositivos críticos.
         critical_devices = storage.get_critical_devices(org)
-        for system in payload.get("systems", []):
-            system_name = _system_value(system.get("system_name") or system.get("name"))
+        for system in _dashboard_systems(payload):
+            system_name = _dashboard_system_name(system)
             for item in system.get("critical_devices", []):
                 name = (item.get("name") or "").strip()
                 ips = _split_ips(item.get("ips"))
@@ -1033,15 +1053,11 @@ async def import_recon_dashboard(file: UploadFile = File(...), organization: Opt
 
         # 3) Electrónica de red en dos pasadas para resolver conexiones físicas por nombre.
         network_devices = storage.get_network_devices(org)
-        device_lookup = {}
-        for device in network_devices:
-            key = ((device.get("system_name") or ""), device["name"].strip().lower())
-            device_lookup[key] = device["id"]
-            device_lookup[("", device["name"].strip().lower())] = device["id"]
+        device_lookup = _device_lookup(network_devices)
 
         pending_connections = []
-        for system in payload.get("systems", []):
-            system_name = _system_value(system.get("system_name") or system.get("name"))
+        for system in _dashboard_systems(payload):
+            system_name = _dashboard_system_name(system)
             system_key = system_name or ""
             for item in system.get("network_electronics", []):
                 name = (item.get("name") or "").strip()
@@ -1049,19 +1065,10 @@ async def import_recon_dashboard(file: UploadFile = File(...), organization: Opt
                 if not name or not device_type:
                     continue
                 refs = item.get("accessible_network_ids") or item.get("accessible_networks") or []
-                if isinstance(refs, str):
-                    refs = [refs]
-                accessible_ids = []
-                for ref in refs:
-                    if isinstance(ref, int):
-                        accessible_ids.append(ref)
-                    else:
-                        resolved = network_lookup.get(str(ref).strip().lower())
-                        if resolved:
-                            accessible_ids.append(resolved)
+                accessible_ids = _resolve_lookup_refs(refs, network_lookup)
 
                 origins = item.get("origin_locations") or item.get("scan_origins") or []
-                key = (system_key, name.lower())
+                key = _device_lookup_key(system_key, name)
                 existing_id = device_lookup.get(key)
                 if existing_id:
                     storage.update_network_device(
@@ -1088,8 +1095,7 @@ async def import_recon_dashboard(file: UploadFile = File(...), organization: Opt
                         connected_device_ids=[],
                         notes=item.get("notes"),
                     )
-                device_lookup[(system_key, name.lower())] = device_id
-                device_lookup[("", name.lower())] = device_id
+                _register_device_lookup(device_lookup, device_id, system_key, name)
                 pending_connections.append({
                     "id": device_id,
                     "system_key": system_key,
@@ -1109,11 +1115,8 @@ async def import_recon_dashboard(file: UploadFile = File(...), organization: Opt
                 stats["network_devices"] += 1
 
         for item in pending_connections:
-            refs = item["connected_to"]
-            if isinstance(refs, str):
-                refs = [refs]
             connected_ids = []
-            for ref in refs:
+            for ref in _coerce_list(item["connected_to"]):
                 if isinstance(ref, int):
                     connected_ids.append(ref)
                 else:
@@ -1155,87 +1158,73 @@ async def export_results_csv(
     location: Optional[str] = None,
     scan_id: Optional[int] = None,
 ):
-    """Exporta los resultados filtrados en formato CSV, manejando activos y pasivos."""
+    """Exporta solo resultados activos en formato CSV."""
     conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     cursor = conn.cursor()
 
-    # 1. Determinar si estamos exportando un scan pasivo específico
-    is_passive_only = False
-    if scan_id:
-        mode_row = cursor.execute("SELECT scan_mode FROM scans WHERE id = ?", (scan_id,)).fetchone()
-        is_passive_only = mode_row and mode_row[0] == 'passive'
-
     output = io.StringIO()
     writer = csv.writer(output)
 
-    if is_passive_only:
-        # --- EXPORTAR SOLO PASIVO (Formato específico) ---
-        writer.writerow(["IP Origen", "MAC Origen", "Puerto Origen", "IP Destino", "MAC Destino", "Puerto Destino", "Protocolo", "Última Vez", "Organización", "Ubicación", "Scan ID"])
-        passive_data = storage.get_passive_results(scan_id=scan_id)
-        for r in passive_data:
-            writer.writerow([
-                r['src_ip'], r['src_mac'] or "", r['src_port'] or "",
-                r['dst_ip'], r['dst_mac'] or "", r['dst_port'] or "",
-                r['protocol'] or "", r['last_seen'],
-                r['organization_name'], r['location'], r['scan_id']
-            ])
-    else:
-        # --- EXPORTAR ACTIVO (+ PASIVO SI ES "TODOS") ---
-        # Cabecera genérica que acomoda ambos si es necesario
-        header = ["TIPO", "IP/Origen", "Hostname/Destino", "Puerto", "Protocolo", "Servicio/Info", "Producto/MAC_Or", "Versión/MAC_Des", "Organización", "Ubicación", "Origen_Desc", "Crítico", "Scan ID"]
-        writer.writerow(header)
+    header = [
+        "TIPO", "IP", "Hostname", "MAC_Observada", "MAC_Conocida_Global",
+        "Fabricante_Observado", "Fabricante_Conocido_Global", "Puerto",
+        "Protocolo", "Servicio", "Producto", "Versión", "Organización",
+        "Ubicación", "IP_Origen", "Origen_Desc", "Crítico", "Scan ID"
+    ]
+    writer.writerow(header)
 
-        # A. Resultados Activos
-        where = "WHERE 1=1"
-        res_params = []
-        if organization:
-            where += " AND UPPER(s.organization_name) = UPPER(?)"
-            res_params.append(organization)
-        if location:
-            where += " AND UPPER(s.location) = UPPER(?)"
-            res_params.append(location)
-        if scan_id:
-            where += " AND sr.scan_id = ?"
-            res_params.append(scan_id)
+    where = "WHERE COALESCE(s.scan_mode, 'active') != 'passive' AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'"
+    res_params = []
+    if organization:
+        where += " AND UPPER(s.organization_name) = UPPER(?)"
+        res_params.append(organization)
+    if location:
+        where += " AND UPPER(s.location) = UPPER(?)"
+        res_params.append(location)
+    if scan_id:
+        where += " AND sr.scan_id = ?"
+        res_params.append(scan_id)
 
-        query = f"""
-            SELECT h.ip_address, h.hostname, sr.port, sr.protocol, sr.service_name, sr.product, sr.version,
-                   s.organization_name, s.location, sr.discovery_method, s.id AS scan_id
-            FROM scan_results sr JOIN hosts h ON h.id = sr.host_id JOIN scans s ON s.id = sr.scan_id
-            {where} ORDER BY h.ip_address, sr.port
-        """
-        rows = cursor.execute(query, res_params).fetchall()
-        
-        # IPs críticas
-        critical_ips = set()
-        if organization:
-            crit_devs = storage.get_critical_devices(organization)
-            for d in crit_devs:
-                for ip in d['ips'].split(','):
-                    ip_clean = ip.strip()
-                    if ip_clean: critical_ips.add(ip_clean)
+    query = f"""
+        SELECT h.ip_address,
+               COALESCE(NULLIF(TRIM(m.hostname), ''), NULLIF(TRIM(h.hostname), '')) AS hostname,
+               NULLIF(TRIM(m.mac_address), '') AS mac_address,
+               NULLIF(TRIM(h.mac_address), '') AS known_mac_address,
+               NULLIF(TRIM(m.vendor), '') AS vendor,
+               NULLIF(TRIM(h.vendor), '') AS known_vendor,
+               sr.port, sr.protocol, sr.service_name, sr.product, sr.version,
+               s.organization_name, s.location, s.myip AS source_ip,
+               sr.discovery_method, s.id AS scan_id
+        FROM scan_results sr
+        JOIN hosts h ON h.id = sr.host_id
+        JOIN scans s ON s.id = sr.scan_id
+        LEFT JOIN host_scan_metadata m ON m.scan_id = sr.scan_id AND m.host_id = sr.host_id
+        {where} ORDER BY h.ip_address, sr.port
+    """
+    rows = cursor.execute(query, res_params).fetchall()
 
-        for row in rows:
-            writer.writerow([
-                "ACTIVO", row["ip_address"], row["hostname"], row["port"], row["protocol"],
-                row["service_name"], row["product"], row["version"], row["organization_name"],
-                row["location"], row["discovery_method"], "SÍ" if row["ip_address"] in critical_ips else "No",
-                row["scan_id"]
-            ])
+    critical_ips = set()
+    if organization:
+        crit_devs = storage.get_critical_devices(organization)
+        for d in crit_devs:
+            for ip in d['ips'].split(','):
+                ip_clean = ip.strip()
+                if ip_clean:
+                    critical_ips.add(ip_clean)
 
-        # B. Resultados Pasivos (solo si no se filtró por un scan activo específico)
-        # Si hay scan_id y NO es passive_only (ya manejado arriba), entonces es activo_only, no añadimos pasivos.
-        # B. Resultados Pasivos
-        # Siempre intentamos obtener resultados pasivos si no hay un filtro que lo impida
-        passive_data = storage.get_passive_results(scan_id=scan_id, organization=organization, location=location)
-        for r in passive_data:
-            writer.writerow([
-                "PASIVO", r['src_ip'], r['dst_ip'], r['src_port'], r['protocol'],
-                f"Conv a {r['dst_ip']}:{r['dst_port']}", r['src_mac'], r['dst_mac'],
-                r['organization_name'], r['location'], "passive_capture", "No", r['scan_id']
-            ])
+    for row in rows:
+        writer.writerow([
+            "ACTIVO", row["ip_address"], row["hostname"],
+            row["mac_address"], row["known_mac_address"],
+            row["vendor"], row["known_vendor"],
+            row["port"], row["protocol"], row["service_name"],
+            row["product"], row["version"], row["organization_name"],
+            row["location"], row["source_ip"], row["discovery_method"],
+            "SÍ" if row["ip_address"] in critical_ips else "No",
+            row["scan_id"]
+        ])
 
     conn.close()
 

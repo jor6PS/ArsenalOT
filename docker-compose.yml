@@ -25,9 +25,11 @@ services:
       - PWNDOC_URL=${PWNDOC_URL:-https://127.0.0.1:4242}
       - PWNDOC_USER=${PWNDOC_USER:-admin}
       - PWNDOC_PASSWORD=${PWNDOC_PASSWORD:-ArsenalOT2026!}
+      - MARLINSPIKE_PUBLIC_URL=${MARLINSPIKE_PUBLIC_URL:-http://127.0.0.1:5001}
     restart: unless-stopped
     depends_on:
       - neo4j
+      - marlinspike
 
   # ── Neo4j ────────────────────────────────────────────────────
   neo4j:
@@ -57,6 +59,65 @@ services:
       - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j123}
     restart: unless-stopped
+
+  # ── MarlinSpike ─────────────────────────────────────────────
+  # Aplicacion externa para analisis pasivo de PCAP: http://127.0.0.1:5001
+  marlinspike:
+    build:
+      context: https://github.com/riverrisk/marlinspike.git
+      args:
+        MARLINSPIKE_DPI_REPO: ${MARLINSPIKE_DPI_REPO:-https://github.com/riverrisk/marlinspike-dpi.git}
+        MARLINSPIKE_DPI_REF: ${MARLINSPIKE_DPI_REF:-de7ed06a28096a3da482831bc674ef0652c0e479}
+        MARLINSPIKE_MITRE_REPO: ${MARLINSPIKE_MITRE_REPO:-https://github.com/riverrisk/marlinspike-mitre.git}
+        MARLINSPIKE_MITRE_REF: ${MARLINSPIKE_MITRE_REF:-c3583ec2d189b8cde69f2160da6a5e8e5b643f7b}
+        MARLINSPIKE_MALWARE_REPO: ${MARLINSPIKE_MALWARE_REPO:-https://github.com/riverrisk/marlinspike-malware.git}
+        MARLINSPIKE_MALWARE_REF: ${MARLINSPIKE_MALWARE_REF:-4a008211cad7e56609e8a667b95f1c09b790c1b4}
+        MARLINSPIKE_MALWARE_RULES_REPO: ${MARLINSPIKE_MALWARE_RULES_REPO:-https://github.com/riverrisk/marlinspike-malware-rules.git}
+        MARLINSPIKE_MALWARE_RULES_REF: ${MARLINSPIKE_MALWARE_RULES_REF:-99cbe9358d0a5047d9b5e57a7e4ff5eafdee9bd4}
+    container_name: arsenalot-marlinspike
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5001:5001"
+    environment:
+      - DATABASE_URL=postgresql://marlinspike:${MARLINSPIKE_DB_PASSWORD:-change-this-marlinspike-db-password}@marlinspike-db:5432/marlinspike
+      - SECRET_KEY=${MARLINSPIKE_SECRET_KEY:-change-this-marlinspike-secret-key}
+      - ADMIN_PASSWORD=${MARLINSPIKE_ADMIN_PASSWORD:-change-this-marlinspike-admin-password}
+      - SESSION_COOKIE_SECURE=${MARLINSPIKE_SESSION_COOKIE_SECURE:-false}
+      - PCAP_MAX_SIZE=${MARLINSPIKE_PCAP_MAX_SIZE:-5368709120}
+      - PCAP_PROCESS_SIZE=${MARLINSPIKE_PCAP_PROCESS_SIZE:-5368709120}
+      - MARLINSPIKE_UPLOAD_LIMIT_MB=${MARLINSPIKE_UPLOAD_LIMIT_MB:-1024}
+      - MARLINSPIKE_DPI_BIN=/usr/local/bin/marlinspike-dpi
+      - MARLINSPIKE_MALWARE_BIN=/opt/marlinspike-malware/bin/marlinspike-malware
+      - MARLINSPIKE_MALWARE_RULES=/usr/share/marlinspike-malware/rules/packs
+    command: ["sh", "-c", "python3 /app/arsenalot_patch_upload_limit.py && exec python3 app.py"]
+    depends_on:
+      marlinspike-db:
+        condition: service_healthy
+    volumes:
+      - marlinspike_data:/app/data
+      - ./docker/marlinspike/patch_upload_limit.py:/app/arsenalot_patch_upload_limit.py:ro
+    networks:
+      - marlinspike-net
+    mem_limit: 3g
+
+  marlinspike-db:
+    image: postgres:16-alpine
+    container_name: arsenalot-marlinspike-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=marlinspike
+      - POSTGRES_PASSWORD=${MARLINSPIKE_DB_PASSWORD:-change-this-marlinspike-db-password}
+      - POSTGRES_DB=marlinspike
+    volumes:
+      - marlinspike_pgdata:/var/lib/postgresql/data
+    networks:
+      - marlinspike-net
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marlinspike"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ── PwnDoc ───────────────────────────────────────────────────
   # Acceso web: https://localhost:8443
@@ -100,8 +161,12 @@ services:
 networks:
   pwndoc-net:
     driver: bridge
+  marlinspike-net:
+    driver: bridge
 
 volumes:
   neo4j_data:
   neo4j_logs:
+  marlinspike_data:
+  marlinspike_pgdata:
   pwndoc_mongo_data:

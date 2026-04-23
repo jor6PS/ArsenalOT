@@ -397,6 +397,17 @@ body {
     color: white;
 }
 
+.btn-warning {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.btn-warning:hover {
+    background: #f59e0b;
+    color: #111827;
+}
+
 .btn-sm {
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;

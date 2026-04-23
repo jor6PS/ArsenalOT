@@ -35,6 +35,7 @@
     .home-card.report .card-icon { background: rgba(129,140,248,.16); border-color: rgba(129,140,248,.34); color: #c7d2fe; }
     .home-card.data .card-icon { background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.28); color: #bbf7d0; }
     .home-card.graph .card-icon { background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.3); color: #fde68a; }
+    .home-card.passive .card-icon { background: rgba(20,184,166,.15); border-color: rgba(20,184,166,.34); color: #99f6e4; }
     .home-note { padding: 1rem; border-radius: 8px; border: 1px solid rgba(148,163,184,.16); background: rgba(2,6,23,.28); color: var(--text-secondary); line-height: 1.55; }
     @media (max-width: 850px) { .home-hero { grid-template-columns: 1fr; } }
 </style>
@@ -50,11 +51,13 @@
             <div class="home-actions">
                 <a class="home-action" href="/pentest">Abrir auditor&iacute;a</a>
                 <a class="home-action secondary" href="https://localhost:8443" target="_blank" rel="noopener noreferrer">Abrir PwnDoc</a>
+                <a class="home-action secondary" href="/marlinspike" target="_blank" rel="noopener noreferrer">Abrir MarlinSpike</a>
             </div>
         </div>
         <div class="home-status" aria-label="Servicios principales">
             <div class="status-row"><span class="status-dot"></span><span><span class="status-label">ArsenalOT</span> interfaz web</span><span>8000</span></div>
             <div class="status-row"><span class="status-dot"></span><span><span class="status-label">PwnDoc</span> informes</span><span>8443</span></div>
+            <div class="status-row"><span class="status-dot"></span><span><span class="status-label">MarlinSpike</span> pasivo OT</span><span>5001</span></div>
             <div class="status-row"><span class="status-dot"></span><span><span class="status-label">Neo4j</span> base de grafos</span><span>7474</span></div>
             <div class="status-row"><span class="status-dot"></span><span><span class="status-label">Graph Viewer</span> visualizaci&oacute;n</span><span>7777</span></div>
         </div>
@@ -89,6 +92,12 @@
             <h3>Graph Viewer</h3>
             <p>Visualiza el mapa de activos y relaciones con consultas predeterminadas editables para explorar caminos y visibilidad.</p>
             <span class="card-link">Abrir Graph Viewer</span>
+        </a>
+        <a class="home-card passive" href="/marlinspike" target="_blank" rel="noopener noreferrer">
+            <div class="card-top"><span class="card-icon">{{ icons.icon('database') }}</span><span class="card-tag">Pasivo</span></div>
+            <h3>MarlinSpike</h3>
+            <p>Visor de capturas pasivas OT. ArsenalOT abre esta aplicaci&oacute;n externa para gestionar PCAPs e informes all&iacute;.</p>
+            <span class="card-link">Abrir MarlinSpike</span>
         </a>
         <a class="home-card" href="/pentest">
             <div class="card-top"><span class="card-icon">{{ icons.icon('building') }}</span><span class="card-tag">Gesti&oacute;n</span></div>

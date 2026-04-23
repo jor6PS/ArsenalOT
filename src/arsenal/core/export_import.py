@@ -347,6 +347,8 @@ def import_data(storage: ScanStorage, zip_path: Path) -> Dict:
         'pwndoc_findings_skipped': 0,
         'pwndoc_errors': [],
         'network_devices': 0,
+        'imported_scan_ids': [],
+        'scan_id_map': {},
     }
     
     # Crear directorio temporal para extraer
@@ -605,6 +607,8 @@ def _import_scan_data(cursor, export_data: Dict, import_stats: Dict):
         new_id = cursor.lastrowid
         if old_id is not None:
             scan_id_map[old_id] = new_id
+            import_stats['scan_id_map'][str(old_id)] = new_id
+        import_stats['imported_scan_ids'].append(new_id)
         import_stats['scans'] += 1
 
     # ------------------------------------------------------------------ #
