@@ -205,6 +205,11 @@ class CreateOrgRequest(BaseModel):
     pwndoc_date_end: str = ""
 
 
+class CreateLocationRequest(BaseModel):
+    organization: str
+    location: str
+
+
 @router.post("/api/organizations")
 async def create_organization(body: CreateOrgRequest):
     """Crea una organización, su bitácora y opcionalmente su auditoría PwnDoc."""
@@ -247,29 +252,17 @@ async def create_organization(body: CreateOrgRequest):
 @router.get("/api/locations")
 async def get_locations(organization: Optional[str] = None):
     """Obtiene lista de ubicaciones, opcionalmente filtradas por organización."""
-    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    if organization:
-        query = """
-            SELECT DISTINCT location
-            FROM scans
-            WHERE UPPER(organization_name) = UPPER(?)
-            ORDER BY location
-        """
-        locations = cursor.execute(query, (organization,)).fetchall()
-    else:
-        query = """
-            SELECT DISTINCT location 
-            FROM scans 
-            ORDER BY location
-        """
-        locations = cursor.execute(query).fetchall()
-    
-    conn.close()
-    
-    return [{"location": loc["location"]} for loc in locations]
+    return [{"location": loc} for loc in storage.get_scan_origins(organization)]
+
+
+@router.post("/api/locations")
+async def create_location(request: CreateLocationRequest):
+    """Crea un origen reutilizable para nuevos escaneos."""
+    try:
+        location = storage.add_scan_origin(request.organization, request.location)
+        return _success_response("Origen creado correctamente", location=location)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/api/targets/suggestions")
 async def get_target_suggestions(organization: str, location: Optional[str] = None):
@@ -676,204 +669,511 @@ def _device_lookup(devices: List[dict]) -> dict:
     return lookup
 
 
-def _diagram_origin_label(value: str) -> str:
-    return str(value or "").strip().upper()
-
-
-def _diagram_target_networks(value: str) -> list:
-    networks = []
-    for token in str(value or "").replace(",", " ").split():
-        cleaned = token.strip().strip("[](){};")
-        if not cleaned:
-            continue
-        if cleaned.count(":") == 1 and "." in cleaned:
-            cleaned = cleaned.rsplit(":", 1)[0]
-        try:
-            networks.append(ipaddress.ip_network(cleaned, strict=False))
-        except ValueError:
-            continue
-    return networks
-
-
-def _diagram_add_link(links: list, seen: set, source: str, target: str,
-                      link_type: str, label: str = ""):
-    key = (source, target, link_type, label)
-    if not source or not target or key in seen:
+def _diagram_unique_append(items: list, value):
+    if value in (None, ""):
         return
-    seen.add(key)
-    links.append({
-        "source": source,
-        "target": target,
-        "type": link_type,
-        "label": label,
-    })
+    if value not in items:
+        items.append(value)
+
+
+def _diagram_system_slug(system_name: str = "", is_unknown: bool = False) -> str:
+    if is_unknown:
+        return "__unknown__"
+    cleaned = str(system_name or "").strip()
+    return cleaned if cleaned else "__none__"
+
+
+def _diagram_system_label(system_name: str = "", is_unknown: bool = False) -> str:
+    if is_unknown:
+        return "Unknown"
+    cleaned = str(system_name or "").strip()
+    return cleaned if cleaned else "Sin sistema"
+
+
+def _diagram_network_display_name(names: list, range_value: str, is_unknown: bool = False) -> str:
+    if is_unknown:
+        return str(range_value or "Unknown").strip() or "Unknown"
+    unique_names = []
+    for name in names or []:
+        cleaned = str(name or "").strip()
+        if cleaned and cleaned not in unique_names:
+            unique_names.append(cleaned)
+    if unique_names:
+        return " / ".join(unique_names)
+    return str(range_value or "Sin rango").strip() or "Sin rango"
+
+
+def _diagram_network_sort_key(item: dict):
+    parsed = item.get("_parsed_network")
+    if parsed is not None:
+        return (0, parsed.version, int(parsed.network_address), parsed.prefixlen)
+    return (1, str(item.get("range") or ""), str(item.get("display_name") or "").lower())
+
+
+def _diagram_ip_sort_key(value: str):
+    try:
+        ip_obj = ipaddress.ip_address(str(value or "").strip())
+        return (0, ip_obj.version, int(ip_obj))
+    except ValueError:
+        return (1, str(value or "").strip())
+
+
+_DIAGRAM_LAYER_META = {
+    "l2": {
+        "id": "l2",
+        "label": "Capa 2 · ARP",
+        "description": "Descubrimiento en el mismo dominio de broadcast.",
+        "sort_order": 0,
+    },
+    "l3": {
+        "id": "l3",
+        "label": "Capa 3 · Ping / Puertos",
+        "description": "Visibilidad enrutada por ICMP, Nmap o importes equivalentes.",
+        "sort_order": 1,
+    },
+    "l7": {
+        "id": "l7",
+        "label": "Capa 7 · Específico / IOXID",
+        "description": "Alcance confirmado por técnicas de aplicación.",
+        "sort_order": 2,
+    },
+}
+
+
+def _diagram_discovery_method_to_layer_key(discovery_method: str, has_mac: bool = False,
+                                           has_port: bool = False) -> Optional[str]:
+    method = str(discovery_method or "").strip().lower()
+    if method == "arp_discovery":
+        return "l2"
+    if method == "host_discovery":
+        return "l2" if has_mac else "l3"
+    if method in {"icmp_discovery", "nmap_ping", "nmap_ports", "nmap_import"}:
+        return "l3"
+    if method in {"ioxid", "specific_capture", "netexec"}:
+        return "l7"
+    return None
 
 
 @router.get("/api/access-vector-diagram")
 async def get_access_vector_diagram(organization: str):
-    """Devuelve datos normalizados para dibujar vectores de acceso sin depender de servicios externos."""
+    """Devuelve un diagrama de visibilidad basado en resultados reales de escaneo."""
     try:
         org = organization.upper()
-        networks = storage.get_networks(org)
-        network_devices = storage.get_network_devices(org)
+        declared_networks = storage.get_networks(org)
         critical_devices = storage.get_critical_devices(org)
+
+        network_groups = {}
+        unknown_groups = {}
+        critical_hosts_map = {}
+        layer_usage = {}
+
+        def ensure_network_group(system_name: str, network_range: str, network_name: str = None,
+                                 purdue_level: int = None, is_unknown: bool = False,
+                                 parsed_network=None):
+            normalized_range = str(network_range or "").strip() or "Unknown"
+            system_slug = _diagram_system_slug(system_name, is_unknown=is_unknown)
+            key = (system_slug, normalized_range)
+            group = network_groups.get(key)
+            if group is None:
+                system_label = _diagram_system_label(system_name, is_unknown=is_unknown)
+                group = {
+                    "id": f"network:{system_slug}:{normalized_range}",
+                    "system_id": f"system:{system_slug}",
+                    "system_name": system_label,
+                    "raw_system_name": (str(system_name or "").strip() or None) if not is_unknown else None,
+                    "range": normalized_range,
+                    "network_names": [],
+                    "display_name": normalized_range if is_unknown else normalized_range,
+                    "purdue_levels": [],
+                    "is_unknown": bool(is_unknown),
+                    "origin_ids": set(),
+                    "incoming_origin_ids": set(),
+                    "_critical_host_ids": set(),
+                    "_known_target_ips": set(),
+                    "_parsed_network": parsed_network,
+                }
+                network_groups[key] = group
+            if network_name:
+                _diagram_unique_append(group["network_names"], str(network_name).strip())
+            if purdue_level is not None:
+                _diagram_unique_append(group["purdue_levels"], purdue_level)
+            if parsed_network is not None:
+                group["_parsed_network"] = parsed_network
+            group["display_name"] = _diagram_network_display_name(
+                group["network_names"],
+                group["range"],
+                is_unknown=group["is_unknown"],
+            )
+            return group
+
+        for network in declared_networks:
+            try:
+                parsed_network = ipaddress.ip_network(network["network_range"], strict=False)
+                normalized_range = str(parsed_network)
+            except ValueError:
+                parsed_network = None
+                normalized_range = str(network["network_range"] or "").strip()
+            ensure_network_group(
+                network.get("system_name") or "",
+                normalized_range,
+                network_name=network.get("network_name"),
+                purdue_level=network.get("purdue_level"),
+                parsed_network=parsed_network,
+            )
+
+        known_groups = list(network_groups.values())
+
+        def ensure_unknown_group(ip_str: str):
+            ip_obj = ipaddress.ip_address(str(ip_str).strip())
+            if ip_obj.version == 4:
+                bucket = ipaddress.ip_network(f"{ip_obj}/24", strict=False)
+            else:
+                bucket = ipaddress.ip_network(f"{ip_obj}/64", strict=False)
+            bucket_label = str(bucket)
+            group = unknown_groups.get(bucket_label)
+            if group is None:
+                group = ensure_network_group(
+                    "Unknown",
+                    bucket_label,
+                    network_name=bucket_label,
+                    is_unknown=True,
+                    parsed_network=bucket,
+                )
+                unknown_groups[bucket_label] = group
+            return group
+
+        def match_ip_to_network_groups(ip_str: str) -> list:
+            try:
+                ip_obj = ipaddress.ip_address(str(ip_str or "").strip())
+            except ValueError:
+                return []
+
+            matches = []
+            for group in known_groups:
+                parsed_network = group.get("_parsed_network")
+                if parsed_network is None or parsed_network.version != ip_obj.version:
+                    continue
+                if ip_obj in parsed_network:
+                    matches.append(group)
+
+            if matches:
+                most_specific = max(item["_parsed_network"].prefixlen for item in matches)
+                return [item for item in matches if item["_parsed_network"].prefixlen == most_specific]
+
+            return [ensure_unknown_group(str(ip_obj))]
 
         conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
         scans = conn.execute("""
-            SELECT id, organization_name, location, target_range, status,
-                   scan_mode, scan_type, started_at
+            SELECT id, location, myip, scan_type, started_at
             FROM scans
             WHERE UPPER(organization_name) = UPPER(?)
+              AND COALESCE(scan_mode, 'active') != 'passive'
+              AND COALESCE(status, '') = 'completed'
+              AND COALESCE(TRIM(myip), '') != ''
             ORDER BY started_at DESC
+        """, (org,)).fetchall()
+        scan_results = conn.execute("""
+            SELECT DISTINCT
+                   s.id AS scan_id,
+                   s.myip AS origin_ip,
+                   h.ip_address AS target_ip,
+                   COALESCE(sr.discovery_method, '') AS discovery_method,
+                   CASE WHEN sr.port IS NULL THEN 0 ELSE 1 END AS has_port,
+                   COALESCE(hsm.mac_address, h.mac_address, '') AS mac_address
+            FROM scan_results sr
+            JOIN scans s ON s.id = sr.scan_id
+            JOIN hosts h ON h.id = sr.host_id
+            LEFT JOIN host_scan_metadata hsm
+                   ON hsm.scan_id = sr.scan_id
+                  AND hsm.host_id = sr.host_id
+            WHERE UPPER(s.organization_name) = UPPER(?)
+              AND COALESCE(s.scan_mode, 'active') != 'passive'
+              AND COALESCE(s.status, '') = 'completed'
+              AND COALESCE(TRIM(s.myip), '') != ''
         """, (org,)).fetchall()
         conn.close()
 
-        network_by_id = {int(item["id"]): dict(item) for item in networks}
-        device_by_id = {int(item["id"]): dict(item) for item in network_devices}
-
-        systems = set()
-        for item in networks + network_devices + critical_devices:
-            systems.add(item.get("system_name") or "")
-        if not systems:
-            systems.add("")
-
         origins = {}
         for scan in scans:
-            origin_label = _diagram_origin_label(scan["location"])
-            if not origin_label:
+            origin_ip = str(scan["myip"] or "").strip()
+            if not origin_ip:
                 continue
-            entry = origins.setdefault(origin_label, {
-                "id": f"origin:{origin_label}",
-                "name": origin_label,
-                "scan_count": 0,
-                "running_count": 0,
-                "targets": [],
-                "linked": False,
+            source_groups = match_ip_to_network_groups(origin_ip)
+            entry = origins.setdefault(origin_ip, {
+                "id": f"origin:{origin_ip}",
+                "ip": origin_ip,
+                "name": origin_ip,
+                "scan_ids": [],
+                "scan_types": [],
+                "locations": [],
+                "source_network_ids": [],
+                "source_network_labels": [],
+                "_source_network_id_set": set(),
+                "_all_visible_hosts": set(),
+                "_local_visible_hosts": set(),
             })
-            entry["scan_count"] += 1
-            if scan["status"] == "running":
-                entry["running_count"] += 1
-            target_range = str(scan["target_range"] or "").strip()
-            if target_range and target_range not in entry["targets"]:
-                entry["targets"].append(target_range)
+            _diagram_unique_append(entry["scan_ids"], scan["id"])
+            _diagram_unique_append(entry["scan_types"], scan["scan_type"])
+            _diagram_unique_append(entry["locations"], scan["location"])
 
-        for device in network_devices:
-            for origin in device.get("origin_locations") or []:
-                origin_label = _diagram_origin_label(origin)
-                if not origin_label:
+            for group in source_groups:
+                group["origin_ids"].add(entry["id"])
+                if group["id"] in entry["_source_network_id_set"]:
                     continue
-                origins.setdefault(origin_label, {
-                    "id": f"origin:{origin_label}",
-                    "name": origin_label,
-                    "scan_count": 0,
-                    "running_count": 0,
-                    "targets": [],
-                    "linked": False,
-                })
-
-        links = []
-        seen_links = set()
-
-        for device in network_devices:
-            device_id = f"device:{device['id']}"
-            for origin in device.get("origin_locations") or []:
-                origin_label = _diagram_origin_label(origin)
-                if not origin_label:
-                    continue
-                origins[origin_label]["linked"] = True
-                _diagram_add_link(
-                    links, seen_links, f"origin:{origin_label}", device_id,
-                    "origin_device", "origen declarado"
+                entry["_source_network_id_set"].add(group["id"])
+                entry["source_network_ids"].append(group["id"])
+                entry["source_network_labels"].append(
+                    f"{group['system_name']} / {group['display_name']} ({group['range']})"
                 )
 
-            for network_id in device.get("accessible_network_ids") or []:
-                if int(network_id) in network_by_id:
-                    _diagram_add_link(
-                        links, seen_links, device_id, f"network:{int(network_id)}",
-                        "device_network", "red accesible"
-                    )
-
-            for peer_id in device.get("connected_device_ids") or []:
-                if int(peer_id) in device_by_id:
-                    _diagram_add_link(
-                        links, seen_links, device_id, f"device:{int(peer_id)}",
-                        "device_device", "conectado"
-                    )
-
-        parsed_networks = []
-        for network in networks:
-            try:
-                parsed = ipaddress.ip_network(network["network_range"], strict=False)
-            except ValueError:
-                parsed = None
-            parsed_networks.append((network, parsed))
-
-        for scan in scans:
-            origin_label = _diagram_origin_label(scan["location"])
-            target_range = str(scan["target_range"] or "").strip()
-            if not origin_label or not target_range:
+        relations = {}
+        for row in scan_results:
+            origin_ip = str(row["origin_ip"] or "").strip()
+            target_ip = str(row["target_ip"] or "").strip()
+            if not origin_ip or not target_ip or origin_ip not in origins:
                 continue
-            for target_net in _diagram_target_networks(target_range):
-                for network, parsed in parsed_networks:
-                    if parsed and target_net.overlaps(parsed):
-                        _diagram_add_link(
-                            links, seen_links, f"origin:{origin_label}", f"network:{network['id']}",
-                            "scan_target", "objetivo escaneado"
+
+            layer_key = _diagram_discovery_method_to_layer_key(
+                row["discovery_method"],
+                has_mac=bool(str(row["mac_address"] or "").strip()),
+                has_port=bool(row["has_port"]),
+            )
+            if not layer_key:
+                continue
+
+            origin_entry = origins[origin_ip]
+            origin_entry["_all_visible_hosts"].add(target_ip)
+            source_network_ids = set(origin_entry["source_network_ids"])
+            layer_entry = layer_usage.setdefault(layer_key, {
+                "scan_ids": set(),
+                "target_ips": set(),
+                "relation_ids": set(),
+            })
+            layer_entry["scan_ids"].add(row["scan_id"])
+            layer_entry["target_ips"].add(target_ip)
+
+            for target_group in match_ip_to_network_groups(target_ip):
+                if target_group["id"] in source_network_ids:
+                    origin_entry["_local_visible_hosts"].add(target_ip)
+                    continue
+
+                relation_key = (origin_entry["id"], target_group["id"])
+                relation = relations.setdefault(relation_key, {
+                    "id": f"relation:{origin_entry['id']}->{target_group['id']}",
+                    "source_origin_id": origin_entry["id"],
+                    "source_network_ids": list(origin_entry["source_network_ids"]),
+                    "target_network_id": target_group["id"],
+                    "_scan_ids": set(),
+                    "_target_ips": set(),
+                    "_layer_keys": set(),
+                    "_layer_scan_ids": {},
+                    "_layer_target_ips": {},
+                })
+                relation["_scan_ids"].add(row["scan_id"])
+                relation["_target_ips"].add(target_ip)
+                relation["_layer_keys"].add(layer_key)
+                relation["_layer_scan_ids"].setdefault(layer_key, set()).add(row["scan_id"])
+                relation["_layer_target_ips"].setdefault(layer_key, set()).add(target_ip)
+                target_group["_known_target_ips"].add(target_ip)
+                target_group["incoming_origin_ids"].add(origin_entry["id"])
+                layer_entry["relation_ids"].add(relation["id"])
+
+        for device in critical_devices:
+            device_name = str(device.get("name") or "").strip() or "Host crítico"
+            device_reason = str(device.get("reason") or "").strip()
+            device_system = str(device.get("system_name") or "").strip() or None
+
+            for raw_ip in str(device.get("ips") or "").split(","):
+                critical_ip = str(raw_ip or "").strip()
+                if not critical_ip:
+                    continue
+
+                host_id = f"critical:{critical_ip}"
+                critical_host = critical_hosts_map.setdefault(host_id, {
+                    "id": host_id,
+                    "ip": critical_ip,
+                    "device_name": device_name,
+                    "system_name": device_system,
+                    "reason": device_reason,
+                    "network_ids": [],
+                    "network_labels": [],
+                })
+
+                for group in match_ip_to_network_groups(critical_ip):
+                    if group["id"] not in critical_host["network_ids"]:
+                        critical_host["network_ids"].append(group["id"])
+                        critical_host["network_labels"].append(
+                            f"{group['system_name']} / {group['display_name']} ({group['range']})"
                         )
+                    group["_critical_host_ids"].add(host_id)
+
+        for group in network_groups.values():
+            group["display_name"] = _diagram_network_display_name(
+                group["network_names"],
+                group["range"],
+                is_unknown=group["is_unknown"],
+            )
+
+        systems_map = {}
+        for group in network_groups.values():
+            system_entry = systems_map.setdefault(group["system_id"], {
+                "id": group["system_id"],
+                "name": group["system_name"],
+                "raw_name": group["raw_system_name"],
+                "is_unknown": group["is_unknown"],
+                "network_ids": [],
+                "_origin_ids": set(),
+            })
+            system_entry["network_ids"].append(group["id"])
+            system_entry["_origin_ids"].update(group["origin_ids"])
+
+        networks_payload = []
+        for group in sorted(network_groups.values(), key=lambda item: (
+            item["is_unknown"],
+            _diagram_network_sort_key(item),
+        )):
+            networks_payload.append({
+                "id": group["id"],
+                "system_id": group["system_id"],
+                "system_name": group["system_name"],
+                "raw_system_name": group["raw_system_name"],
+                "display_name": group["display_name"],
+                "network_names": list(group["network_names"]),
+                "range": group["range"],
+                "purdue_levels": sorted(group["purdue_levels"], reverse=True),
+                "is_unknown": group["is_unknown"],
+                "origin_ids": sorted(group["origin_ids"], key=lambda value: _diagram_ip_sort_key(value.split("origin:", 1)[-1])),
+                "incoming_origin_ids": sorted(group["incoming_origin_ids"], key=lambda value: _diagram_ip_sort_key(value.split("origin:", 1)[-1])),
+                "critical_hosts": [
+                    {
+                        "id": critical_hosts_map[host_id]["id"],
+                        "ip": critical_hosts_map[host_id]["ip"],
+                        "device_name": critical_hosts_map[host_id]["device_name"],
+                    }
+                    for host_id in sorted(group["_critical_host_ids"], key=lambda value: _diagram_ip_sort_key(value.split("critical:", 1)[-1]))
+                    if host_id in critical_hosts_map
+                ],
+                "known_host_count": len(group["_known_target_ips"]),
+            })
+
+        systems_payload = []
+        for system in sorted(systems_map.values(), key=lambda item: (item["is_unknown"], item["name"].lower())):
+            systems_payload.append({
+                "id": system["id"],
+                "name": system["name"],
+                "raw_name": system["raw_name"],
+                "is_unknown": system["is_unknown"],
+                "network_ids": sorted(system["network_ids"]),
+                "network_count": len(system["network_ids"]),
+                "origin_count": len(system["_origin_ids"]),
+            })
+
+        origins_payload = []
+        for origin in sorted(origins.values(), key=lambda item: (
+            item["source_network_labels"][0] if item["source_network_labels"] else "",
+            _diagram_ip_sort_key(item["ip"]),
+        )):
+            visible_network_ids = sorted({
+                relation["target_network_id"]
+                for relation in relations.values()
+                if relation["source_origin_id"] == origin["id"]
+            })
+            origins_payload.append({
+                "id": origin["id"],
+                "ip": origin["ip"],
+                "name": origin["name"],
+                "scan_ids": sorted(origin["scan_ids"]),
+                "scan_types": list(origin["scan_types"]),
+                "locations": list(origin["locations"]),
+                "scan_count": len(origin["scan_ids"]),
+                "source_network_ids": list(origin["source_network_ids"]),
+                "source_network_labels": list(origin["source_network_labels"]),
+                "visible_network_count": len(visible_network_ids),
+                "visible_host_count": len(origin["_all_visible_hosts"]),
+                "local_visible_host_count": len(origin["_local_visible_hosts"]),
+            })
+
+        relations_payload = []
+        for relation in sorted(relations.values(), key=lambda item: (
+            _diagram_ip_sort_key(item["source_origin_id"].split("origin:", 1)[-1]),
+            item["target_network_id"],
+        )):
+            layer_keys = sorted(
+                relation["_layer_keys"],
+                key=lambda value: _DIAGRAM_LAYER_META.get(value, {}).get("sort_order", 999),
+            )
+            relations_payload.append({
+                "id": relation["id"],
+                "source_origin_id": relation["source_origin_id"],
+                "source_network_ids": relation["source_network_ids"],
+                "target_network_id": relation["target_network_id"],
+                "scan_ids": sorted(relation["_scan_ids"]),
+                "target_ips": sorted(relation["_target_ips"], key=_diagram_ip_sort_key),
+                "layer_keys": layer_keys,
+                "layers": {
+                    layer_key: {
+                        "scan_ids": sorted(relation["_layer_scan_ids"].get(layer_key, set())),
+                        "target_ips": sorted(relation["_layer_target_ips"].get(layer_key, set()), key=_diagram_ip_sort_key),
+                    }
+                    for layer_key in layer_keys
+                },
+                "scan_count": len(relation["_scan_ids"]),
+                "visible_host_count": len(relation["_target_ips"]),
+            })
+
+        layers_payload = []
+        for layer_key in sorted(layer_usage.keys(), key=lambda value: _DIAGRAM_LAYER_META.get(value, {}).get("sort_order", 999)):
+            meta = _DIAGRAM_LAYER_META.get(layer_key, {
+                "id": layer_key,
+                "label": layer_key.upper(),
+                "description": "",
+                "sort_order": 999,
+            })
+            usage = layer_usage[layer_key]
+            layers_payload.append({
+                "id": meta["id"],
+                "label": meta["label"],
+                "description": meta["description"],
+                "sort_order": meta["sort_order"],
+                "scan_count": len(usage["scan_ids"]),
+                "visible_host_count": len(usage["target_ips"]),
+                "relation_count": len(usage["relation_ids"]),
+            })
+
+        critical_hosts_payload = []
+        for critical_host in sorted(critical_hosts_map.values(), key=lambda item: (
+            str(item.get("device_name") or "").lower(),
+            _diagram_ip_sort_key(item["ip"]),
+        )):
+            critical_hosts_payload.append({
+                "id": critical_host["id"],
+                "ip": critical_host["ip"],
+                "device_name": critical_host["device_name"],
+                "system_name": critical_host["system_name"],
+                "reason": critical_host["reason"],
+                "network_ids": list(critical_host["network_ids"]),
+                "network_labels": list(critical_host["network_labels"]),
+            })
 
         return {
             "organization": org,
-            "systems": [
-                {
-                    "id": f"system:{system or '__none__'}",
-                    "name": system or "Sin sistema",
-                    "raw_name": system or None,
-                }
-                for system in sorted(systems, key=lambda value: (value == "", value.lower()))
-            ],
-            "origins": sorted(origins.values(), key=lambda item: item["name"]),
-            "networks": [
-                {
-                    "id": f"network:{item['id']}",
-                    "raw_id": item["id"],
-                    "system_name": item.get("system_name") or None,
-                    "name": item["network_name"],
-                    "range": item["network_range"],
-                    "purdue_level": item.get("purdue_level"),
-                }
-                for item in networks
-            ],
-            "network_devices": [
-                {
-                    "id": f"device:{item['id']}",
-                    "raw_id": item["id"],
-                    "system_name": item.get("system_name") or None,
-                    "name": item["name"],
-                    "device_type": item["device_type"],
-                    "management_ip": item.get("management_ip") or "",
-                    "origin_locations": item.get("origin_locations") or [],
-                    "accessible_network_ids": item.get("accessible_network_ids") or [],
-                    "connected_device_ids": item.get("connected_device_ids") or [],
-                    "notes": item.get("notes") or "",
-                }
-                for item in network_devices
-            ],
-            "critical_devices": [
-                {
-                    "id": f"critical:{item['id']}",
-                    "raw_id": item["id"],
-                    "system_name": item.get("system_name") or None,
-                    "name": item["name"],
-                    "ips": item.get("ips") or "",
-                    "reason": item.get("reason") or "",
-                }
-                for item in critical_devices
-            ],
-            "links": links,
+            "stats": {
+                "system_count": len(systems_payload),
+                "network_count": len(networks_payload),
+                "origin_count": len(origins_payload),
+                "relation_count": len(relations_payload),
+                "critical_host_count": len(critical_hosts_payload),
+            },
+            "systems": systems_payload,
+            "networks": networks_payload,
+            "origins": origins_payload,
+            "layers": layers_payload,
+            "critical_hosts": critical_hosts_payload,
+            "relations": relations_payload,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generando diagrama de vectores: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generando diagrama de visibilidad: {e}")
 
 
 @router.get("/api/recon-dashboard/export")
@@ -1168,8 +1468,8 @@ async def export_results_csv(
     writer = csv.writer(output)
 
     header = [
-        "TIPO", "IP", "Hostname", "MAC_Observada", "MAC_Conocida_Global",
-        "Fabricante_Observado", "Fabricante_Conocido_Global", "Puerto",
+        "TIPO", "IP", "Hostname", "MAC",
+        "Fabricante_Observado", "Puerto",
         "Protocolo", "Servicio", "Producto", "Versión", "Organización",
         "Ubicación", "IP_Origen", "Origen_Desc", "Crítico", "Scan ID"
     ]
@@ -1191,9 +1491,7 @@ async def export_results_csv(
         SELECT h.ip_address,
                COALESCE(NULLIF(TRIM(m.hostname), ''), NULLIF(TRIM(h.hostname), '')) AS hostname,
                NULLIF(TRIM(m.mac_address), '') AS mac_address,
-               NULLIF(TRIM(h.mac_address), '') AS known_mac_address,
                NULLIF(TRIM(m.vendor), '') AS vendor,
-               NULLIF(TRIM(h.vendor), '') AS known_vendor,
                sr.port, sr.protocol, sr.service_name, sr.product, sr.version,
                s.organization_name, s.location, s.myip AS source_ip,
                sr.discovery_method, s.id AS scan_id
@@ -1217,8 +1515,8 @@ async def export_results_csv(
     for row in rows:
         writer.writerow([
             "ACTIVO", row["ip_address"], row["hostname"],
-            row["mac_address"], row["known_mac_address"],
-            row["vendor"], row["known_vendor"],
+            row["mac_address"],
+            row["vendor"],
             row["port"], row["protocol"], row["service_name"],
             row["product"], row["version"], row["organization_name"],
             row["location"], row["source_ip"], row["discovery_method"],

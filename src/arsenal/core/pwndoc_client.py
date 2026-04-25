@@ -4,7 +4,7 @@ Cliente para la API REST de PwnDoc.
 Variables de entorno:
   PWNDOC_URL      → URL base del backend de PwnDoc (por defecto https://localhost:4242)
   PWNDOC_USER     → Usuario admin (por defecto 'admin')
-  PWNDOC_PASSWORD → Contraseña admin (por defecto 'changeme')
+  PWNDOC_PASSWORD → Contraseña admin (por defecto 'change-this-pwndoc-password')
 """
 
 import os
@@ -17,7 +17,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 PWNDOC_URL      = os.environ.get("PWNDOC_URL",      "https://localhost:4242")
 PWNDOC_USER     = os.environ.get("PWNDOC_USER",     "admin")
-PWNDOC_PASSWORD = os.environ.get("PWNDOC_PASSWORD", "ArsenalOT2026!")
+PWNDOC_PASSWORD = os.environ.get("PWNDOC_PASSWORD", "change-this-pwndoc-password")
 
 
 class PwnDocClient:

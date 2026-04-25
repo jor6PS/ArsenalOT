@@ -104,10 +104,6 @@
                 style="display: none; flex: 1; min-width: 100px;">
                 👁️ Ver XML
             </button>
-            <button class="btn btn-success btn-sm" id="downloadPcapBtn" onclick="downloadPcap()"
-                style="display: none; flex: 1; min-width: 100px;">
-                📦 Descargar PCAP
-            </button>
         </div>
     </div>
 
@@ -154,18 +150,6 @@
                 </table>
             </div>
         </div>
-
-        <div id="marlinSpikePassiveContainer" style="margin-top: 2.5rem;">
-            <h3
-                style="margin-top: 1.5rem; margin-bottom: 1rem; color: #1e293b; display: flex; align-items: center; gap: 0.5rem; justify-content: space-between; flex-wrap: wrap;">
-                <span>🎧 Escaneo pasivo</span>
-                <a href="/marlinspike" target="_blank" rel="noopener" class="btn btn-warning btn-sm"
-                    style="text-decoration: none;">Abrir MarlinSpike</a>
-            </h3>
-            <div class="table-container" style="padding: 1rem; color: #64748b;">
-                ArsenalOT no muestra resultados pasivos. Usa MarlinSpike para cargar PCAPs y consultar sus informes.
-            </div>
-        </div>
     </div>
 
     <script>
@@ -180,6 +164,10 @@
         window.addEventListener('resize', updateResultsStickyOffset);
         window.addEventListener('load', updateResultsStickyOffset);
         updateResultsStickyOffset();
+
+        const contextualUrlParams = new URLSearchParams(window.location.search);
+        const contextualSourceIp = (contextualUrlParams.get('source_ip') || '').trim();
+        const contextualTargetRange = (contextualUrlParams.get('target_range') || '').trim();
 
         // Set of critical IPs loaded once from API
         let criticalIps = new Set();
@@ -283,10 +271,8 @@
         const resultColumns = [
             { key: 'ip_address', label: 'IP', defaultVisible: true },
             { key: 'hostname', label: 'Hostname', defaultVisible: true },
-            { key: 'mac_address', label: 'MAC observada', tableLabel: 'MAC Observada', csvLabel: 'MAC Observada', defaultVisible: false, cellClass: 'result-cell-mono' },
-            { key: 'known_mac_address', label: 'MAC global', tableLabel: 'MAC Global', csvLabel: 'MAC Conocida Global', filterLabel: 'MAC conocida global', defaultVisible: false, cellClass: 'result-cell-mono' },
+            { key: 'mac_address', label: 'MAC', tableLabel: 'MAC', csvLabel: 'MAC', defaultVisible: true, cellClass: 'result-cell-mono' },
             { key: 'vendor', label: 'Fabricante', tableLabel: 'Fabricante Observado', csvLabel: 'Fabricante Observado', defaultVisible: true },
-            { key: 'known_vendor', label: 'Fabricante global', tableLabel: 'Fabricante Global', csvLabel: 'Fabricante Conocido Global', filterLabel: 'Fabricante conocido global', defaultVisible: false },
             { key: 'port', label: 'Puertos', filterLabel: 'Puerto', defaultVisible: true },
             { key: 'protocol', label: 'Protocolo', tableLabel: 'Protocolos', csvLabel: 'Protocolos', defaultVisible: false },
             { key: 'service_name', label: 'Servicio', tableLabel: 'Servicios', csvLabel: 'Servicios', defaultVisible: true },
@@ -395,8 +381,9 @@
             applyColumnVisibility();
         }
 
-        // Consolida por activo de inventario: misma organizacion, IP y MAC efectiva.
-        // La MAC efectiva prioriza la observada en el scan y usa la global como fallback.
+        // Consolida por activo de inventario: misma organizacion e IP.
+        // En la vista agregada se acumula todo lo observado para la misma IP
+        // dentro del conjunto filtrado, aunque haya MACs distintas.
         function consolidateByAssetInventory(results) {
             function addValue(targetSet, value) {
                 const cleaned = cleanValue(value);
@@ -426,10 +413,6 @@
                     .forEach(v => targetSet.add(v));
             }
 
-            function getIdentityMac(row) {
-                return normalizeMac(row.mac_address) || normalizeMac(row.known_mac_address) || 'no-mac';
-            }
-
             const map = new Map();
             for (const r of results) {
                 const ip = cleanValue(r.ip_address);
@@ -437,8 +420,7 @@
                 const sourceIp = cleanValue(r.source_ip || r.myip);
                 const org = cleanValue(r.organization_name);
                 const location = cleanValue(r.location);
-                const identityMac = getIdentityMac(r);
-                const identityKey = [org, ip, identityMac]
+                const identityKey = [org, ip]
                     .map(v => (v || '').toLowerCase())
                     .join('||');
                 if (!map.has(identityKey)) {
@@ -453,9 +435,7 @@
                         locations: new Set(),
                         sourceIps: new Set(),
                         observedMacs: new Set(),
-                        knownMacs: new Set(),
                         observedVendors: new Set(),
-                        knownVendors: new Set(),
                         interfaces: new Set(),
                         scan_ids: new Set(),
                         discovery_methods: new Set(),
@@ -473,9 +453,7 @@
                 addValue(host.locations, location);
                 addValue(host.sourceIps, sourceIp);
                 addMacValue(host.observedMacs, r.mac_address);
-                addMacValue(host.knownMacs, r.known_mac_address);
                 addValue(host.observedVendors, r.vendor);
-                addValue(host.knownVendors, r.known_vendor);
                 addValue(host.scan_ids, r.scan_id);
                 if (r.interfaces_json) {
                     try {
@@ -522,9 +500,7 @@
             }
             return [...map.values()].map(host => {
                 const observedMacs = [...host.observedMacs];
-                const knownMacs = [...host.knownMacs].filter(mac => !host.observedMacs.has(mac));
                 const observedVendors = [...host.observedVendors];
-                const knownVendors = [...host.knownVendors].filter(vendor => !host.observedVendors.has(vendor));
                 const organizations = [...host.organizations];
                 const locations = [...host.locations];
                 const sourceIps = [...host.sourceIps];
@@ -543,14 +519,10 @@
                 host.source_ips = sourceIps;
                 host.source_ip = sourceIps.join('; ');
                 host.mac_addresses = observedMacs;
-                host.known_mac_addresses = knownMacs;
                 host.mac_address = observedMacs.join('; ');
-                host.known_mac_address = knownMacs.join('; ');
                 host.mac_conflict = observedMacs.length > 1;
                 host.vendor_values = observedVendors;
-                host.known_vendor_values = knownVendors;
                 host.vendor = observedVendors.join('; ');
-                host.known_vendor = knownVendors.join('; ');
                 host.vendor_conflict = observedVendors.length > 1;
                 host.interfaces_json = host.interfaces.size ? JSON.stringify([...host.interfaces]) : null;
                 host.scan_ids = [...host.scan_ids];
@@ -561,9 +533,7 @@
                 delete host.locations;
                 delete host.sourceIps;
                 delete host.observedMacs;
-                delete host.knownMacs;
                 delete host.observedVendors;
-                delete host.knownVendors;
                 delete host.interfaces;
                 return host;
             });
@@ -573,7 +543,6 @@
             'nmap': '🔌 Nmap',
             'nmap_ports': '🔌 Nmap Puertos',
             'nmap_ping': '📡 Nmap Ping',
-            'passive_capture': '🎧 Captura Pasiva',
             'host_discovery': '🔍 Host Discovery',
             'arp_discovery': '🔍 ARP Discovery',
             'arp_scan': '🔍 ARP Scan',
@@ -672,13 +641,6 @@
             return `${observed}${conflictBadge}`;
         }
 
-        function renderKnownCell(values) {
-            return renderBadgeList(values, {
-                className: 'badge-muted',
-                title: 'Valor global conocido'
-            }) || '-';
-        }
-
         function renderMethods(methods) {
             const unique = uniqueValues(methods);
             return unique.length
@@ -732,9 +694,7 @@
                 ip_address: row.ip_address,
                 hostname: row.hostname,
                 mac_address: row.mac_address,
-                known_mac_address: row.known_mac_address,
                 vendor: row.vendor,
-                known_vendor: row.known_vendor,
                 port: derived.portNumbers.join(';'),
                 protocol: derived.protocols.join(';'),
                 service_name: derived.services.join(';'),
@@ -776,18 +736,14 @@
                     return renderObservedCell(
                         row.mac_addresses,
                         row.mac_conflict,
-                        `Varias MAC observadas para ${row.ip_address || 'este asset'} desde ${row.source_ip || 'origen desconocido'}`
+                        `Varias MAC asociadas a ${row.ip_address || 'este asset'} desde ${row.source_ip || 'origen desconocido'}`
                     );
-                case 'known_mac_address':
-                    return renderKnownCell(row.known_mac_addresses);
                 case 'vendor':
                     return renderObservedCell(
                         row.vendor_values,
                         row.vendor_conflict,
                         `Varios fabricantes observados para ${row.ip_address || 'este asset'} desde ${row.source_ip || 'origen desconocido'}`
                     );
-                case 'known_vendor':
-                    return renderKnownCell(row.known_vendor_values);
                 case 'port':
                     return `<div class="port-badges">${renderPortBadges(row)}</div>`;
                 case 'discovery_method':
@@ -853,6 +809,8 @@
             if (org) params.append('organization', org);
             if (location) params.append('location', location);
             if (scanId) params.append('scan_id', scanId);
+            if (contextualSourceIp) params.append('source_ip', contextualSourceIp);
+            if (contextualTargetRange) params.append('target_range', contextualTargetRange);
 
             try {
                 // Cargar IPs críticas primero para el marcado de filas
@@ -1001,7 +959,6 @@
             // Ocultar todos los botones de descarga inicialmente
             document.getElementById('downloadNmapBtn').style.display = 'none';
             document.getElementById('viewNmapBtn').style.display = 'none';
-            document.getElementById('downloadPcapBtn').style.display = 'none';
 
             // Si hay un escaneo seleccionado, verificar qué archivos tiene disponibles
             if (scanId && scanId !== '') {
@@ -1013,11 +970,6 @@
                     if (scanInfo.has_nmap) {
                         document.getElementById('downloadNmapBtn').style.display = 'inline-block';
                         document.getElementById('viewNmapBtn').style.display = 'inline-block';
-                    }
-
-                    // Mostrar botón de PCAP solo si el escaneo tiene archivo PCAP
-                    if (scanInfo.has_pcap) {
-                        document.getElementById('downloadPcapBtn').style.display = 'inline-block';
                     }
 
                 } catch (error) {
@@ -1035,17 +987,6 @@
             }
 
             window.location.href = `/api/evidence/nmap/${scanId}`;
-        }
-
-        // Descargar PCAP
-        function downloadPcap() {
-            const scanId = document.getElementById('filterScan').value;
-            if (!scanId) {
-                alert('Por favor, selecciona un escaneo primero');
-                return;
-            }
-
-            window.location.href = `/api/scan/${scanId}/pcap`;
         }
 
         // Visualizar XML de Nmap

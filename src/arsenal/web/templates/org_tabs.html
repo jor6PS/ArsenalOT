@@ -24,7 +24,7 @@ Variables esperadas:
 {% if active_phase == 'bitacora' %}
   {% set results_context = 'Bit&aacute;cora' %}
 {% elif active_section == 'access_vectors' %}
-  {% set results_context = 'Vectores de acceso' %}
+  {% set results_context = 'Visibilidad' %}
 {% elif active_section == 'findings' %}
   {% set results_context = 'Findings' %}
 {% elif active_section == 'neo4j' %}
@@ -68,7 +68,7 @@ Variables esperadas:
           </span>
           <a href="/pentest/{{ org_url }}/exploitation" class="org-nav-item {% if active_phase == 'explotacion' %}org-nav-item--active{% endif %}">
             <span class="org-nav-item-icon">{{ icons.icon('exploit') }}</span>
-            <span class="org-nav-item-text"><span>Explotaci&oacute;n</span><small>Credenciales, NetExec e importaciones</small></span>
+            <span class="org-nav-item-text"><span>Explotaci&oacute;n</span><small>Pruebas y evidencias de explotaci&oacute;n IT</small></span>
           </a>
           <a href="/pentest/{{ org_url }}/exploitation-ot" class="org-nav-item {% if active_phase == 'explotacion_ot' %}org-nav-item--active{% endif %}">
             <span class="org-nav-item-icon">{{ icons.icon('factory') }}</span>
@@ -103,7 +103,7 @@ Variables esperadas:
           </a>
           <a href="/pentest/{{ org_url }}/recon/access-vectors" class="org-nav-item {% if active_section == 'access_vectors' %}org-nav-item--active{% endif %}">
             <span class="org-nav-item-icon">{{ icons.icon('network') }}</span>
-            <span class="org-nav-item-text"><span>Diagrama de vectores</span><small>Or&iacute;genes, sistemas y redes accesibles</small></span>
+            <span class="org-nav-item-text"><span>Diagrama de visibilidad</span><small>Or&iacute;genes reales, sistemas y redes alcanzables</small></span>
           </a>
           <a href="/pentest/{{ org_url }}/recon/neo4j" class="org-nav-item {% if active_section == 'neo4j' %}org-nav-item--active{% endif %}">
             <span class="org-nav-item-icon">{{ icons.icon('database') }}</span>

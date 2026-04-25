@@ -359,7 +359,7 @@ async function autoConnect() {
     const cfg = window.NEO4J_CONFIG || {};
     const httpUrl  = cfg.httpUrl  || 'http://localhost:7474';
     const username = cfg.username || 'neo4j';
-    const password = cfg.password || 'neo4j123';
+    const password = cfg.password || 'change-this-neo4j-password';
     await connectToNeo4j(httpUrl, username, password);
 }
 
@@ -936,7 +936,7 @@ function bindEvents() {
         connectToNeo4j(
             cfg.httpUrl  || 'http://localhost:7474',
             cfg.username || 'neo4j',
-            cfg.password || 'neo4j123'
+            cfg.password || 'change-this-neo4j-password'
         );
     });
 

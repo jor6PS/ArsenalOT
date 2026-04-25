@@ -260,6 +260,16 @@
                 style="display: flex; flex-wrap: wrap; gap: 0.5rem; background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); min-height: 56px;">
                 <div class="loading" style="font-size: 0.85rem;">Cargando orígenes...</div>
             </div>
+            <form id="addLocationForm" onsubmit="event.preventDefault(); addLocation();"
+                style="display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 0.65rem; margin-top: 0.9rem;">
+                <input type="text" id="newLocationInput" list="dashboardLocationsList"
+                    placeholder="Nuevo origen (ej. SALA CONTROL)" autocomplete="off"
+                    style="padding: 0.62rem 0.75rem; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.22); background: rgba(2, 6, 23, 0.42); color: #e2e8f0;">
+                <datalist id="dashboardLocationsList"></datalist>
+                <button type="submit" class="btn btn-sm recon-action primary" style="white-space: nowrap;">
+                    ➕ Añadir origen
+                </button>
+            </form>
             <input type="hidden" id="filterLocation" value="">
         </div>
         <div id="scanPills" style="display: none;"></div>
@@ -1584,6 +1594,12 @@
             const locations = await response.json();
             cachedLocations = locations.map(loc => loc.location);
             renderNetworkDeviceSelectors();
+            const originDatalist = document.getElementById('dashboardLocationsList');
+            if (originDatalist) {
+                originDatalist.innerHTML = cachedLocations
+                    .map(location => `<option value="${escapeHtml(location)}"></option>`)
+                    .join('');
+            }
 
             const container = document.getElementById('locationPills');
 
@@ -1608,6 +1624,45 @@
         } catch (error) {
             console.error('Error cargando ubicaciones:', error);
             document.getElementById('locationPills').innerHTML = '<div class="loading">Error cargando ubicaciones</div>';
+        }
+    }
+
+    async function addLocation() {
+        const org = currentFilters.organization || document.getElementById('filterOrg').value;
+        const input = document.getElementById('newLocationInput');
+        const location = input ? input.value.trim() : '';
+        if (!org) {
+            alert('Selecciona una organización antes de añadir un origen.');
+            return;
+        }
+        if (!location) {
+            alert('Introduce el nombre del origen.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/locations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ organization: org, location })
+            });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.detail || 'Error creando origen');
+            }
+            const result = await response.json();
+            const createdLocation = result.location || location.toUpperCase();
+            currentFilters.location = createdLocation;
+            currentFilters.scan_id = '';
+            document.getElementById('filterLocation').value = createdLocation;
+            document.getElementById('filterScan').value = '';
+            if (input) input.value = '';
+            await loadLocations(org);
+            renderNetworkDeviceSelectors();
+            applyFilters();
+        } catch (error) {
+            console.error('Error creando origen:', error);
+            alert('❌ Error creando origen: ' + error.message);
         }
     }
 
@@ -2154,25 +2209,6 @@
             }).join('');
         }
 
-        // Actualizar tabla de resultados pasivos
-        const passiveBody = container.querySelector(`#passiveResultsBody_${scanId}`);
-        const passiveContainer = container.querySelector(`#passiveContainer_${scanId}`);
-        if (liveData && liveData.passive && liveData.passive.length > 0 && passiveBody && passiveContainer) {
-            passiveContainer.style.display = 'block';
-            passiveBody.innerHTML = liveData.passive.map(r => {
-                return `
-                    <tr style="border-bottom: 1px solid #334155;">
-                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.src_ip}</td>
-                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.dst_ip}</td>
-                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.src_port || '-'}</td>
-                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.dst_port || '-'}</td>
-                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.protocol || '-'}</td>
-                        <td style="padding: 0.75rem; color: #e2e8f0;">${r.last_seen || '-'}</td>
-                    </tr>
-                `;
-            }).join('');
-        }
-
         // Si el escaneo terminó, detener el seguimiento
         if (scanData.status !== 'running') {
             stopTrackingScan(scanId);
@@ -2222,25 +2258,6 @@
                             </tr>
                         </thead>
                         <tbody id="liveResultsBody_${scanId}" style="background: #0f172a;"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="passiveContainer_${scanId}" style="margin-top: 1.5rem; display: none;">
-                <h4 style="margin-bottom: 1rem; color: #10b981;">🎧 Tráfico y Conversaciones (Pasivo)</h4>
-                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #065f46; border-radius: 6px;">
-                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-                        <thead style="position: sticky; top: 0; background: #064e3b; z-index: 10;">
-                            <tr>
-                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Origen</th>
-                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Destino</th>
-                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">P. Origen</th>
-                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">P. Destino</th>
-                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Protocolo</th>
-                                <th style="padding: 0.75rem; text-align: left; border-bottom: 2px solid #047857; color: #d1fae5;">Última vez</th>
-                            </tr>
-                        </thead>
-                        <tbody id="passiveResultsBody_${scanId}" style="background: #064e3b;"></tbody>
                     </table>
                 </div>
             </div>

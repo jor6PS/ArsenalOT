@@ -158,14 +158,6 @@ class DependencyChecker:
                 critical=False,
                 install_instructions=self._get_arp_scan_install()
             )
-            self.check_command(
-                'tshark',
-                'tshark (Wireshark)',
-                'Necesario para escaneos pasivos de tráfico de red',
-                critical=False,
-                install_instructions=self._get_tshark_install()
-            )
-        
         # Verificar dependencias para capturas de pantalla
         if check_screenshots:
             print("\n📋 Dependencias para capturas de pantalla (EyeWitness):")
@@ -273,26 +265,6 @@ class DependencyChecker:
                 return "git clone https://github.com/FortyNorthSecurity/EyeWitness.git /opt/eyewitness && pip install -r /opt/eyewitness/requirements.txt"
         else:
             return "Ver https://github.com/FortyNorthSecurity/EyeWitness para instrucciones de instalación"
-    
-    def _get_tshark_install(self):
-        """Instrucciones específicas para instalar tshark (Wireshark)."""
-        if self.os_type == 'linux':
-            distro = self._detect_linux_distro()
-            if distro in ['debian', 'ubuntu']:
-                return "sudo apt-get update && sudo apt-get install -y wireshark-common tshark"
-            elif distro in ['redhat', 'centos', 'fedora']:
-                return "sudo yum install -y wireshark"
-            elif distro == 'arch':
-                return "sudo pacman -S wireshark-cli"
-            else:
-                return "Instalar wireshark-common y tshark usando el gestor de paquetes de tu distribución"
-        elif self.os_type == 'darwin':
-            return "brew install wireshark"
-        elif self.os_type == 'windows':
-            return "Descargar desde https://www.wireshark.org/download.html o usar: choco install wireshark"
-        else:
-            return "Instalar Wireshark según tu sistema operativo"
-
 
 def check_dependencies(check_optional=True, check_screenshots=True):
     """
@@ -313,4 +285,3 @@ if __name__ == "__main__":
     # Ejecutar verificación si se llama directamente
     success = check_dependencies()
     sys.exit(0 if success else 1)
-

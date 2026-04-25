@@ -1,23 +1,17 @@
 import sqlite3
-import threading
 import subprocess
 import os
-import shutil
 import ipaddress
 import shlex
-import json
-import time
 import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
 
 from arsenal.core.scanners import (
     HostDiscovery,
     PortScanner,
-    PassiveCapture,
     ServiceDetection,
     IOXIDResolverScanner
 )
@@ -67,11 +61,6 @@ def build_scan_phases(config: ScanConfig):
             "detail": detail,
             "sort_order": len(phases),
         })
-
-    if config.scan_mode == "passive":
-        add("passive_capture", "Captura pasiva", "Esperando trafico en la interfaz seleccionada")
-        add("pcap_processing", "Procesamiento PCAP", "Analizando conversaciones detectadas")
-        return phases
 
     is_active = config.scan_mode == "active"
 
@@ -177,18 +166,12 @@ async def get_scans_list(organization: Optional[str] = None, location: Optional[
         
         result = []
         for scan in scans:
-            # Formatear target_range: si es pasivo y es "0.0.0.0/0", mostrar "Escaneo Pasivo"
             # sqlite3.Row no tiene método .get(), usar acceso directo con manejo de None
             target_range_val = scan["target_range"] if scan["target_range"] is not None else ""
             scan_mode_val = scan["scan_mode"] if scan["scan_mode"] is not None else "active"
             scan_type_val = scan["scan_type"] if scan["scan_type"] is not None else None
             
             target_display = target_range_val
-            
-            if scan_mode_val == "passive" and (target_display == "0.0.0.0/0" or not target_display):
-                target_display = "🎧 Escaneo Pasivo"
-            elif scan_mode_val == "passive":
-                target_display = f"🎧 Pasivo: {target_display}"
             
             result.append({
                 "id": scan["id"],
@@ -267,7 +250,7 @@ async def get_scans(
             if thread and thread.is_alive():
                 continue  # Saltar este escaneo, está realmente en ejecución
 
-            # NO marcar como zombie si el proceso está realmente en ejecución (para escaneos pasivos)
+            # NO marcar como zombie si el proceso del escaneo está realmente en ejecución
             with running_scans_lock:
                 process = running_processes.get(zombie_id_str)
             if process and process.poll() is None:
@@ -420,8 +403,24 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 with running_scans_lock:
                     running_processes[str(scan_id)] = proc
 
-        # Dict IP -> {mac_address, vendor} — Phase 1 popula MAC/vendor, fases 2+ sólo añaden IPs
+        # Dict IP -> {mac_address, vendor}. Se reutiliza entre fases para que
+        # ping/puertos no pierdan la MAC si una fase anterior ya la vio.
         discovered_ips: dict = {}
+
+        def _clean_host_meta_value(value):
+            cleaned = str(value).strip() if value is not None else None
+            return cleaned or None
+
+        def merge_discovered_host_meta(host_ip: str, mac_address=None, vendor=None):
+            host_meta = discovered_ips.setdefault(host_ip, {'mac_address': None, 'vendor': None})
+            mac_address = _clean_host_meta_value(mac_address)
+            vendor = _clean_host_meta_value(vendor)
+            if mac_address:
+                host_meta['mac_address'] = mac_address
+            if vendor:
+                host_meta['vendor'] = vendor
+            return host_meta
+
         is_active_mode = config.scan_mode == "active"
         run_host_discovery = is_active_mode and config.host_discovery
         run_ping_discovery = is_active_mode and config.nmap_icmp
@@ -552,15 +551,19 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     
                     # Actualizar discovered_ips con nuevos hallazgos
                     new_hosts_count = 0
-                    accepted_ping_reasons = {"echo-reply", "timestamp-reply", "address-mask-reply"}
+                    accepted_ping_reasons = {"echo-reply", "timestamp-reply", "address-mask-reply", "arp-response", "user-set"}
                     for host_ip, host_data in parsed_data['hosts'].items():
                         reason = (host_data.get('reason') or '').lower()
                         if reason and reason not in accepted_ping_reasons:
                             print(f"[Scan {scan_id}] Ignorando host ping {host_ip}: reason={reason}")
                             continue
                         if host_ip not in discovered_ips:
-                            discovered_ips[host_ip] = {'mac_address': None, 'vendor': None}
                             new_hosts_count += 1
+                        host_meta = merge_discovered_host_meta(
+                            host_ip,
+                            host_data.get('mac_address'),
+                            host_data.get('vendor'),
+                        )
                         
                         # Guardar host en BD (aunque no tenga puertos)
                         try:
@@ -576,8 +579,8 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                                 service_data={},
                                 hostname=hostname,
                                 host_data={
-                                    'mac_address': host_data.get('mac_address'),
-                                    'vendor': host_data.get('vendor'),
+                                    'mac_address': host_data.get('mac_address') or host_meta.get('mac_address'),
+                                    'vendor': host_data.get('vendor') or host_meta.get('vendor'),
                                     'hostnames': host_data.get('hostnames', []),
                                     'os': host_data.get('os', {}),
                                     'host_scripts': host_data.get('host_scripts', {}),
@@ -670,12 +673,18 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         
                         # Obtener hostname
                         hostname = host_data.get('hostname') or None
+                        was_previously_discovered = host_ip in discovered_ips
+                        host_meta = merge_discovered_host_meta(
+                            host_ip,
+                            host_data.get('mac_address'),
+                            host_data.get('vendor'),
+                        )
                         
                         # Preparar datos adicionales del host
                         host_additional_data = {
                             'hostnames': host_data.get('hostnames', []),
-                            'mac_address': host_data.get('mac_address'),
-                            'vendor': host_data.get('vendor'),
+                            'mac_address': host_data.get('mac_address') or host_meta.get('mac_address'),
+                            'vendor': host_data.get('vendor') or host_meta.get('vendor'),
                             'os': host_data.get('os', {}),
                             'host_scripts': host_data.get('host_scripts', {})
                         }
@@ -684,7 +693,7 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         if not host_data.get('ports'):
                             reason = (host_data.get('reason') or '').lower()
                             reliable_host_reasons = {"echo-reply", "timestamp-reply", "address-mask-reply", "arp-response", "user-set"}
-                            if host_ip not in discovered_ips and reason not in reliable_host_reasons:
+                            if not was_previously_discovered and reason not in reliable_host_reasons:
                                 hosts_processed += 1
                                 continue
                             storage.save_host_result(
@@ -1206,312 +1215,6 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
             running_processes.pop(str(scan_id), None)
             running_scans.pop(str(scan_id), None)
 
-
-def run_passive_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
-    """Ejecuta un escaneo pasivo capturando tráfico usando PassiveCapture."""
-    import time
-    
-    # Obtener información del escaneo
-    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-    conn.execute("PRAGMA journal_mode=WAL")
-    cursor = conn.cursor()
-    scan_info = cursor.execute("""
-        SELECT organization_name, location FROM scans WHERE id = ?
-    """, (scan_id,)).fetchone()
-    conn.close()
-    
-    if not scan_info:
-        print(f"[Scan {scan_id}] ❌ Escaneo no encontrado en BD")
-        return
-    
-    organization, location = scan_info
-    
-    # Actualizar estado a running
-    try:
-        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-        conn.execute("PRAGMA journal_mode=WAL")
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE scans 
-            SET status = 'running', hosts_discovered = 0, ports_found = 0
-            WHERE id = ?
-        """, (scan_id,))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"[Scan {scan_id}] Error actualizando estado inicial: {e}")
-        return
-
-    try:
-        storage.initialize_scan_phases(scan_id, build_scan_phases(config))
-        set_phase(scan_id, "passive_capture", status="running", progress=35, detail="Captura activa; detener para cerrar y procesar", started=True)
-        set_phase(scan_id, "pcap_processing", status="pending", progress=0, detail="A la espera de trafico capturado")
-    except Exception as e:
-        print(f"[Scan {scan_id}] Error inicializando fases pasivas: {e}")
-    
-    # Obtener directorio del escaneo
-    scan_dir = storage.get_scan_directory(organization, location, scan_id)
-    pcap_dir = scan_dir / "pcap"
-    pcap_dir.mkdir(exist_ok=True)
-    
-    # Generar nombre de archivo pcap
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    pcap_file = pcap_dir / f"capture_{scan_id:06d}_{timestamp}.pcap"
-    
-    # Actualizar BD con la ruta del pcap
-    try:
-        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-        conn.execute("PRAGMA journal_mode=WAL")
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE scans SET pcap_file = ? WHERE id = ?
-        """, (str(pcap_file), scan_id))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"[Scan {scan_id}] Error guardando ruta del pcap: {e}")
-    
-    def is_scan_cancelled():
-        """Comprueba si el escaneo ha sido cancelado en la base de datos."""
-        try:
-            conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-            cursor = conn.cursor()
-            status = cursor.execute("SELECT status FROM scans WHERE id = ?", (scan_id,)).fetchone()[0]
-            conn.close()
-            return status != 'running'
-        except:
-            return False
-
-    print(f"[Scan {scan_id}] 🎧 Iniciando captura pasiva...")
-    print(f"[Scan {scan_id}]    Interfaz: {config.interface}")
-    print(f"[Scan {scan_id}]    Filtro: {config.pcap_filter or 'Ninguno'}")
-    print(f"[Scan {scan_id}]    Archivo: {pcap_file}\n")
-    
-    try:
-        # Usar PassiveCapture para iniciar la captura
-        passive_capture = PassiveCapture(interface=config.interface)
-        process = passive_capture.start_capture(
-            output_file=str(pcap_file),
-            filter=config.pcap_filter,
-            duration=86400  # 24 horas máximo
-        )
-        
-        # Guardar proceso para poder cancelarlo (thread-safe)
-        with running_scans_lock:
-            running_processes[str(scan_id)] = process
-        
-        print(f"[Scan {scan_id}] ✅ Captura iniciada (PID: {process.pid})")
-        
-        # Procesar pcap periódicamente mientras se captura
-        last_process_time = time.time()
-        process_interval = 30  # Procesar cada 30 segundos
-        
-        while True:
-            # Verificar si el escaneo ha sido cancelado por el usuario
-            if is_scan_cancelled():
-                print(f"[Scan {scan_id}] 🛑 Escaneo detenido/cancelado por el usuario (pasivo)")
-                if process.poll() is None:
-                    process.terminate()
-                    try:
-                        process.wait(timeout=5)
-                    except:
-                        process.kill()
-                
-                # Procesar lo que quede en el pcap antes de salir
-                print(f"[Scan {scan_id}] 📦 Procesando datos finales antes de cerrar...")
-                set_phase(scan_id, "passive_capture", status="completed", progress=100, detail="Captura detenida por el usuario", completed=True)
-                set_phase(scan_id, "pcap_processing", status="running", progress=75, detail="Procesando datos finales", started=True)
-                try:
-                    process_pcap_file(scan_id, str(pcap_file), organization, location)
-                except:
-                    pass
-                break
-                
-            # Verificar si el proceso sigue corriendo
-            if process.poll() is not None:
-                # Proceso terminó
-                return_code = process.returncode
-                if return_code != 0:
-                    error_msg = f"tshark terminó con código {return_code}"
-                    print(f"[Scan {scan_id}] ❌ {error_msg}")
-                    storage.complete_scan(scan_id, error_message=error_msg)
-                else:
-                    # Proceso completado normalmente
-                    print(f"[Scan {scan_id}] ✅ Captura completada")
-                    # Procesar pcap final
-                    process_pcap_file(scan_id, str(pcap_file), organization, location)
-                break
-            
-            # Procesar pcap periódicamente
-            current_time = time.time()
-            if current_time - last_process_time >= process_interval:
-                if pcap_file.exists() and pcap_file.stat().st_size > 0:
-                    try:
-                        process_pcap_file(scan_id, str(pcap_file), organization, location)
-                        last_process_time = current_time
-                    except Exception as e:
-                        print(f"[Scan {scan_id}] ⚠️  Error procesando pcap: {e}")
-            
-            # Pequeña pausa
-            time.sleep(1)
-            
-            # Verificar si el escaneo fue cancelado (marcado como tal en BD)
-            try:
-                conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-                conn.execute("PRAGMA journal_mode=WAL")
-                cursor = conn.cursor()
-                status = cursor.execute("SELECT status FROM scans WHERE id = ?", (scan_id,)).fetchone()
-                conn.close()
-                if status and status[0] != 'running':
-                    # Escaneo fue cancelado o completado
-                    process.terminate()
-                    try:
-                        process.wait(timeout=5)
-                    except:
-                        process.kill()
-                    break
-            except Exception:
-                pass
-        
-        # Procesar pcap final si aún existe
-        if pcap_file.exists() and pcap_file.stat().st_size > 0:
-            try:
-                process_pcap_file(scan_id, str(pcap_file), organization, location)
-            except Exception as e:
-                print(f"[Scan {scan_id}] ⚠️  Error procesando pcap final: {e}")
-        
-        # Contar hosts y puertos finales
-        try:
-            stats = storage.get_passive_stats(scan_id)
-            hosts_count = stats['hosts_count']
-            ports_count = stats['conversations_count'] # Usamos conversaciones como equivalente a "hallazgos"
-            
-            set_phase(scan_id, "passive_capture", status="completed", progress=100, detail="Captura cerrada", completed=True)
-            set_phase(scan_id, "pcap_processing", status="completed", progress=100, detail=f"{ports_count} conversacion(es), {hosts_count} host(s)", completed=True)
-            storage.complete_scan(scan_id, hosts_count=hosts_count, ports_count=ports_count)
-            print(f"[Scan {scan_id}] ✅ ESCANEO PASIVO COMPLETADO")
-            print(f"[Scan {scan_id}]    Hosts únicos involucrados: {hosts_count}")
-            print(f"[Scan {scan_id}]    Conversaciones registradas: {ports_count}")
-        except Exception as e:
-            print(f"[Scan {scan_id}] ⚠️  Error contando resultados finales: {e}")
-            storage.complete_scan(scan_id)
-
-    except Exception as e:
-        error_msg = f"Error ejecutando escaneo pasivo: {str(e)}"
-        print(f"\n[Scan {scan_id}] ❌ ERROR CRÍTICO")
-        print(f"[Scan {scan_id}]    {error_msg}")
-        import traceback
-        traceback.print_exc()
-        storage.complete_scan(scan_id, error_message=error_msg[:1000])
-    finally:
-        # Limpiar procesos de los diccionarios (thread-safe)
-        with running_scans_lock:
-            running_processes.pop(str(scan_id), None)
-            running_scans.pop(str(scan_id), None)
-
-def process_pcap_file(scan_id: int, pcap_file: str, organization: str, location: str):
-    """Procesa un archivo pcap usando PassiveCapture y guarda resultados en la BD."""
-    try:
-        # Usar PassiveCapture para extraer conexiones
-        passive_capture = PassiveCapture()
-        connections = passive_capture.extract_connections(pcap_file)
-        
-        print(f"[Scan {scan_id}] 📊 Procesando {len(connections)} conexiones del pcap...")
-        
-        # Subredes privadas para determinar subnet
-        private_subnets = [
-            ipaddress.ip_network(subnet) for subnet in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16']
-        ]
-        # Obtener myip del escaneo para filtrar tráfico saliente del propio equipo
-        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        scan_info = cursor.execute("SELECT myip FROM scans WHERE id = ?", (scan_id,)).fetchone()
-        conn.close()
-        my_ip = scan_info['myip'] if scan_info and scan_info['myip'] else None
-        if my_ip:
-            print(f"[Scan {scan_id}] 🛡️ Filtrando tráfico saliente desde mi IP: {my_ip}")
-
-        # Guardar conexiones en la BD (solo IPs privadas)
-        conversations_to_save = []
-        ip_timestamps = {} # IP -> latest timestamp
-        
-        for conv in connections:
-            try:
-                ip_src = conv['src_ip']
-                ip_dst = conv['dst_ip']
-                ts = conv.get('timestamp') or datetime.now()
-
-                # DESCARTE: Si el origen es mi equipo, no guardar ni registrar como host
-                if my_ip and ip_src == my_ip:
-                    continue
-
-                # Validar IPs y verificar que sean privadas
-                try:
-                    ip_src_obj = ipaddress.ip_address(ip_src)
-                    ip_dst_obj = ipaddress.ip_address(ip_dst)
-                except ValueError:
-                    continue
-
-                # Añadir a la lista para guardado masivo
-                conversations_to_save.append(conv)
-                
-                # Coleccionar IPs únicas con su último timestamp visto
-                if ip_src not in ip_timestamps or ts > ip_timestamps[ip_src]:
-                    ip_timestamps[ip_src] = ts
-                if ip_dst not in ip_timestamps or ts > ip_timestamps[ip_dst]:
-                    ip_timestamps[ip_dst] = ts
-
-            except Exception as e:
-                print(f"[Scan {scan_id}] ⚠️  Error procesando conversación: {e}")
-                continue
-        
-        # Guardar conversaciones masivamente
-        if conversations_to_save:
-            storage.save_passive_conversations_bulk(scan_id, conversations_to_save)
-            
-        # Registrar hosts descubiertos masivamente (con su timestamp real)
-        if ip_timestamps:
-            hosts_to_save = []
-            for ip, ts in ip_timestamps.items():
-                hosts_to_save.append({
-                    'host_ip': ip,
-                    'port': None,
-                    'protocol': None,
-                    'state': 'up',
-                    'service_data': {},
-                    'discovery_method': 'passive_capture',
-                    'timestamp': ts # Propagar timestamp para first_seen/last_seen
-                })
-            storage.save_host_results_bulk(scan_id, hosts_to_save)
-        
-        # Actualizar los tiempos del escaneo (started_at / completed_at) con los reales del pcap
-        if ip_timestamps:
-            min_ts = min(ip_timestamps.values())
-            max_ts = max(ip_timestamps.values())
-            
-            try:
-                conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-                conn.execute("PRAGMA journal_mode=WAL")
-                cursor = conn.cursor()
-                cursor.execute("""
-                    UPDATE scans 
-                    SET started_at = ?, completed_at = ? 
-                    WHERE id = ?
-                """, (min_ts, max_ts, scan_id))
-                conn.commit()
-                conn.close()
-                print(f"[Scan {scan_id}] 📅 Tiempos del escaneo actualizados: {min_ts} - {max_ts}")
-            except Exception as e:
-                print(f"[Scan {scan_id}] ⚠️  Error actualizando tiempos del escaneo: {e}")
-
-        print(f"[Scan {scan_id}] ✅ Procesamiento de pcap completado")
-        
-    except Exception as e:
-        print(f"[Scan {scan_id}] ❌ Error procesando pcap: {e}")
-        import traceback
-        traceback.print_exc()
-
 @router.websocket("/ws/scan/{scan_id}")
 async def websocket_scan_progress(websocket: WebSocket, scan_id: str):
     """WebSocket para recibir progreso del escaneo."""
@@ -1623,63 +1326,3 @@ async def websocket_scan_progress(websocket: WebSocket, scan_id: str):
     finally:
         # Siempre limpiar la conexión
         manager.disconnect(scan_id)
-
-def run_ioxid_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
-    """Ejecuta el escaneo de IOXIDResolver en background."""
-    try:
-        # 1. Marcar como running
-        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-        conn.execute("PRAGMA journal_mode=WAL")
-        cursor = conn.cursor()
-        cursor.execute("UPDATE scans SET status = 'running' WHERE id = ?", (scan_id,))
-        conn.commit()
-        conn.close()
-
-        # 2. Obtener targets
-        # Si no hay targets conocidos, usamos el target_range
-        # Pero IOXID necesita IPs individuales.
-        targets = []
-        try:
-            # Intentar parsear como red
-            network = ipaddress.ip_network(config.target_range, strict=False)
-            targets = [str(ip) for ip in network.hosts()]
-            if not targets: # Caso /32
-                targets = [str(network.network_address)]
-        except ValueError:
-            # Es una lista de IPs o herencia de descubrimiento anterior
-            targets = [t.strip() for t in config.target_range.split(',') if t.strip()]
-
-        print(f"[Scan {scan_id}] 🔍 Iniciando IOXIDResolver en {len(targets)} targets...")
-        
-        hosts_discovered = 0
-        interfaces_found = 0
-
-        for ip in targets:
-            try:
-                scanner = IOXIDResolverScanner(ip)
-                interfaces = scanner.get_interfaces()
-                
-                if interfaces:
-                    print(f"[Scan {scan_id}] ✅ Descubiertas interfaces para {ip}: {interfaces}")
-                    # Guardar host en la base de datos si no existe
-                    storage.save_discovered_host(scan_id, ip, discovery_method='ioxid')
-                    
-                    storage.add_host_interfaces(ip, interfaces, scan_id=scan_id)
-                    interfaces_found += len(interfaces)
-                    
-                    hosts_discovered += 1
-            except Exception as e:
-                print(f"[Scan {scan_id}] ⚠️ Error escaneando {ip}: {e}")
-
-        # 3. Finalizar
-        storage.complete_scan(scan_id, hosts_count=hosts_discovered)
-        print(f"[Scan {scan_id}] ✅ IOXIDResolver completado. Hosts con interfaces: {hosts_discovered}")
-
-    except Exception as e:
-        print(f"[Scan {scan_id}] ❌ ERROR en IOXIDResolver: {e}")
-        storage.complete_scan(scan_id, error_message=str(e))
-    finally:
-        if str(scan_id) in running_processes:
-            del running_processes[str(scan_id)]
-        if str(scan_id) in running_scans:
-            del running_scans[str(scan_id)]

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Diagrama de vectores - {{ org_name }} | ArsenalOT{% endblock %}
+{% block title %}Diagrama de visibilidad - {{ org_name }} | ArsenalOT{% endblock %}
 
 {% block content %}
 {% set active_phase = 'recon' %}
@@ -8,299 +8,1055 @@
 {% include "org_tabs.html" %}
 
 <style>
-  .vector-page {
-    margin-top: 1.5rem;
+  .visibility-page {
+    --visibility-source: #ef4444;
+    --visibility-source-soft: rgba(239, 68, 68, 0.16);
+    --visibility-target: #22c55e;
+    --visibility-target-soft: rgba(34, 197, 94, 0.16);
+    --visibility-critical: #f97316;
+    --visibility-critical-soft: rgba(249, 115, 22, 0.18);
+    --visibility-link: rgba(103, 232, 249, 0.46);
+    --visibility-panel: rgba(4, 10, 20, 0.96);
+    --visibility-panel-strong: rgba(9, 17, 31, 0.88);
+    --visibility-surface: rgba(15, 23, 42, 0.72);
+    --visibility-network: rgba(14, 24, 41, 0.94);
+    --visibility-border: rgba(148, 163, 184, 0.18);
+    margin-top: 1.25rem;
     color: var(--text-primary);
   }
 
-  .vector-toolbar {
+  .visibility-toolbar {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
-    padding: 1rem 1.25rem;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: rgba(15, 23, 42, 0.72);
+    gap: 0.9rem;
+    align-items: flex-start;
+    margin-bottom: 0.85rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--visibility-border);
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.92));
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.18);
   }
 
-  .vector-toolbar h2 {
+  .visibility-toolbar h2 {
     margin: 0;
-    font-size: 1.15rem;
+    font-size: 1.06rem;
   }
 
-  .vector-toolbar p {
+  .visibility-toolbar p {
     margin: 0.25rem 0 0;
     color: var(--text-secondary);
-    font-size: 0.88rem;
+    font-size: 0.84rem;
+    max-width: 72ch;
   }
 
-  .vector-actions {
+  .visibility-actions {
     display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+
+  .visibility-diagram-panel {
+    border: 1px solid var(--visibility-border);
+    border-radius: 12px;
+    background: var(--visibility-panel);
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.18);
+    overflow: visible;
+  }
+
+  .visibility-diagram-header {
+    position: relative;
+    z-index: 10;
+    padding: 0.8rem 0.92rem 0.72rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 12px 12px 0 0;
+    background: linear-gradient(180deg, rgba(4, 10, 20, 0.97), rgba(7, 14, 26, 0.94));
+    backdrop-filter: blur(10px);
+  }
+
+  .visibility-header-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+  }
+
+  .visibility-diagram-header h3 {
+    margin: 0;
+    font-size: 0.98rem;
+    color: var(--text-primary);
+  }
+
+  .visibility-diagram-header p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    line-height: 1.38;
+    max-width: 76ch;
+  }
+
+  .visibility-filterbar {
+    display: flex;
+    align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
-    align-items: center;
+    margin-top: 0;
+    justify-content: flex-start;
   }
 
-  .vector-toggle {
+  .visibility-filterbar-shell {
+    position: relative;
+    z-index: 12;
+    width: fit-content;
+    max-width: min(760px, calc(100% - 1.44rem));
+    margin: 0.72rem 0.72rem 0;
+    padding: 0.46rem 0.58rem;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(4, 10, 20, 0.96), rgba(7, 14, 26, 0.9));
+    box-shadow: 0 16px 30px rgba(0, 0, 0, 0.24);
+    backdrop-filter: blur(10px);
+  }
+
+  .visibility-filter-menu {
+    position: relative;
+  }
+
+  .visibility-filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    min-height: 34px;
+    padding: 0.5rem 0.72rem;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.86);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
+  }
+
+  .visibility-filter-toggle::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.34);
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.1);
+    flex: 0 0 auto;
+  }
+
+  .visibility-filter-toggle strong {
+    color: inherit;
+    font-weight: 700;
+  }
+
+  .visibility-filter-toggle:hover,
+  .visibility-filter-menu--open .visibility-filter-toggle {
+    color: var(--text-primary);
+  }
+
+  .visibility-filter-toggle--origin {
+    border-color: rgba(239, 68, 68, 0.28);
+    box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.06);
+  }
+
+  .visibility-filter-toggle--origin::before {
+    background: rgba(239, 68, 68, 0.92);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+  }
+
+  .visibility-filter-menu--open .visibility-filter-toggle--origin,
+  .visibility-filter-toggle--origin:hover {
+    border-color: rgba(239, 68, 68, 0.52);
+    color: #fecaca;
+    background: rgba(127, 29, 29, 0.2);
+  }
+
+  .visibility-filter-toggle--destination {
+    border-color: rgba(34, 197, 94, 0.26);
+    box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.05);
+  }
+
+  .visibility-filter-toggle--destination::before {
+    background: rgba(34, 197, 94, 0.92);
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+  }
+
+  .visibility-filter-menu--open .visibility-filter-toggle--destination,
+  .visibility-filter-toggle--destination:hover {
+    border-color: rgba(34, 197, 94, 0.48);
+    color: #bbf7d0;
+    background: rgba(20, 83, 45, 0.18);
+  }
+
+  .visibility-filter-toggle--critical {
+    border-color: rgba(249, 115, 22, 0.28);
+    box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.05);
+  }
+
+  .visibility-filter-toggle--critical::before {
+    background: rgba(249, 115, 22, 0.92);
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
+  }
+
+  .visibility-filter-menu--open .visibility-filter-toggle--critical,
+  .visibility-filter-toggle--critical:hover {
+    border-color: rgba(249, 115, 22, 0.52);
+    color: #fdba74;
+    background: rgba(154, 52, 18, 0.2);
+  }
+
+  .visibility-filter-toggle--layer {
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.06);
+  }
+
+  .visibility-filter-toggle--layer::before {
+    background: rgba(59, 130, 246, 0.94);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  }
+
+  .visibility-filter-menu--open .visibility-filter-toggle--layer,
+  .visibility-filter-toggle--layer:hover {
+    border-color: rgba(59, 130, 246, 0.54);
+    color: #bfdbfe;
+    background: rgba(30, 64, 175, 0.2);
+  }
+
+  .visibility-filter-toggle.visibility-mode-btn--active {
+    color: var(--text-primary);
+  }
+
+  .visibility-filter-toggle--origin.visibility-mode-btn--active {
+    border-color: rgba(239, 68, 68, 0.58);
+    background: rgba(127, 29, 29, 0.24);
+    color: #fecaca;
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.16), 0 0 16px rgba(239, 68, 68, 0.1);
+  }
+
+  .visibility-filter-toggle--destination.visibility-mode-btn--active {
+    border-color: rgba(34, 197, 94, 0.56);
+    background: rgba(20, 83, 45, 0.22);
+    color: #bbf7d0;
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.14), 0 0 16px rgba(34, 197, 94, 0.1);
+  }
+
+  .visibility-filter-toggle--critical.visibility-mode-btn--active {
+    border-color: rgba(249, 115, 22, 0.58);
+    background: rgba(154, 52, 18, 0.24);
+    color: #fdba74;
+    box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.16), 0 0 16px rgba(249, 115, 22, 0.1);
+  }
+
+  .visibility-filter-toggle--layer.visibility-mode-btn--active {
+    border-color: rgba(59, 130, 246, 0.58);
+    background: rgba(30, 64, 175, 0.26);
+    color: #bfdbfe;
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.16), 0 0 16px rgba(59, 130, 246, 0.1);
+  }
+
+  .visibility-layer-strip {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    color: var(--text-secondary);
-    font-size: 0.84rem;
-    white-space: nowrap;
+    min-height: 34px;
+    flex-wrap: wrap;
   }
 
-  .vector-diagram-shell {
-    position: relative;
-    min-height: 560px;
-    overflow: auto;
-    border: 1px solid var(--border-color);
+  .visibility-layer-title {
+    color: #bfdbfe;
+    font-size: 0.8rem;
+    font-weight: 800;
+  }
+
+  .visibility-layer-options {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.38rem;
+    flex-wrap: wrap;
+  }
+
+  .visibility-layer-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+    min-height: 34px;
+    padding: 0.42rem 0.58rem;
+    border: 1px solid rgba(59, 130, 246, 0.22);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.72);
+    color: #94a3b8;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .visibility-layer-option input {
+    margin: 0;
+    accent-color: #3b82f6;
+  }
+
+  .visibility-layer-option--selected {
+    border-color: rgba(59, 130, 246, 0.58);
+    background: rgba(30, 64, 175, 0.26);
+    color: #bfdbfe;
+  }
+
+  .visibility-purdue-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    min-height: 34px;
+    padding: 0.5rem 0.72rem;
+    border: 1px solid rgba(234, 179, 8, 0.34);
+    border-radius: 999px;
+    background: rgba(113, 63, 18, 0.16);
+    color: #fde68a;
+    font-size: 0.82rem;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .visibility-purdue-toggle::before {
+    content: "EXP";
+    font-size: 0.58rem;
+    letter-spacing: 0.04em;
+    color: #020617;
+    background: #facc15;
+    border-radius: 999px;
+    padding: 0.08rem 0.28rem;
+  }
+
+  .visibility-purdue-toggle--active {
+    border-color: rgba(250, 204, 21, 0.72);
+    background: rgba(113, 63, 18, 0.36);
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.18), 0 0 18px rgba(250, 204, 21, 0.1);
+  }
+
+  .visibility-filter-menu--open .visibility-filter-dropdown {
+    display: flex;
+  }
+
+  .visibility-filter-dropdown {
+    position: absolute;
+    top: calc(100% + 0.45rem);
+    left: 0;
+    z-index: 25;
+    display: none;
+    flex-direction: column;
+    width: min(320px, calc(100vw - 1.4rem));
+    max-height: min(72vh, 760px);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    background: rgba(5, 11, 22, 0.98);
+    box-shadow: 0 24px 52px rgba(0, 0, 0, 0.38);
+    overflow: hidden;
+  }
+
+  .visibility-filter-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.42rem;
+    padding: 0.58rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(9, 17, 31, 0.98);
+  }
+
+  .visibility-search {
+    width: 100%;
+    padding: 0.58rem 0.68rem;
+    border: 1px solid rgba(148, 163, 184, 0.16);
     border-radius: 8px;
+    background: rgba(15, 23, 42, 0.84);
+    color: var(--text-primary);
+    font-size: 0.84rem;
+  }
+
+  .visibility-search:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.12);
+  }
+
+  .visibility-search--origin:focus {
+    border-color: rgba(239, 68, 68, 0.42);
+  }
+
+  .visibility-search--destination:focus {
+    border-color: rgba(34, 197, 94, 0.42);
+  }
+
+  .visibility-search--critical:focus {
+    border-color: rgba(249, 115, 22, 0.42);
+  }
+
+  .visibility-filter-actions {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+
+  .visibility-selection-summary {
+    padding: 0.46rem 0.58rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    background: rgba(8, 15, 28, 0.9);
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    line-height: 1.42;
+  }
+
+  .visibility-filter-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 0.34rem;
+    max-height: 52vh;
+    overflow: auto;
+    padding: 0.48rem;
+  }
+
+  .visibility-filter-group {
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.56);
+  }
+
+  .visibility-filter-group-header {
+    padding: 0.34rem 0.48rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  }
+
+  .visibility-filter-group-title {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+  }
+
+  .visibility-filter-group-subtitle {
+    display: block;
+    margin-top: 0.08rem;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+  }
+
+  .visibility-filter-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+    padding: 0.32rem;
+  }
+
+  .visibility-filter-item {
+    display: flex;
+    gap: 0.38rem;
+    align-items: flex-start;
+    padding: 0.34rem 0.42rem;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 7px;
+    background: rgba(2, 6, 23, 0.42);
+    cursor: pointer;
+    transition: border-color 0.16s ease, background 0.16s ease;
+  }
+
+  .visibility-filter-item:hover {
+    border-color: rgba(96, 165, 250, 0.28);
+  }
+
+  .visibility-filter-item--selected-origin {
+    border-color: rgba(239, 68, 68, 0.38);
+    background: rgba(127, 29, 29, 0.22);
+  }
+
+  .visibility-filter-item--selected-destination {
+    border-color: rgba(34, 197, 94, 0.34);
+    background: rgba(20, 83, 45, 0.2);
+  }
+
+  .visibility-filter-item--selected-critical {
+    border-color: rgba(249, 115, 22, 0.38);
+    background: rgba(154, 52, 18, 0.2);
+  }
+
+  .visibility-filter-item--selected-layer {
+    border-color: rgba(59, 130, 246, 0.4);
+    background: rgba(30, 64, 175, 0.2);
+  }
+
+  .visibility-filter-item input {
+    margin-top: 0.12rem;
+  }
+
+  .visibility-filter-item--origin input {
+    accent-color: var(--visibility-source);
+  }
+
+  .visibility-filter-item--destination input {
+    accent-color: var(--visibility-target);
+  }
+
+  .visibility-filter-item--critical input {
+    accent-color: var(--visibility-critical);
+  }
+
+  .visibility-filter-item--layer input {
+    accent-color: #3b82f6;
+  }
+
+  .visibility-filter-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+    min-width: 0;
+  }
+
+  .visibility-filter-item-title {
+    font-weight: 700;
+    font-size: 0.84rem;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+  }
+
+  .visibility-filter-item-meta {
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    line-height: 1.28;
+    overflow-wrap: anywhere;
+  }
+
+  .visibility-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.38rem;
+  }
+
+  .visibility-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.22rem 0.48rem;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.78);
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+  }
+
+  .visibility-badge strong {
+    color: var(--text-primary);
+    font-size: 0.76rem;
+  }
+
+  .visibility-diagram-shell {
+    position: relative;
+    min-height: 720px;
+    margin-top: 0.72rem;
+    overflow: auto;
+    border-radius: 12px;
     background:
-      linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-      rgba(2, 6, 23, 0.58);
+      linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(8, 15, 28, 0.98));
     background-size: 32px 32px;
   }
 
-  .vector-diagram {
+  .visibility-diagram {
     position: relative;
-    display: grid;
-    grid-template-columns: minmax(230px, 280px) minmax(680px, 1fr);
-    gap: 1.25rem;
-    min-width: 980px;
-    padding: 1.25rem;
+    min-width: 100%;
+    min-height: 100%;
+    padding: 0.9rem 0.95rem 1rem;
   }
 
-  .vector-links {
+  .visibility-links {
     position: absolute;
     inset: 0;
-    z-index: 0;
+    z-index: 3;
     pointer-events: none;
     overflow: visible;
   }
 
-  .vector-links path {
+  .visibility-links path {
     fill: none;
-    stroke: rgba(125, 211, 252, 0.58);
-    stroke-width: 2;
+    stroke: var(--visibility-link);
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    shape-rendering: geometricPrecision;
+    filter: drop-shadow(0 0 5px rgba(56, 189, 248, 0.16));
   }
 
-  .vector-links path[data-type="scan_target"] {
-    stroke: rgba(250, 204, 21, 0.55);
-    stroke-dasharray: 8 6;
-  }
-
-  .vector-links path[data-type="device_device"] {
-    stroke: rgba(167, 139, 250, 0.62);
-  }
-
-  .origin-lane,
-  .system-board {
+  .visibility-board {
     position: relative;
     z-index: 1;
   }
 
-  .origin-lane,
-  .system-column {
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    border-radius: 8px;
-    background: rgba(15, 23, 42, 0.82);
+  .visibility-system {
+    position: absolute;
+    border: 2px dashed rgba(148, 163, 184, 0.24);
+    border-radius: 18px;
+    background: rgba(15, 23, 42, 0.22);
+    padding: 2.15rem 1.14rem 0.9rem;
+    overflow: visible;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
   }
 
-  .lane-header,
-  .system-header {
-    padding: 0.85rem 0.95rem;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  .visibility-system--active {
+    box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.08);
   }
 
-  .lane-header h3,
-  .system-header h3 {
+  .visibility-system--source {
+    border-color: rgba(239, 68, 68, 0.34);
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.08);
+  }
+
+  .visibility-system--target {
+    border-color: rgba(34, 197, 94, 0.3);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.08);
+  }
+
+  .visibility-system--purdue {
+    border-style: solid;
+    border-color: rgba(250, 204, 21, 0.28);
+    background:
+      linear-gradient(180deg, rgba(113, 63, 18, 0.13), rgba(15, 23, 42, 0.22));
+  }
+
+  .visibility-system--purdue-unknown {
+    border-color: rgba(148, 163, 184, 0.28);
+    background:
+      linear-gradient(180deg, rgba(51, 65, 85, 0.16), rgba(15, 23, 42, 0.22));
+  }
+
+  .visibility-system-header {
+    position: absolute;
+    top: -0.66rem;
+    left: 0.82rem;
+    padding: 0 0.46rem;
+    background: rgba(4, 10, 20, 0.96);
+  }
+
+  .visibility-system-header h3 {
     margin: 0;
-    font-size: 0.98rem;
+    font-size: 0.84rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    color: #dbe7f6;
   }
 
-  .lane-header small,
-  .system-header small {
-    display: block;
-    margin-top: 0.2rem;
-    color: var(--text-secondary);
-  }
-
-  .origin-list,
-  .system-content {
+  .visibility-system-content {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    padding: 0.85rem;
+    gap: 0.56rem;
+    padding: 0;
   }
 
-  .system-board {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 1rem;
-    align-items: start;
-  }
-
-  .vector-node {
+  .visibility-network {
     position: relative;
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    border-radius: 8px;
-    background: rgba(15, 23, 42, 0.92);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+    border: 1.5px solid rgba(110, 138, 176, 0.7);
+    border-radius: 15px;
+    background: linear-gradient(180deg, rgba(17, 27, 46, 0.96), rgba(12, 20, 35, 0.96));
+    padding: 0.46rem 0.68rem 0.5rem;
+    margin: 0 0.12rem;
+    color: #d6e2f2;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
   }
 
-  .vector-node-inner {
-    display: grid;
-    grid-template-columns: 38px 1fr;
-    gap: 0.65rem;
-    align-items: center;
-    padding: 0.75rem;
+  .visibility-network--active {
+    box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.06);
   }
 
-  .node-icon {
-    display: grid;
-    place-items: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 8px;
-    background: rgba(56, 189, 248, 0.12);
-    color: #7dd3fc;
-    font-size: 1.1rem;
+  .visibility-network--source {
+    border-color: rgba(239, 68, 68, 0.92);
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.16), 0 0 22px rgba(239, 68, 68, 0.08);
   }
 
-  .node-title {
-    font-weight: 700;
-    font-size: 0.9rem;
-    overflow-wrap: anywhere;
+  .visibility-network--target {
+    border-color: rgba(34, 197, 94, 0.9);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.14), 0 0 22px rgba(34, 197, 94, 0.08);
   }
 
-  .node-meta {
-    margin-top: 0.2rem;
-    color: var(--text-secondary);
-    font-size: 0.78rem;
-    line-height: 1.35;
-    overflow-wrap: anywhere;
-    display: block;
+  .visibility-network--origin-physical {
+    background:
+      linear-gradient(180deg, rgba(37, 99, 235, 0.28), rgba(19, 34, 58, 0.94)),
+      linear-gradient(180deg, rgba(17, 27, 46, 0.96), rgba(12, 20, 35, 0.96));
+    box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.16), 0 0 0 1px rgba(96, 165, 250, 0.12);
   }
 
-  .origin-node .node-icon {
-    background: rgba(34, 197, 94, 0.12);
-    color: #86efac;
+  .visibility-network::before,
+  .visibility-network::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    border: 2px solid rgba(148, 163, 184, 0.78);
+    border-radius: 999px;
+    background: rgba(4, 10, 20, 0.98);
+    transform: translateY(-50%);
+    z-index: 5;
   }
 
-  .origin-node.unlinked {
-    border-color: rgba(250, 204, 21, 0.32);
+  .visibility-network::before {
+    left: -7px;
   }
 
-  .device-node .node-icon {
-    background: rgba(167, 139, 250, 0.12);
-    color: #c4b5fd;
+  .visibility-network::after {
+    right: -7px;
   }
 
-  .network-node .node-icon {
-    background: rgba(14, 165, 233, 0.12);
-    color: #7dd3fc;
+  .visibility-network--source::before,
+  .visibility-network--source::after {
+    border-color: rgba(239, 68, 68, 0.92);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
   }
 
-  .critical-node .node-icon {
-    background: rgba(248, 113, 113, 0.12);
-    color: #fca5a5;
+  .visibility-network--target::before,
+  .visibility-network--target::after {
+    border-color: rgba(34, 197, 94, 0.9);
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.08);
   }
 
-  .node-section-title {
-    margin: 0.1rem 0 0;
-    color: var(--text-secondary);
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .vector-empty {
-    padding: 2rem;
-    border: 1px dashed rgba(148, 163, 184, 0.32);
-    border-radius: 8px;
-    color: var(--text-secondary);
-    text-align: center;
-  }
-
-  .vector-legend {
+  .visibility-network-header {
     display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-top: 0.75rem;
-    color: var(--text-secondary);
-    font-size: 0.78rem;
+    align-items: flex-start;
+    gap: 0.46rem;
   }
 
-  .legend-item {
+  .visibility-network-title {
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.8rem;
+    font-weight: 800;
+    line-height: 1.18;
+    color: #f3f7fb;
+    overflow-wrap: anywhere;
+  }
+
+  .visibility-network-target-count {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 3rem;
+    padding: 0.14rem 0.42rem;
+    border: 1px solid rgba(251, 146, 60, 0.38);
+    border-radius: 999px;
+    background: rgba(154, 52, 18, 0.22);
+    color: #fdba74;
+    font-size: 0.64rem;
+    font-weight: 800;
+    line-height: 1.1;
+    white-space: nowrap;
   }
 
-  .legend-line {
-    width: 26px;
-    height: 0;
-    border-top: 2px solid rgba(125, 211, 252, 0.68);
+  .visibility-network-target-count[hidden] {
+    display: none;
   }
 
-  .legend-line.inferred {
-    border-top-color: rgba(250, 204, 21, 0.7);
-    border-top-style: dashed;
+  .visibility-network-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+    margin-top: 0.28rem;
+  }
+
+  .visibility-network-range {
+    font-size: 0.68rem;
+    color: #a4b4c8;
+    font-weight: 600;
+  }
+
+  .visibility-network-origin {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.34rem;
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 0.08rem;
+    padding: 0.16rem 0.42rem;
+    border-radius: 999px;
+    background: rgba(96, 165, 250, 0.12);
+    color: #cfe2ff;
+    font-size: 0.64rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+    transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+  }
+
+  .visibility-network--source .visibility-network-origin {
+    background: rgba(239, 68, 68, 0.14);
+    color: #fecaca;
+  }
+
+  .visibility-network--target .visibility-network-origin {
+    background: rgba(34, 197, 94, 0.14);
+    color: #bbf7d0;
+  }
+
+  .visibility-network-origin--source-focus {
+    background: rgba(239, 68, 68, 0.18) !important;
+    color: #fee2e2 !important;
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.18);
+  }
+
+  .visibility-network-origin--target-context {
+    background: rgba(148, 163, 184, 0.1) !important;
+    color: rgba(207, 226, 255, 0.72) !important;
+    opacity: 0.72;
+    box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.12);
+  }
+
+  .visibility-network-origin-context {
+    position: absolute;
+    top: -0.82rem;
+    right: 0.82rem;
+    z-index: 8;
+    max-width: calc(100% - 1.6rem);
+    padding: 0.14rem 0.46rem;
+    border: 1px solid rgba(96, 165, 250, 0.42);
+    border-radius: 999px;
+    background: rgba(8, 15, 28, 0.96);
+    color: #bfdbfe;
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    box-shadow: 0 8px 20px rgba(2, 6, 23, 0.34);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .visibility-network-origin-context[hidden] {
+    display: none;
+  }
+
+  .visibility-network-critical {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.34rem;
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 0.08rem;
+    padding: 0.16rem 0.42rem;
+    border-radius: 999px;
+    background: rgba(249, 115, 22, 0.14);
+    color: #fdba74;
+    font-size: 0.64rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .visibility-network-critical-label {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.56rem;
+    opacity: 0.92;
+  }
+
+  .visibility-network-critical-values {
+    overflow-wrap: anywhere;
+  }
+
+  .visibility-network-critical-star {
+    color: #fb923c;
+    font-size: 0.72rem;
+    line-height: 1;
+  }
+
+  .visibility-network-origin-label {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.56rem;
+    opacity: 0.92;
+  }
+
+  .visibility-network-origin-values {
+    overflow-wrap: anywhere;
+  }
+
+  .visibility-network-result-link {
+    position: absolute;
+    left: -11px;
+    top: 50%;
+    z-index: 9;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid rgba(251, 146, 60, 0.88);
+    border-radius: 999px;
+    background: rgba(9, 16, 28, 0.98);
+    color: #fdba74;
+    font-size: 0.62rem;
+    font-weight: 900;
+    line-height: 1;
+    text-decoration: none;
+    transform: translateY(-50%);
+    box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.12);
+    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  }
+
+  .visibility-network-result-link:hover {
+    border-color: rgba(253, 186, 116, 0.98);
+    box-shadow: 0 0 0 4px rgba(251, 146, 60, 0.16);
+    transform: translateY(-50%) scale(1.05);
+  }
+
+  .visibility-network-result-link[hidden] {
+    display: none;
+  }
+
+  .visibility-empty {
+    padding: 1.4rem;
+    border: 1px dashed rgba(148, 163, 184, 0.24);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    text-align: center;
+    background: rgba(15, 23, 42, 0.52);
   }
 
   @media (max-width: 900px) {
-    .vector-toolbar {
-      align-items: flex-start;
+    .visibility-toolbar {
       flex-direction: column;
+      align-items: stretch;
     }
 
-    .vector-diagram {
-      grid-template-columns: 1fr;
-      min-width: 0;
+    .visibility-filterbar-shell {
+      width: calc(100% - 0.9rem);
+      max-width: calc(100% - 0.9rem);
+      margin: 0.45rem 0.45rem 0;
     }
 
-    .system-board {
-      grid-template-columns: 1fr;
+    .visibility-diagram {
+      min-width: 100%;
+    }
+
+    .visibility-filter-dropdown {
+      width: min(100vw - 1.5rem, 340px);
+      left: 0;
+      right: auto;
     }
   }
 </style>
 
-<div class="vector-page">
-  <div class="vector-toolbar">
+<div class="visibility-page">
+  <div class="visibility-toolbar">
     <div>
-      <h2>Diagrama de vectores de acceso</h2>
-      <p>Vista offline de or&iacute;genes, sistemas, electr&oacute;nica de red y redes declaradas para {{ org_name }}.</p>
-      <div class="vector-legend">
-        <span class="legend-item"><span class="legend-line"></span>Relaci&oacute;n declarada</span>
-        <span class="legend-item"><span class="legend-line inferred"></span>Inferida por objetivo de escaneo</span>
-      </div>
+      <h2>Diagrama de visibilidad</h2>
+      <p>Vista operativa de la visibilidad real entre segmentos. El foco puede ponerse en un origen o en un destino sin perder el contexto global.</p>
     </div>
-    <div class="vector-actions">
-      <label class="vector-toggle">
-        <input type="checkbox" id="showInferredLinks" onchange="drawVectorLinks()">
-        <span>Mostrar inferidas</span>
-      </label>
-      <button class="btn btn-secondary" type="button" onclick="loadAccessVectorDiagram()">Actualizar</button>
-      <button class="btn btn-primary" type="button" onclick="exportVectorJson()">Exportar JSON</button>
+    <div class="visibility-actions">
+      <button class="btn btn-secondary" type="button" id="refreshVisibilityBtn">Actualizar</button>
+      <button class="btn btn-primary" type="button" id="exportVisibilityPngBtn">Exportar PNG</button>
     </div>
   </div>
 
-  <div class="vector-diagram-shell" id="diagramShell">
-    <div class="vector-diagram" id="vectorDiagram">
-      <svg class="vector-links" id="vectorLinks" aria-hidden="true"></svg>
-      <div class="vector-empty">Cargando diagrama...</div>
+  <section class="visibility-diagram-panel">
+    <div class="visibility-filterbar-shell">
+      <div class="visibility-filterbar">
+        <div class="visibility-filter-menu" id="originFilterMenu">
+          <button class="visibility-filter-toggle visibility-filter-toggle--origin" type="button" id="originFilterToggle" data-filter-mode="origin" aria-expanded="false">
+            Or&iacute;genes <strong>0/0</strong>
+          </button>
+          <div class="visibility-filter-dropdown" id="originFilterDropdown">
+            <div class="visibility-filter-toolbar">
+              <input class="visibility-search visibility-search--origin" id="originSearchInput" type="search" placeholder="Buscar IP u origen...">
+              <div class="visibility-filter-actions">
+                <button class="btn btn-secondary" type="button" id="selectVisibleOriginsBtn">Seleccionar visibles</button>
+                <button class="btn btn-secondary" type="button" id="clearOriginSelectionBtn">Limpiar</button>
+              </div>
+            </div>
+            <div class="visibility-selection-summary" id="originSelectionSummary">Cargando or&iacute;genes...</div>
+            <div class="visibility-filter-groups" id="originFilters">
+              <div class="visibility-empty">Cargando or&iacute;genes...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="visibility-filter-menu" id="destinationFilterMenu">
+          <button class="visibility-filter-toggle visibility-filter-toggle--destination" type="button" id="destinationFilterToggle" data-filter-mode="destination" aria-expanded="false">
+            Destinos <strong>0/0</strong>
+          </button>
+          <div class="visibility-filter-dropdown" id="destinationFilterDropdown">
+            <div class="visibility-filter-toolbar">
+              <input class="visibility-search visibility-search--destination" id="destinationSearchInput" type="search" placeholder="Buscar red, rango o sistema...">
+              <div class="visibility-filter-actions">
+                <button class="btn btn-secondary" type="button" id="selectVisibleDestinationsBtn">Seleccionar visibles</button>
+                <button class="btn btn-secondary" type="button" id="clearDestinationSelectionBtn">Limpiar</button>
+              </div>
+            </div>
+            <div class="visibility-selection-summary" id="destinationSelectionSummary">Cargando destinos...</div>
+            <div class="visibility-filter-groups" id="destinationFilters">
+              <div class="visibility-empty">Cargando destinos...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="visibility-filter-menu" id="criticalFilterMenu">
+          <button class="visibility-filter-toggle visibility-filter-toggle--critical" type="button" id="criticalFilterToggle" data-filter-mode="critical" aria-expanded="false">
+            Cr&iacute;ticos <strong>0/0</strong>
+          </button>
+          <div class="visibility-filter-dropdown" id="criticalFilterDropdown">
+            <div class="visibility-filter-toolbar">
+              <input class="visibility-search visibility-search--critical" id="criticalSearchInput" type="search" placeholder="Buscar host cr&iacute;tico, IP o red...">
+              <div class="visibility-filter-actions">
+                <button class="btn btn-secondary" type="button" id="selectVisibleCriticalsBtn">Seleccionar visibles</button>
+                <button class="btn btn-secondary" type="button" id="clearCriticalSelectionBtn">Limpiar</button>
+              </div>
+            </div>
+            <div class="visibility-selection-summary" id="criticalSelectionSummary">Cargando cr&iacute;ticos...</div>
+            <div class="visibility-filter-groups" id="criticalFilters">
+              <div class="visibility-empty">Cargando cr&iacute;ticos...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="visibility-layer-strip" id="layerFilterMenu">
+          <span class="visibility-layer-title" id="layerFilterToggle">Capas <strong>0/0</strong></span>
+          <div class="visibility-layer-options" id="layerFilters">
+            <span class="visibility-empty">Cargando capas...</span>
+          </div>
+          <button class="btn btn-secondary" type="button" id="selectAllLayersBtn">Todas</button>
+          <button class="btn btn-secondary" type="button" id="clearLayerSelectionBtn">Limpiar</button>
+          <span class="visibility-selection-summary" id="layerSelectionSummary" style="border:0; background:transparent; padding:0;">Cargando capas...</span>
+        </div>
+
+        <button class="visibility-purdue-toggle" type="button" id="purdueToggleBtn" aria-pressed="false">
+          Purdue
+        </button>
+      </div>
     </div>
-  </div>
+
+    <div class="visibility-diagram-shell" id="diagramShell">
+      <div class="visibility-diagram" id="visibilityDiagram">
+        <svg class="visibility-links" id="visibilityLinks" aria-hidden="true"></svg>
+        <div class="visibility-empty">Cargando diagrama...</div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
   const ORG_NAME = "{{ org_name }}";
+  const FILTER_MENU_IDS = ['originFilterMenu', 'destinationFilterMenu', 'criticalFilterMenu'];
   let currentDiagramData = null;
+  let currentLayout = null;
+  let currentFilterMode = 'origin';
+  let purdueModeEnabled = false;
+  let selectedOriginIds = new Set();
+  let selectedDestinationIds = new Set();
+  let selectedCriticalIds = new Set();
+  let selectedLayerIds = new Set();
+  let originSearchTerm = '';
+  let destinationSearchTerm = '';
+  let criticalSearchTerm = '';
+  let hasInitializedOriginSelection = false;
+  let hasInitializedDestinationSelection = false;
+  let hasInitializedCriticalSelection = false;
+  let hasInitializedLayerSelection = false;
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -315,129 +1071,1539 @@
     return `diagram-node-${String(rawId).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   }
 
-  function systemKey(value) {
-    return value || '__none__';
+  function hashString(value) {
+    let hash = 2166136261;
+    const text = String(value ?? '');
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
   }
 
-  function deviceIcon(type) {
-    const normalized = String(type || '').toLowerCase();
-    if (normalized === 'firewall') return '🧱';
-    if (normalized === 'router') return '🔀';
-    return '🔌';
+  function deterministicUnit(value, salt = 0) {
+    return (hashString(`${value}:${salt}`) % 1000) / 1000;
   }
 
-  function renderNode(item, kind, icon, metaLines = []) {
-    const classes = [
-      'vector-node',
-      `${kind}-node`,
-      kind === 'origin' && !item.linked ? 'unlinked' : ''
-    ].filter(Boolean).join(' ');
-    const meta = metaLines.filter(Boolean).map(escapeHtml).join('<br>');
-    return `
-      <div class="${classes}" id="${nodeId(item.id)}" data-node-id="${escapeHtml(item.id)}">
-        <div class="vector-node-inner">
-          <span class="node-icon">${icon}</span>
-          <span>
-            <span class="node-title">${escapeHtml(item.name)}</span>
-            ${meta ? `<span class="node-meta">${meta}</span>` : ''}
-          </span>
-        </div>
-      </div>
+  function networkMap() {
+    return new Map((currentDiagramData?.networks || []).map((item) => [item.id, item]));
+  }
+
+  function originMap() {
+    return new Map((currentDiagramData?.origins || []).map((item) => [item.id, item]));
+  }
+
+  function systemMap() {
+    return new Map((currentDiagramData?.systems || []).map((item) => [item.id, item]));
+  }
+
+  function layerMap() {
+    return new Map((currentDiagramData?.layers || []).map((item) => [item.id, item]));
+  }
+
+  function destinationOptions(data) {
+    const networksById = new Map((data?.networks || []).map((item) => [item.id, item]));
+    const systemsById = new Map((data?.systems || []).map((item) => [item.id, item]));
+    const targetIds = new Set((data?.relations || []).map((relation) => relation.target_network_id));
+
+    return Array.from(targetIds)
+      .map((networkId) => {
+        const network = networksById.get(networkId);
+        if (!network) return null;
+        return {
+          ...network,
+          system_name: systemsById.get(network.system_id)?.name || 'Sistema desconocido',
+          incoming_count: network.incoming_origin_ids?.length || 0,
+        };
+      })
+      .filter(Boolean)
+      .sort((left, right) => {
+        const systemCompare = String(left.system_name || '').localeCompare(String(right.system_name || ''));
+        if (systemCompare !== 0) return systemCompare;
+        return String(left.display_name || '').localeCompare(String(right.display_name || ''));
+      });
+  }
+
+  function criticalOptions(data) {
+    return [...(data?.critical_hosts || [])].sort((left, right) => {
+      const labelCompare = String(left.device_name || '').localeCompare(String(right.device_name || ''));
+      if (labelCompare !== 0) return labelCompare;
+      return String(left.ip || '').localeCompare(String(right.ip || ''), undefined, { numeric: true });
+    });
+  }
+
+  function layerOptions(data) {
+    return [...(data?.layers || [])].sort((left, right) => (left.sort_order || 0) - (right.sort_order || 0));
+  }
+
+  function sortIpValues(values) {
+    return [...values].sort((left, right) => String(left || '').localeCompare(String(right || ''), undefined, { numeric: true }));
+  }
+
+  function previewValues(values, maxItems = 2) {
+    const normalized = [...values].filter(Boolean);
+    if (!normalized.length) return '';
+    if (normalized.length > maxItems) return `${normalized.slice(0, maxItems).join(' · ')} +${normalized.length - maxItems}`;
+    return normalized.join(' · ');
+  }
+
+  function setFilterMenuOpen(menuId, open) {
+    FILTER_MENU_IDS.forEach((id) => {
+      const menu = document.getElementById(id);
+      const toggle = menu?.querySelector('.visibility-filter-toggle');
+      const shouldOpen = open && id === menuId;
+      if (menu) menu.classList.toggle('visibility-filter-menu--open', shouldOpen);
+      if (toggle) toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    });
+  }
+
+  function toggleFilterMenu(menuId) {
+    const menu = document.getElementById(menuId);
+    const isOpen = menu?.classList.contains('visibility-filter-menu--open');
+    setFilterMenuOpen(menuId, !isOpen);
+  }
+
+  function closeAllFilterMenus() {
+    setFilterMenuOpen(null, false);
+  }
+
+  function getFilteredOrigins(origins) {
+    const term = originSearchTerm.trim().toLowerCase();
+    if (!term) return origins;
+    return origins.filter((origin) => {
+      const haystack = [
+        origin.ip,
+        ...(origin.locations || []),
+        ...(origin.source_network_labels || []),
+      ].join(' ').toLowerCase();
+      return haystack.includes(term);
+    });
+  }
+
+  function getFilteredDestinations(destinations) {
+    const term = destinationSearchTerm.trim().toLowerCase();
+    if (!term) return destinations;
+    return destinations.filter((destination) => {
+      const haystack = [
+        destination.display_name,
+        destination.range,
+        destination.system_name,
+      ].join(' ').toLowerCase();
+      return haystack.includes(term);
+    });
+  }
+
+  function getFilteredCriticalHosts(hosts) {
+    const term = criticalSearchTerm.trim().toLowerCase();
+    if (!term) return hosts;
+    return hosts.filter((host) => {
+      const haystack = [
+        host.ip,
+        host.device_name,
+        host.reason,
+        ...(host.network_labels || []),
+      ].join(' ').toLowerCase();
+      return haystack.includes(term);
+    });
+  }
+
+  function renderStats(data) {
+    const statsContainer = document.getElementById('visibilityStats');
+    if (!statsContainer) return;
+    const stats = data?.stats || {};
+    statsContainer.innerHTML = `
+      <span class="visibility-badge"><strong>${stats.system_count || 0}</strong> sistemas</span>
+      <span class="visibility-badge"><strong>${stats.network_count || 0}</strong> redes</span>
+      <span class="visibility-badge"><strong>${stats.origin_count || 0}</strong> or&iacute;genes</span>
+      <span class="visibility-badge"><strong>${stats.relation_count || 0}</strong> relaciones</span>
     `;
   }
 
-  function renderAccessVectorDiagram(data) {
-    currentDiagramData = data;
-    const diagram = document.getElementById('vectorDiagram');
-    const origins = data.origins || [];
-    const systems = data.systems || [];
-    const networks = data.networks || [];
-    const devices = data.network_devices || [];
-    const critical = data.critical_devices || [];
+  function sortSystemsForDiagram(data) {
+    const systems = [...(data?.systems || [])];
+    const networksById = new Map((data?.networks || []).map((item) => [item.id, item]));
+    const scores = new Map();
 
-    if (!origins.length && !systems.length && !networks.length && !devices.length && !critical.length) {
-      diagram.innerHTML = '<svg class="vector-links" id="vectorLinks" aria-hidden="true"></svg><div class="vector-empty">Todav&iacute;a no hay datos de arquitectura ni or&iacute;genes para dibujar.</div>';
+    systems.forEach((system) => {
+      scores.set(system.id, {
+        outgoing: 0,
+        incoming: 0,
+        originCount: system.origin_count || 0,
+      });
+    });
+
+    (data?.relations || []).forEach((relation) => {
+      const targetNetwork = networksById.get(relation.target_network_id);
+      const targetSystemId = targetNetwork?.system_id;
+      const relationWeight = (relation.visible_host_count || 0) + (relation.scan_count || 0);
+
+      (relation.source_network_ids || []).forEach((networkId) => {
+        const sourceSystemId = networksById.get(networkId)?.system_id;
+        if (sourceSystemId && scores.has(sourceSystemId)) {
+          scores.get(sourceSystemId).outgoing += relationWeight;
+        }
+      });
+
+      if (targetSystemId && scores.has(targetSystemId)) {
+        scores.get(targetSystemId).incoming += relationWeight;
+      }
+    });
+
+    return systems.sort((left, right) => {
+      const leftScore = scores.get(left.id) || {};
+      const rightScore = scores.get(right.id) || {};
+      const leftUnknown = left.is_unknown ? 1 : 0;
+      const rightUnknown = right.is_unknown ? 1 : 0;
+      if (leftUnknown !== rightUnknown) return leftUnknown - rightUnknown;
+      if ((rightScore.originCount || 0) !== (leftScore.originCount || 0)) return (rightScore.originCount || 0) - (leftScore.originCount || 0);
+      if ((rightScore.outgoing || 0) !== (leftScore.outgoing || 0)) return (rightScore.outgoing || 0) - (leftScore.outgoing || 0);
+      if ((rightScore.incoming || 0) !== (leftScore.incoming || 0)) return (rightScore.incoming || 0) - (leftScore.incoming || 0);
+      return String(left.name || '').localeCompare(String(right.name || ''));
+    });
+  }
+
+  function updateModeControls() {
+    document.querySelectorAll('[data-filter-mode]').forEach((button) => {
+      button.classList.toggle('visibility-mode-btn--active', button.dataset.filterMode === currentFilterMode);
+    });
+    const layerToggle = document.getElementById('layerFilterToggle');
+    if (layerToggle) {
+      layerToggle.classList.toggle('visibility-mode-btn--active', isLayerFilterActive());
+    }
+    const purdueToggle = document.getElementById('purdueToggleBtn');
+    if (purdueToggle) {
+      purdueToggle.classList.toggle('visibility-purdue-toggle--active', purdueModeEnabled);
+      purdueToggle.setAttribute('aria-pressed', purdueModeEnabled ? 'true' : 'false');
+    }
+  }
+
+  function isFilterRestricted(selectedIds, totalCount) {
+    return totalCount > 0 && selectedIds.size < totalCount;
+  }
+
+  function isOriginFilterActive(data = currentDiagramData) {
+    return isFilterRestricted(selectedOriginIds, (data?.origins || []).length);
+  }
+
+  function isDestinationFilterActive(data = currentDiagramData) {
+    return isFilterRestricted(selectedDestinationIds, destinationOptions(data).length);
+  }
+
+  function isCriticalFilterActive(data = currentDiagramData) {
+    return criticalOptions(data).length > 0;
+  }
+
+  function isLayerFilterActive(data = currentDiagramData) {
+    return isFilterRestricted(selectedLayerIds, layerOptions(data).length);
+  }
+
+  function isOriginFilterApplied(data = currentDiagramData) {
+    return currentFilterMode === 'origin' && isOriginFilterActive(data);
+  }
+
+  function isDestinationFilterApplied(data = currentDiagramData) {
+    return currentFilterMode === 'destination' && isDestinationFilterActive(data);
+  }
+
+  function isCriticalFilterApplied(data = currentDiagramData) {
+    return currentFilterMode === 'critical' && isCriticalFilterActive(data);
+  }
+
+  function isLayerFilterApplied(data = currentDiagramData) {
+    return isLayerFilterActive(data);
+  }
+
+  function originGroupLabel(origin) {
+    const labels = [...new Set((origin.locations || [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean))];
+
+    if (labels.length === 1) return labels[0];
+    if (labels.length > 1) return labels.join(' / ');
+    return 'Sin origen';
+  }
+
+  function filterSelectionLabel(selectedIds, totalCount) {
+    if (!totalCount) return '0/0';
+    return isFilterRestricted(selectedIds, totalCount)
+      ? `${selectedIds.size}/${totalCount}`
+      : `todos (${totalCount})`;
+  }
+
+  function setFilterMode(mode) {
+    if (!['origin', 'destination', 'critical'].includes(mode)) return;
+    currentFilterMode = mode;
+    updateModeControls();
+    updateDiagramSelection();
+  }
+
+  function reconcileSelectedIds(selectedIds, availableIds, previousTotal) {
+    if (!previousTotal || selectedIds.size >= previousTotal) return new Set(availableIds);
+    return new Set(Array.from(selectedIds).filter((id) => availableIds.has(id)));
+  }
+
+  function bindFilterToggle(toggleId, mode, menuId) {
+    const button = document.getElementById(toggleId);
+    if (!button) return;
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      setFilterMode(mode);
+      toggleFilterMenu(menuId);
+    });
+  }
+
+  function bindMenuToggle(toggleId, menuId) {
+    const button = document.getElementById(toggleId);
+    if (!button) return;
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleFilterMenu(menuId);
+    });
+  }
+
+  function renderOriginFilters(data) {
+    const container = document.getElementById('originFilters');
+    const summary = document.getElementById('originSelectionSummary');
+    const toggle = document.getElementById('originFilterToggle');
+    const origins = data?.origins || [];
+    const filteredOrigins = getFilteredOrigins(origins);
+    const filterActive = isFilterRestricted(selectedOriginIds, origins.length);
+
+    toggle.innerHTML = `Or&iacute;genes <strong>${escapeHtml(filterSelectionLabel(selectedOriginIds, origins.length))}</strong>`;
+
+    const visibleIds = new Set(filteredOrigins.map((origin) => origin.id));
+    const selectedVisibleCount = Array.from(selectedOriginIds).filter((id) => visibleIds.has(id)).length;
+
+    summary.innerHTML = filterActive
+      ? `
+          <strong>${selectedOriginIds.size}</strong> origen(es) seleccionado(s)
+          <br>
+          ${filteredOrigins.length} visible(s)${filteredOrigins.length !== origins.length ? ` de ${origins.length}` : ''}${filteredOrigins.length ? ` · ${selectedVisibleCount} marcado(s)` : ''}
+        `
+      : `
+          <strong>Sin filtro</strong>
+          <br>
+          ${filteredOrigins.length} visible(s)${filteredOrigins.length !== origins.length ? ` de ${origins.length}` : ''}${origins.length ? ` · se incluyen ${origins.length} origen(es)` : ''}
+        `;
+
+    if (!filteredOrigins.length) {
+      container.innerHTML = '<div class="visibility-empty">No hay or&iacute;genes que coincidan con el filtro.</div>';
       return;
     }
 
-    const originsHtml = origins.length
-      ? origins.map(origin => renderNode(origin, 'origin', '💻', [
-          `${origin.scan_count || 0} escaneo(s)`,
-          origin.running_count ? `${origin.running_count} en ejecución` : '',
-          origin.targets && origin.targets.length ? `${origin.targets.length} conjunto(s) de objetivos` : '',
-          !origin.linked ? 'Sin enlace directo declarado' : ''
-        ])).join('')
-      : '<div class="vector-empty">No hay or&iacute;genes registrados.</div>';
+    const groups = new Map();
+    filteredOrigins.forEach((origin) => {
+      const groupKey = originGroupLabel(origin);
+      if (!groups.has(groupKey)) groups.set(groupKey, []);
+      groups.get(groupKey).push(origin);
+    });
 
-    const systemHtml = systems.map(system => {
-      const rawName = system.raw_name || null;
-      const systemNetworks = networks.filter(item => systemKey(item.system_name) === systemKey(rawName));
-      const systemDevices = devices.filter(item => systemKey(item.system_name) === systemKey(rawName));
-      const systemCritical = critical.filter(item => systemKey(item.system_name) === systemKey(rawName));
+    container.innerHTML = Array.from(groups.entries())
+      .sort((left, right) => String(left[0]).localeCompare(String(right[0])))
+      .map(([groupLabel, groupOrigins]) => `
+      <section class="visibility-filter-group">
+        <div class="visibility-filter-group-header">
+          <span class="visibility-filter-group-title">${escapeHtml(groupLabel)}</span>
+        </div>
+        <div class="visibility-filter-list">
+          ${groupOrigins
+            .slice()
+            .sort((left, right) => String(left.ip || '').localeCompare(String(right.ip || ''), undefined, { numeric: true }))
+            .map((origin) => `
+            <label class="visibility-filter-item visibility-filter-item--origin ${selectedOriginIds.has(origin.id) ? 'visibility-filter-item--selected-origin' : ''}">
+              <input type="checkbox" value="${escapeHtml(origin.id)}" data-origin-checkbox ${selectedOriginIds.has(origin.id) ? 'checked' : ''}>
+              <span class="visibility-filter-main">
+                <span class="visibility-filter-item-title">${escapeHtml(origin.ip)}</span>
+              </span>
+            </label>
+          `).join('')}
+        </div>
+      </section>
+    `).join('');
 
-      const devicesHtml = systemDevices.length ? `
-        <p class="node-section-title">Electr&oacute;nica</p>
-        ${systemDevices.map(device => renderNode(device, 'device', deviceIcon(device.device_type), [
-          `${device.device_type || 'dispositivo'}${device.management_ip ? ` · ${device.management_ip}` : ''}`,
-          device.origin_locations && device.origin_locations.length ? `Orígenes: ${device.origin_locations.join(', ')}` : '',
-        ])).join('')}
-      ` : '';
+    container.querySelectorAll('[data-origin-checkbox]').forEach((input) => {
+      input.addEventListener('change', (event) => {
+        setFilterMode('origin');
+        const originId = event.target.value;
+        if (event.target.checked) selectedOriginIds.add(originId);
+        else selectedOriginIds.delete(originId);
+        renderOriginFilters(currentDiagramData);
+        updateDiagramSelection();
+      });
+    });
+  }
 
-      const networksHtml = systemNetworks.length ? `
-        <p class="node-section-title">Redes</p>
-        ${systemNetworks.map(network => renderNode(network, 'network', '▦', [
-          network.range,
-          network.purdue_level !== null && network.purdue_level !== undefined ? `Purdue L${network.purdue_level}` : ''
-        ])).join('')}
-      ` : '';
+  function renderDestinationFilters(data) {
+    const container = document.getElementById('destinationFilters');
+    const summary = document.getElementById('destinationSelectionSummary');
+    const toggle = document.getElementById('destinationFilterToggle');
+    const destinations = destinationOptions(data);
+    const filteredDestinations = getFilteredDestinations(destinations);
+    const filterActive = isFilterRestricted(selectedDestinationIds, destinations.length);
 
-      const criticalHtml = systemCritical.length ? `
-        <p class="node-section-title">Activos cr&iacute;ticos</p>
-        ${systemCritical.map(item => renderNode(item, 'critical', '⚠', [
-          item.ips,
-          item.reason
-        ])).join('')}
-      ` : '';
+    toggle.innerHTML = `Destinos <strong>${escapeHtml(filterSelectionLabel(selectedDestinationIds, destinations.length))}</strong>`;
 
-      const emptyHtml = !devicesHtml && !networksHtml && !criticalHtml
-        ? '<div class="vector-empty">Sistema sin elementos declarados.</div>'
-        : '';
+    const visibleIds = new Set(filteredDestinations.map((destination) => destination.id));
+    const selectedVisibleCount = Array.from(selectedDestinationIds).filter((id) => visibleIds.has(id)).length;
+
+    summary.innerHTML = filterActive
+      ? `
+          <strong>${selectedDestinationIds.size}</strong> destino(s) seleccionado(s)
+          <br>
+          ${filteredDestinations.length} visible(s)${filteredDestinations.length !== destinations.length ? ` de ${destinations.length}` : ''}${filteredDestinations.length ? ` · ${selectedVisibleCount} marcado(s)` : ''}
+        `
+      : `
+          <strong>Sin filtro</strong>
+          <br>
+          ${filteredDestinations.length} visible(s)${filteredDestinations.length !== destinations.length ? ` de ${destinations.length}` : ''}${destinations.length ? ` · se incluyen ${destinations.length} destino(s)` : ''}
+        `;
+
+    if (!filteredDestinations.length) {
+      container.innerHTML = '<div class="visibility-empty">No hay destinos que coincidan con el filtro.</div>';
+      return;
+    }
+
+    const groups = new Map();
+    filteredDestinations.forEach((destination) => {
+      const groupKey = destination.system_name || 'Sistema desconocido';
+      if (!groups.has(groupKey)) groups.set(groupKey, []);
+      groups.get(groupKey).push(destination);
+    });
+
+    container.innerHTML = Array.from(groups.entries()).map(([groupLabel, groupDestinations]) => `
+      <section class="visibility-filter-group">
+        <div class="visibility-filter-group-header">
+          <span class="visibility-filter-group-title">${escapeHtml(groupLabel)}</span>
+          <span class="visibility-filter-group-subtitle">${groupDestinations.length} destino(s)</span>
+        </div>
+        <div class="visibility-filter-list">
+          ${groupDestinations.map((destination) => `
+            <label class="visibility-filter-item visibility-filter-item--destination ${selectedDestinationIds.has(destination.id) ? 'visibility-filter-item--selected-destination' : ''}">
+              <input type="checkbox" value="${escapeHtml(destination.id)}" data-destination-checkbox ${selectedDestinationIds.has(destination.id) ? 'checked' : ''}>
+              <span class="visibility-filter-main">
+                <span class="visibility-filter-item-title">${escapeHtml(destination.display_name)}</span>
+                <span class="visibility-filter-item-meta">${escapeHtml(destination.range)}</span>
+              </span>
+            </label>
+          `).join('')}
+        </div>
+      </section>
+    `).join('');
+
+    container.querySelectorAll('[data-destination-checkbox]').forEach((input) => {
+      input.addEventListener('change', (event) => {
+        setFilterMode('destination');
+        const destinationId = event.target.value;
+        if (event.target.checked) selectedDestinationIds.add(destinationId);
+        else selectedDestinationIds.delete(destinationId);
+        renderDestinationFilters(currentDiagramData);
+        updateDiagramSelection();
+      });
+    });
+  }
+
+  function renderCriticalFilters(data) {
+    const container = document.getElementById('criticalFilters');
+    const summary = document.getElementById('criticalSelectionSummary');
+    const toggle = document.getElementById('criticalFilterToggle');
+    const hosts = criticalOptions(data);
+    const filteredHosts = getFilteredCriticalHosts(hosts);
+    const selectionCount = selectedCriticalIds.size;
+
+    toggle.innerHTML = `Cr&iacute;ticos <strong>${escapeHtml(filterSelectionLabel(selectedCriticalIds, hosts.length))}</strong>`;
+
+    const visibleIds = new Set(filteredHosts.map((host) => host.id));
+    const selectedVisibleCount = Array.from(selectedCriticalIds).filter((id) => visibleIds.has(id)).length;
+
+    summary.innerHTML = selectionCount
+      ? `
+          <strong>${selectionCount}</strong> host(s) cr&iacute;tico(s) seleccionado(s)
+          <br>
+          ${filteredHosts.length} visible(s)${filteredHosts.length !== hosts.length ? ` de ${hosts.length}` : ''}${filteredHosts.length ? ` · ${selectedVisibleCount} marcado(s)` : ''}
+        `
+      : `
+          <strong>Sin selecci&oacute;n</strong>
+          <br>
+          ${filteredHosts.length} visible(s)${filteredHosts.length !== hosts.length ? ` de ${hosts.length}` : ''}${hosts.length ? ' · no se mostrar&aacute;n relaciones cr&iacute;ticas' : ''}
+        `;
+
+    if (!filteredHosts.length) {
+      container.innerHTML = '<div class="visibility-empty">No hay hosts cr&iacute;ticos que coincidan con el filtro.</div>';
+      return;
+    }
+
+    const groups = new Map();
+    filteredHosts.forEach((host) => {
+      const groupKey = host.device_name || 'Host crítico';
+      if (!groups.has(groupKey)) groups.set(groupKey, []);
+      groups.get(groupKey).push(host);
+    });
+
+    container.innerHTML = Array.from(groups.entries())
+      .sort((left, right) => String(left[0]).localeCompare(String(right[0])))
+      .map(([groupLabel, groupHosts]) => `
+      <section class="visibility-filter-group">
+        <div class="visibility-filter-group-header">
+          <span class="visibility-filter-group-title">${escapeHtml(groupLabel)}</span>
+          <span class="visibility-filter-group-subtitle">${groupHosts.length} host${groupHosts.length === 1 ? '' : 's'}</span>
+        </div>
+        <div class="visibility-filter-list">
+          ${groupHosts
+            .slice()
+            .sort((left, right) => String(left.ip || '').localeCompare(String(right.ip || ''), undefined, { numeric: true }))
+            .map((host) => `
+            <label class="visibility-filter-item visibility-filter-item--critical ${selectedCriticalIds.has(host.id) ? 'visibility-filter-item--selected-critical' : ''}">
+              <input type="checkbox" value="${escapeHtml(host.id)}" data-critical-checkbox ${selectedCriticalIds.has(host.id) ? 'checked' : ''}>
+              <span class="visibility-filter-main">
+                <span class="visibility-filter-item-title">${escapeHtml(host.ip)}</span>
+              </span>
+            </label>
+          `).join('')}
+        </div>
+      </section>
+    `).join('');
+
+    container.querySelectorAll('[data-critical-checkbox]').forEach((input) => {
+      input.addEventListener('change', (event) => {
+        setFilterMode('critical');
+        const criticalId = event.target.value;
+        if (event.target.checked) selectedCriticalIds.add(criticalId);
+        else selectedCriticalIds.delete(criticalId);
+        renderCriticalFilters(currentDiagramData);
+        updateDiagramSelection();
+      });
+    });
+  }
+
+  function renderLayerFilters(data) {
+    const container = document.getElementById('layerFilters');
+    const summary = document.getElementById('layerSelectionSummary');
+    const toggle = document.getElementById('layerFilterToggle');
+    const layers = layerOptions(data);
+    const filterActive = isLayerFilterApplied(data);
+
+    toggle.innerHTML = `Capas <strong>${escapeHtml(filterSelectionLabel(selectedLayerIds, layers.length))}</strong>`;
+
+    if (!layers.length) {
+      summary.textContent = 'No hay capas de visibilidad disponibles.';
+      container.innerHTML = '<span class="visibility-empty">No hay capas detectadas.</span>';
+      updateModeControls();
+      return;
+    }
+
+    summary.textContent = filterActive
+      ? `${selectedLayerIds.size} capa(s) activa(s)`
+      : 'Todas las capas activas';
+
+    container.innerHTML = layers.map((layer) => `
+      <label
+        class="visibility-layer-option ${selectedLayerIds.has(layer.id) ? 'visibility-layer-option--selected' : ''}"
+        title="${escapeHtml(layer.description || '')}"
+      >
+        <input type="checkbox" value="${escapeHtml(layer.id)}" data-layer-checkbox ${selectedLayerIds.has(layer.id) ? 'checked' : ''}>
+        <span>${escapeHtml(layer.label)}</span>
+      </label>
+    `).join('');
+
+    container.querySelectorAll('[data-layer-checkbox]').forEach((input) => {
+      input.addEventListener('change', (event) => {
+        const layerId = event.target.value;
+        if (event.target.checked) selectedLayerIds.add(layerId);
+        else selectedLayerIds.delete(layerId);
+        renderLayerFilters(currentDiagramData);
+        updateDiagramSelection();
+      });
+    });
+
+    updateModeControls();
+  }
+
+  function estimateSystemBoxSize(system) {
+    const networkCount = Math.max(1, (system.network_ids || []).length);
+    const extraWidth = Math.min(56, Math.max(0, String(system.name || '').length - 14) * 2.2);
+    return {
+      width: Math.round(226 + extraWidth),
+      height: Math.round(66 + (networkCount * 72) + (Math.max(0, networkCount - 1) * 12)),
+    };
+  }
+
+  function buildSystemLayout(data, systems) {
+    const shell = document.getElementById('diagramShell');
+    const shellWidth = shell?.clientWidth || Math.max(720, (window.innerWidth || 0) - 64);
+    const shellHeight = shell?.clientHeight || Math.round((window.innerHeight || 920) * 0.72);
+    const viewportWidth = Math.max(
+      720,
+      shellWidth,
+    );
+    const viewportHeight = Math.max(
+      760,
+      shellHeight,
+    );
+    const networksById = new Map((data?.networks || []).map((item) => [item.id, item]));
+    const systemsById = new Map(systems.map((system) => [system.id, system]));
+    const sizeById = new Map(systems.map((system) => [system.id, estimateSystemBoxSize(system)]));
+    const outgoing = new Map();
+    const incoming = new Map();
+    const metricsById = new Map();
+
+    systems.forEach((system) => {
+      outgoing.set(system.id, new Map());
+      incoming.set(system.id, new Map());
+      metricsById.set(system.id, {
+        originCount: system.origin_count || 0,
+        networkCount: (system.network_ids || []).length,
+        outgoingWeight: 0,
+        incomingWeight: 0,
+      });
+    });
+
+    (data?.relations || []).forEach((relation) => {
+      const targetSystemId = networksById.get(relation.target_network_id)?.system_id;
+      if (!targetSystemId || !systemsById.has(targetSystemId)) return;
+
+      const relationWeight = Math.max(1, relation.visible_host_count || 0) + Math.max(1, relation.scan_count || 0);
+      const sourceSystemIds = [...new Set(
+        (relation.source_network_ids || [])
+          .map((networkId) => networksById.get(networkId)?.system_id)
+          .filter((systemId) => systemId && systemId !== targetSystemId && systemsById.has(systemId)),
+      )];
+
+      sourceSystemIds.forEach((sourceSystemId) => {
+        outgoing.get(sourceSystemId).set(
+          targetSystemId,
+          (outgoing.get(sourceSystemId).get(targetSystemId) || 0) + relationWeight,
+        );
+        incoming.get(targetSystemId).set(
+          sourceSystemId,
+          (incoming.get(targetSystemId).get(sourceSystemId) || 0) + relationWeight,
+        );
+        metricsById.get(sourceSystemId).outgoingWeight += relationWeight;
+        metricsById.get(targetSystemId).incomingWeight += relationWeight;
+      });
+    });
+
+    const compareByRole = (left, right) => {
+      const leftMetrics = metricsById.get(left.id) || {};
+      const rightMetrics = metricsById.get(right.id) || {};
+      const leftUnknown = left.is_unknown ? 1 : 0;
+      const rightUnknown = right.is_unknown ? 1 : 0;
+
+      if (leftUnknown !== rightUnknown) return leftUnknown - rightUnknown;
+      if ((rightMetrics.originCount || 0) !== (leftMetrics.originCount || 0)) {
+        return (rightMetrics.originCount || 0) - (leftMetrics.originCount || 0);
+      }
+      if ((rightMetrics.outgoingWeight || 0) !== (leftMetrics.outgoingWeight || 0)) {
+        return (rightMetrics.outgoingWeight || 0) - (leftMetrics.outgoingWeight || 0);
+      }
+      if ((leftMetrics.incomingWeight || 0) !== (rightMetrics.incomingWeight || 0)) {
+        return (leftMetrics.incomingWeight || 0) - (rightMetrics.incomingWeight || 0);
+      }
+      if ((rightMetrics.networkCount || 0) !== (leftMetrics.networkCount || 0)) {
+        return (rightMetrics.networkCount || 0) - (leftMetrics.networkCount || 0);
+      }
+      return String(left.name || '').localeCompare(String(right.name || ''));
+    };
+
+    const rankById = new Map(systems.map((system) => [system.id, 0]));
+    const indegreeRemaining = new Map(systems.map((system) => [system.id, incoming.get(system.id).size]));
+    const processed = new Set();
+    const queue = systems
+      .filter((system) => (indegreeRemaining.get(system.id) || 0) === 0)
+      .sort(compareByRole)
+      .map((system) => system.id);
+
+    while (queue.length) {
+      const currentId = queue.shift();
+      if (processed.has(currentId)) continue;
+      processed.add(currentId);
+
+      outgoing.get(currentId).forEach((weight, targetId) => {
+        rankById.set(targetId, Math.max(rankById.get(targetId) || 0, (rankById.get(currentId) || 0) + 1));
+        indegreeRemaining.set(targetId, Math.max(0, (indegreeRemaining.get(targetId) || 0) - 1));
+        if ((indegreeRemaining.get(targetId) || 0) === 0) queue.push(targetId);
+      });
+
+      queue.sort((leftId, rightId) => compareByRole(systemsById.get(leftId), systemsById.get(rightId)));
+    }
+
+    systems
+      .map((system) => system.id)
+      .filter((systemId) => !processed.has(systemId))
+      .sort((leftId, rightId) => compareByRole(systemsById.get(leftId), systemsById.get(rightId)))
+      .forEach((systemId) => {
+        const incomingRanks = Array.from(incoming.get(systemId).keys())
+          .map((neighborId) => rankById.get(neighborId))
+          .filter(Number.isFinite);
+        const outgoingRanks = Array.from(outgoing.get(systemId).keys())
+          .map((neighborId) => rankById.get(neighborId))
+          .filter(Number.isFinite);
+
+        let resolvedRank = 0;
+        if (incomingRanks.length && outgoingRanks.length) {
+          const maxIncoming = Math.max(...incomingRanks);
+          const minOutgoing = Math.min(...outgoingRanks);
+          resolvedRank = minOutgoing > maxIncoming
+            ? Math.round((maxIncoming + minOutgoing) / 2)
+            : maxIncoming + 1;
+        } else if (incomingRanks.length) {
+          resolvedRank = Math.max(...incomingRanks) + 1;
+        } else if (outgoingRanks.length) {
+          resolvedRank = Math.max(0, Math.min(...outgoingRanks) - 1);
+        }
+        rankById.set(systemId, resolvedRank);
+      });
+
+    const minRank = Math.min(...systems.map((system) => rankById.get(system.id) || 0));
+    systems.forEach((system) => rankById.set(system.id, (rankById.get(system.id) || 0) - minRank));
+
+    const rankValues = [...new Set(systems.map((system) => rankById.get(system.id) || 0))].sort((left, right) => left - right);
+    const rankToColumn = new Map(rankValues.map((value, index) => [value, index]));
+    const columns = Array.from({ length: Math.max(1, rankValues.length) }, () => []);
+
+    systems.forEach((system) => {
+      columns[rankToColumn.get(rankById.get(system.id) || 0)].push(system);
+    });
+
+    const orderById = new Map();
+    const refreshOrder = () => {
+      orderById.clear();
+      columns.forEach((column, columnIndex) => {
+        column.forEach((system, rowIndex) => {
+          orderById.set(system.id, { columnIndex, rowIndex });
+        });
+      });
+    };
+
+    const weightedNeighborRow = (systemId, neighborMap, direction) => {
+      const ownPosition = orderById.get(systemId);
+      if (!ownPosition) return null;
+
+      let totalWeight = 0;
+      let totalRow = 0;
+      neighborMap.get(systemId).forEach((weight, neighborId) => {
+        const neighborPosition = orderById.get(neighborId);
+        if (!neighborPosition) return;
+        if (direction === 'incoming' && neighborPosition.columnIndex >= ownPosition.columnIndex) return;
+        if (direction === 'outgoing' && neighborPosition.columnIndex <= ownPosition.columnIndex) return;
+        totalWeight += weight || 1;
+        totalRow += neighborPosition.rowIndex * (weight || 1);
+      });
+
+      return totalWeight ? (totalRow / totalWeight) : null;
+    };
+
+    columns.forEach((column) => column.sort(compareByRole));
+    for (let iteration = 0; iteration < 6; iteration += 1) {
+      refreshOrder();
+      for (let columnIndex = 1; columnIndex < columns.length; columnIndex += 1) {
+        columns[columnIndex].sort((left, right) => {
+          const leftScore = weightedNeighborRow(left.id, incoming, 'incoming');
+          const rightScore = weightedNeighborRow(right.id, incoming, 'incoming');
+          if (leftScore !== null && rightScore !== null && leftScore !== rightScore) return leftScore - rightScore;
+          if (leftScore !== null && rightScore === null) return -1;
+          if (leftScore === null && rightScore !== null) return 1;
+          return compareByRole(left, right);
+        });
+      }
+
+      refreshOrder();
+      for (let columnIndex = columns.length - 2; columnIndex >= 0; columnIndex -= 1) {
+        columns[columnIndex].sort((left, right) => {
+          const leftScore = weightedNeighborRow(left.id, outgoing, 'outgoing');
+          const rightScore = weightedNeighborRow(right.id, outgoing, 'outgoing');
+          if (leftScore !== null && rightScore !== null && leftScore !== rightScore) return leftScore - rightScore;
+          if (leftScore !== null && rightScore === null) return -1;
+          if (leftScore === null && rightScore !== null) return 1;
+          return compareByRole(left, right);
+        });
+      }
+    }
+
+    const horizontalMargin = viewportWidth >= 1280 ? 52 : 36;
+    const verticalMargin = viewportHeight >= 900 ? 62 : 44;
+    const totalColumnWidth = columns.reduce((sum, column) => (
+      sum + Math.max(0, ...column.map((system) => sizeById.get(system.id).width))
+    ), 0);
+    const compactGap = columns.length > 6 ? 36 : columns.length > 4 ? 46 : 58;
+    const idealGap = columns.length > 1
+      ? Math.floor((viewportWidth - (horizontalMargin * 2) - totalColumnWidth) / Math.max(1, columns.length - 1))
+      : 0;
+    const minColumnGap = Math.max(32, compactGap);
+    const distributedGap = columns.length > 1
+      ? Math.max(minColumnGap, idealGap)
+      : 0;
+    const baseWidth = Math.max(
+      viewportWidth,
+      totalColumnWidth + (Math.max(0, columns.length - 1) * distributedGap) + (horizontalMargin * 2),
+    );
+    const requiredHeights = columns.map((column) => {
+      const totalBoxHeight = column.reduce((sum, system) => sum + sizeById.get(system.id).height, 0);
+      return totalBoxHeight + (Math.max(0, column.length - 1) * 44) + (verticalMargin * 2);
+    });
+    const baseHeight = Math.max(viewportHeight, ...requiredHeights);
+
+    const columnWidths = columns.map((column) => Math.max(0, ...column.map((system) => sizeById.get(system.id).width)));
+    const contentWidth = totalColumnWidth + (distributedGap * Math.max(0, columns.length - 1));
+    let columnCursor = horizontalMargin + Math.max(0, Math.round((baseWidth - (horizontalMargin * 2) - contentWidth) / 2));
+    const columnLefts = columnWidths.map((width) => {
+      const left = columnCursor;
+      columnCursor += width + distributedGap;
+      return left;
+    });
+
+    const positions = new Map();
+    columns.forEach((column, columnIndex) => {
+      const totalBoxHeight = column.reduce((sum, system) => sum + sizeById.get(system.id).height, 0);
+      const availableHeight = Math.max(0, baseHeight - (verticalMargin * 2));
+      const gap = column.length > 1
+        ? Math.max(42, Math.floor((availableHeight - totalBoxHeight) / (column.length - 1)))
+        : 0;
+      const contentHeight = totalBoxHeight + (gap * Math.max(0, column.length - 1));
+      let top = verticalMargin + Math.max(0, Math.round((availableHeight - contentHeight) / 2));
+
+      column.forEach((system) => {
+        const size = sizeById.get(system.id);
+        positions.set(system.id, {
+          left: Math.round(columnLefts[columnIndex] + ((columnWidths[columnIndex] - size.width) / 2)),
+          top: Math.round(top),
+          width: size.width,
+          height: size.height,
+          columnIndex,
+        });
+        top += size.height + gap;
+      });
+    });
+
+    return {
+      width: baseWidth,
+      height: baseHeight,
+      positions,
+    };
+  }
+
+  function purdueLevelValue(network) {
+    const levels = (network?.purdue_levels || [])
+      .map((level) => Number(level))
+      .filter((level) => Number.isInteger(level) && level >= 0 && level <= 5);
+    if (!levels.length) return null;
+    return Math.max(...levels);
+  }
+
+  function purdueLevelLabel(level) {
+    const labels = {
+      5: 'Nivel 5 · Empresa',
+      4: 'Nivel 4 · Sistemas corporativos',
+      3: 'Nivel 3 · Operaciones de planta',
+      2: 'Nivel 2 · Supervisión',
+      1: 'Nivel 1 · Control básico',
+      0: 'Nivel 0 · Proceso físico',
+    };
+    return labels[level] || `Nivel ${level}`;
+  }
+
+  function buildPurdueGroups(data) {
+    const groups = new Map();
+    const networksById = new Map((data?.networks || []).map((item) => [item.id, item]));
+    const visibleNetworkIds = new Set();
+
+    (data?.relations || []).forEach((relation) => {
+      if (relation.target_network_id) visibleNetworkIds.add(relation.target_network_id);
+      (relation.source_network_ids || []).forEach((networkId) => visibleNetworkIds.add(networkId));
+    });
+    (data?.origins || []).forEach((origin) => {
+      (origin.source_network_ids || []).forEach((networkId) => visibleNetworkIds.add(networkId));
+    });
+
+    (data?.networks || []).forEach((network) => {
+      if (!visibleNetworkIds.has(network.id) && !(network.origin_ids || []).length && !(network.critical_hosts || []).length) return;
+      const level = purdueLevelValue(network);
+      const groupId = level === null ? 'purdue:unknown' : `purdue:${level}`;
+      if (!groups.has(groupId)) {
+        groups.set(groupId, {
+          id: groupId,
+          level,
+          name: level === null ? 'Sin nivel Purdue' : purdueLevelLabel(level),
+          networks: [],
+          is_unknown: level === null,
+        });
+      }
+      groups.get(groupId).networks.push(networksById.get(network.id) || network);
+    });
+
+    return Array.from(groups.values()).sort((left, right) => {
+      if (left.is_unknown !== right.is_unknown) return left.is_unknown ? 1 : -1;
+      if (left.level !== right.level) return right.level - left.level;
+      return String(left.name).localeCompare(String(right.name));
+    });
+  }
+
+  function estimatePurdueGroupSize(group) {
+    const count = Math.max(1, group.networks.length);
+    return {
+      width: group.is_unknown ? 238 : 258,
+      height: Math.round(66 + (count * 72) + (Math.max(0, count - 1) * 12)),
+    };
+  }
+
+  function buildPurdueLayout(groups) {
+    const shell = document.getElementById('diagramShell');
+    const shellWidth = shell?.clientWidth || Math.max(720, (window.innerWidth || 0) - 64);
+    const shellHeight = shell?.clientHeight || Math.round((window.innerHeight || 920) * 0.72);
+    const viewportWidth = Math.max(720, shellWidth);
+    const viewportHeight = Math.max(760, shellHeight);
+    const sizes = new Map(groups.map((group) => [group.id, estimatePurdueGroupSize(group)]));
+    const marginX = viewportWidth >= 1280 ? 48 : 34;
+    const marginY = viewportHeight >= 900 ? 58 : 42;
+    const gap = groups.length > 5 ? 34 : 48;
+    const totalWidth = groups.reduce((sum, group) => sum + sizes.get(group.id).width, 0) + (Math.max(0, groups.length - 1) * gap);
+    const width = Math.max(viewportWidth, totalWidth + (marginX * 2));
+    const height = Math.max(
+      viewportHeight,
+      Math.max(0, ...groups.map((group) => sizes.get(group.id).height)) + (marginY * 2),
+    );
+    const positions = new Map();
+    let left = marginX + Math.max(0, Math.round((width - (marginX * 2) - totalWidth) / 2));
+
+    groups.forEach((group) => {
+      const size = sizes.get(group.id);
+      positions.set(group.id, {
+        left,
+        top: marginY + Math.max(0, Math.round((height - (marginY * 2) - size.height) / 2)),
+        width: size.width,
+        height: size.height,
+      });
+      left += size.width + gap;
+    });
+
+    return { width, height, positions };
+  }
+
+  function renderNetworkCard(network, origins) {
+    const originIps = sortIpValues(origins
+      .map((origin) => origin.ip)
+      .filter(Boolean));
+    const criticalHosts = [...(network.critical_hosts || [])]
+      .filter((host) => host?.ip)
+      .sort((left, right) => String(left.ip || '').localeCompare(String(right.ip || ''), undefined, { numeric: true }));
+
+    const originPreview = previewValues(originIps);
+    const criticalPreview = previewValues(criticalHosts.map((host) => host.ip));
+    const criticalHtml = criticalPreview ? `
+      <div class="visibility-network-critical" title="${escapeHtml(criticalHosts.map((host) => host.device_name ? `${host.ip} (${host.device_name})` : host.ip).join(' · '))}">
+        <span class="visibility-network-critical-label">Cr&iacute;tico</span>
+        <span class="visibility-network-critical-values">${escapeHtml(criticalPreview)}</span>
+        <span class="visibility-network-critical-star" aria-hidden="true">★</span>
+      </div>
+    ` : '';
+
+    return `
+      <article
+        class="visibility-network"
+        id="${nodeId(network.id)}"
+        data-network-id="${escapeHtml(network.id)}"
+        data-network-range="${escapeHtml(network.range)}"
+      >
+        <div class="visibility-network-origin-context" data-network-origin-context hidden></div>
+        <a class="visibility-network-result-link" data-network-results-link hidden href="#" title="Ver resultado" aria-label="Ver resultado">↗</a>
+        <div class="visibility-network-header">
+          <h4 class="visibility-network-title">${escapeHtml(network.display_name)}</h4>
+          <span class="visibility-network-target-count" data-network-target-count hidden></span>
+        </div>
+        <div class="visibility-network-meta">
+          <span class="visibility-network-range">${escapeHtml(network.range)}</span>
+          <div
+            class="visibility-network-origin"
+            data-network-origin
+            title="${escapeHtml(originIps.join(' · '))}"
+            ${originPreview ? '' : 'hidden'}
+          >
+            <span class="visibility-network-origin-label" data-network-origin-label>Origen</span>
+            <span class="visibility-network-origin-values" data-network-origin-values>${escapeHtml(originPreview)}</span>
+          </div>
+          ${criticalHtml}
+        </div>
+      </article>
+    `;
+  }
+
+  function buildResultsOverviewUrl(origin, network) {
+    if (!origin?.ip || !network?.range || network.range === 'Unknown') return '';
+    const params = new URLSearchParams();
+    params.set('organization', ORG_NAME);
+    params.set('source_ip', origin.ip);
+    params.set('target_range', network.range);
+    if ((origin.locations || []).length === 1) {
+      params.set('location', origin.locations[0]);
+    }
+    return `/pentest/${encodeURIComponent(ORG_NAME)}/recon/results?${params.toString()}`;
+  }
+
+  function criticalHostMap(data = currentDiagramData) {
+    return new Map((data?.critical_hosts || []).map((item) => [item.id, item]));
+  }
+
+  function selectedCriticalIpSet(data = currentDiagramData) {
+    const criticalsById = criticalHostMap(data);
+    return new Set(Array.from(selectedCriticalIds)
+      .map((criticalId) => criticalsById.get(criticalId)?.ip)
+      .filter(Boolean));
+  }
+
+  function layerExportLabel() {
+    const layers = layerOptions(currentDiagramData);
+    if (!layers.length) return 'Capas <strong>0/0</strong>';
+    const layerState = layers
+      .map((layer) => `${selectedLayerIds.has(layer.id) ? '✓' : '□'} ${layer.label}`)
+      .join(' · ');
+    return `Capas <strong>${escapeHtml(layerState)}</strong>`;
+  }
+
+  function renderedSystemIdForNetwork(networkId, networksById) {
+    const element = document.getElementById(nodeId(networkId));
+    const renderedSystem = element?.closest('[data-system-id]')?.dataset.systemId;
+    return renderedSystem || networksById.get(networkId)?.system_id;
+  }
+
+  function renderPurdueDiagram(data) {
+    const diagram = document.getElementById('visibilityDiagram');
+    const originsById = new Map((data?.origins || []).map((item) => [item.id, item]));
+    const groups = buildPurdueGroups(data);
+
+    if (!groups.length) {
+      currentLayout = null;
+      diagram.innerHTML = '<svg class="visibility-links" id="visibilityLinks" aria-hidden="true"></svg><div class="visibility-empty">Todav&iacute;a no hay redes suficientes para construir la vista Purdue.</div>';
+      return;
+    }
+
+    currentLayout = buildPurdueLayout(groups);
+
+    const groupsHtml = groups.map((group) => {
+      const layout = currentLayout.positions.get(group.id);
+      const networksHtml = group.networks
+        .slice()
+        .sort((left, right) => String(left.range || '').localeCompare(String(right.range || ''), undefined, { numeric: true }))
+        .map((network) => {
+          const origins = (network.origin_ids || [])
+            .map((originId) => originsById.get(originId))
+            .filter(Boolean);
+          return renderNetworkCard(network, origins);
+        }).join('');
 
       return `
-        <section class="system-column">
-          <div class="system-header">
-            <h3>${escapeHtml(system.name)}</h3>
-            <small>${systemNetworks.length} redes · ${systemDevices.length} electr&oacute;nica · ${systemCritical.length} cr&iacute;ticos</small>
+        <section
+          class="visibility-system ${group.is_unknown ? 'visibility-system--purdue-unknown' : 'visibility-system--purdue'}"
+          data-system-id="${escapeHtml(group.id)}"
+          style="left:${layout.left}px; top:${layout.top}px; width:${layout.width}px;"
+        >
+          <div class="visibility-system-header">
+            <h3>${escapeHtml(group.name)}</h3>
           </div>
-          <div class="system-content">
-            ${devicesHtml}
-            ${networksHtml}
-            ${criticalHtml}
-            ${emptyHtml}
+          <div class="visibility-system-content">
+            ${networksHtml || '<div class="visibility-empty">Sin redes.</div>'}
           </div>
         </section>
       `;
     }).join('');
 
     diagram.innerHTML = `
-      <svg class="vector-links" id="vectorLinks" aria-hidden="true"></svg>
-      <aside class="origin-lane">
-        <div class="lane-header">
-          <h3>Or&iacute;genes</h3>
-          <small>Vectores desde donde se ejecutaron pruebas</small>
-        </div>
-        <div class="origin-list">${originsHtml}</div>
-      </aside>
-      <main class="system-board">${systemHtml}</main>
+      <svg class="visibility-links" id="visibilityLinks" aria-hidden="true"></svg>
+      <div class="visibility-board" style="width:${currentLayout.width}px; height:${currentLayout.height}px;">
+        ${groupsHtml}
+      </div>
     `;
 
-    requestAnimationFrame(drawVectorLinks);
+    requestAnimationFrame(updateDiagramSelection);
   }
 
-  function drawVectorLinks() {
-    const diagram = document.getElementById('vectorDiagram');
-    const svg = document.getElementById('vectorLinks');
-    if (!diagram || !svg || !currentDiagramData) return;
+  function renderVisibilityDiagram(data) {
+    const diagram = document.getElementById('visibilityDiagram');
+    const networksById = new Map((data?.networks || []).map((item) => [item.id, item]));
+    const originsById = new Map((data?.origins || []).map((item) => [item.id, item]));
+    const systems = sortSystemsForDiagram(data);
+
+    if (purdueModeEnabled) {
+      renderPurdueDiagram(data);
+      return;
+    }
+
+    if (!systems.length || !(data?.networks || []).length) {
+      currentLayout = null;
+      diagram.innerHTML = '<svg class="visibility-links" id="visibilityLinks" aria-hidden="true"></svg><div class="visibility-empty">Todav&iacute;a no hay sistemas y redes suficientes para construir el diagrama.</div>';
+      return;
+    }
+
+    currentLayout = buildSystemLayout(data, systems);
+
+    const systemsHtml = systems.map((system) => {
+      const layout = currentLayout.positions.get(system.id);
+      const systemNetworks = (system.network_ids || [])
+        .map((networkId) => networksById.get(networkId))
+        .filter(Boolean);
+
+      const networksHtml = systemNetworks.length
+        ? systemNetworks.map((network) => {
+            const origins = (network.origin_ids || [])
+              .map((originId) => originsById.get(originId))
+              .filter(Boolean);
+            return renderNetworkCard(network, origins);
+          }).join('')
+        : '<div class="visibility-empty">Sistema sin redes.</div>';
+
+      return `
+        <section
+          class="visibility-system"
+          data-system-id="${escapeHtml(system.id)}"
+          style="left:${layout.left}px; top:${layout.top}px; width:${layout.width}px;"
+        >
+          <div class="visibility-system-header">
+            <h3>${escapeHtml(system.name)}</h3>
+          </div>
+          <div class="visibility-system-content">
+            ${networksHtml}
+          </div>
+        </section>
+      `;
+    }).join('');
+
+    diagram.innerHTML = `
+      <svg class="visibility-links" id="visibilityLinks" aria-hidden="true"></svg>
+      <div class="visibility-board" style="width:${currentLayout.width}px; height:${currentLayout.height}px;">
+        ${systemsHtml}
+      </div>
+    `;
+
+    requestAnimationFrame(updateDiagramSelection);
+  }
+
+  function rectToDiagramSpace(element, bounds, diagram) {
+    const rect = element.getBoundingClientRect();
+    return {
+      left: rect.left - bounds.left + diagram.scrollLeft,
+      right: rect.right - bounds.left + diagram.scrollLeft,
+      top: rect.top - bounds.top + diagram.scrollTop,
+      bottom: rect.bottom - bounds.top + diagram.scrollTop,
+      midX: rect.left - bounds.left + diagram.scrollLeft + (rect.width / 2),
+      midY: rect.top - bounds.top + diagram.scrollTop + (rect.height / 2),
+    };
+  }
+
+  function buildRoundedPath(points, radius = 26) {
+    if (!points.length) return '';
+    if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+    let path = `M ${points[0].x} ${points[0].y}`;
+
+    for (let index = 1; index < points.length; index += 1) {
+      const previous = points[index - 1];
+      const current = points[index];
+      const next = points[index + 1];
+
+      if (!next) {
+        path += ` L ${current.x} ${current.y}`;
+        continue;
+      }
+
+      const inDx = current.x - previous.x;
+      const inDy = current.y - previous.y;
+      const outDx = next.x - current.x;
+      const outDy = next.y - current.y;
+      const inLength = Math.hypot(inDx, inDy) || 0;
+      const outLength = Math.hypot(outDx, outDy) || 0;
+
+      if (!inLength || !outLength) {
+        path += ` L ${current.x} ${current.y}`;
+        continue;
+      }
+
+      const curveRadius = Math.min(radius, inLength / 2, outLength / 2);
+      if (curveRadius < 6) {
+        path += ` L ${current.x} ${current.y}`;
+        continue;
+      }
+
+      const entryPoint = {
+        x: current.x - ((inDx / inLength) * curveRadius),
+        y: current.y - ((inDy / inLength) * curveRadius),
+      };
+      const exitPoint = {
+        x: current.x + ((outDx / outLength) * curveRadius),
+        y: current.y + ((outDy / outLength) * curveRadius),
+      };
+
+      path += ` L ${entryPoint.x} ${entryPoint.y} Q ${current.x} ${current.y} ${exitPoint.x} ${exitPoint.y}`;
+    }
+
+    return path;
+  }
+
+  function isCollinearPoint(previous, current, next) {
+    return (
+      (previous.x === current.x && current.x === next.x) ||
+      (previous.y === current.y && current.y === next.y)
+    );
+  }
+
+  function normalizePath(points) {
+    const normalized = [];
+
+    points.forEach((point) => {
+      const rounded = {
+        x: Math.round(point.x),
+        y: Math.round(point.y),
+      };
+
+      if (!normalized.length) {
+        normalized.push(rounded);
+        return;
+      }
+
+      const last = normalized[normalized.length - 1];
+      if (last.x === rounded.x && last.y === rounded.y) return;
+
+      while (normalized.length >= 2 && isCollinearPoint(normalized[normalized.length - 2], normalized[normalized.length - 1], rounded)) {
+        normalized.pop();
+      }
+
+      normalized.push(rounded);
+    });
+
+    return normalized;
+  }
+
+  function segmentIntersectsRect(start, end, rect, padding = 16) {
+    if (start.x === end.x) {
+      const x = start.x;
+      if (x <= rect.left - padding || x >= rect.right + padding) return false;
+      const minY = Math.min(start.y, end.y);
+      const maxY = Math.max(start.y, end.y);
+      return maxY > rect.top - padding && minY < rect.bottom + padding;
+    }
+
+    if (start.y === end.y) {
+      const y = start.y;
+      if (y <= rect.top - padding || y >= rect.bottom + padding) return false;
+      const minX = Math.min(start.x, end.x);
+      const maxX = Math.max(start.x, end.x);
+      return maxX > rect.left - padding && minX < rect.right + padding;
+    }
+
+    return false;
+  }
+
+  function laneDepth(index, gap = 18) {
+    return index * gap;
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function systemSidePoints(networkRect, systemRect, side, laneDepthOffset = 0) {
+    const centerY = clamp(networkRect.midY, networkRect.top + 12, networkRect.bottom - 12);
+
+    if (side === 'left') {
+      return {
+        anchor: { x: networkRect.left - 6, y: centerY },
+        edge: { x: systemRect.left - 8, y: centerY },
+        exit: { x: systemRect.left - 26 - laneDepthOffset, y: centerY },
+      };
+    }
+
+    return {
+      anchor: { x: networkRect.right + 6, y: centerY },
+      edge: { x: systemRect.right + 8, y: centerY },
+      exit: { x: systemRect.right + 26 + laneDepthOffset, y: centerY },
+    };
+  }
+
+  function chooseSystemSides(sourceSystemRect, targetSystemRect) {
+    if (sourceSystemRect.id === targetSystemRect.id) {
+      const routeOnRight = sourceSystemRect.midX <= ((currentLayout?.width || 0) / 2);
+      return routeOnRight
+        ? { sourceSide: 'right', targetSide: 'right' }
+        : { sourceSide: 'left', targetSide: 'left' };
+    }
+
+    return targetSystemRect.midX >= sourceSystemRect.midX
+      ? { sourceSide: 'right', targetSide: 'left' }
+      : { sourceSide: 'left', targetSide: 'right' };
+  }
+
+  function addRoutingCoordinate(set, value, min, max) {
+    if (!Number.isFinite(value)) return;
+    set.add(Math.round(clamp(value, min, max)));
+  }
+
+  function buildRoutingGrid(descriptors, systemRects, width, height) {
+    const xCoords = new Set([18, Math.max(18, width - 18)]);
+    const yCoords = new Set([18, Math.max(18, height - 18)]);
+
+    systemRects.forEach((rect) => {
+      [
+        rect.left - 52,
+        rect.left - 32,
+        rect.right + 32,
+        rect.right + 52,
+      ].forEach((value) => addRoutingCoordinate(xCoords, value, 18, width - 18));
+
+      [
+        rect.top - 52,
+        rect.top - 32,
+        rect.bottom + 32,
+        rect.bottom + 52,
+      ].forEach((value) => addRoutingCoordinate(yCoords, value, 18, height - 18));
+    });
+
+    descriptors.forEach((descriptor) => {
+      [
+        descriptor.sourcePoints.edge.x,
+        descriptor.sourcePoints.exit.x,
+        descriptor.targetPoints.edge.x,
+        descriptor.targetPoints.exit.x,
+      ].forEach((value) => addRoutingCoordinate(xCoords, value, 18, width - 18));
+
+      [
+        descriptor.sourcePoints.edge.y,
+        descriptor.sourcePoints.exit.y,
+        descriptor.targetPoints.edge.y,
+        descriptor.targetPoints.exit.y,
+      ].forEach((value) => addRoutingCoordinate(yCoords, value, 18, height - 18));
+    });
+
+    return {
+      xCoords: [...xCoords].sort((left, right) => left - right),
+      yCoords: [...yCoords].sort((left, right) => left - right),
+    };
+  }
+
+  function segmentKey(start, end) {
+    const first = `${start.x},${start.y}`;
+    const second = `${end.x},${end.y}`;
+    return first < second ? `${first}|${second}` : `${second}|${first}`;
+  }
+
+  function isSegmentTraversable(start, end, blockedRects, cache) {
+    const key = segmentKey(start, end);
+    if (cache.has(key)) return cache.get(key);
+
+    const traversable = !blockedRects.some((rect) => segmentIntersectsRect(start, end, rect, 18));
+    cache.set(key, traversable);
+    return traversable;
+  }
+
+  function heapPush(heap, item) {
+    heap.push(item);
+    let index = heap.length - 1;
+
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      if (heap[parentIndex].priority <= heap[index].priority) break;
+      [heap[parentIndex], heap[index]] = [heap[index], heap[parentIndex]];
+      index = parentIndex;
+    }
+  }
+
+  function heapPop(heap) {
+    if (!heap.length) return null;
+    const first = heap[0];
+    const last = heap.pop();
+    if (!heap.length) return first;
+
+    heap[0] = last;
+    let index = 0;
+
+    while (true) {
+      const leftIndex = (index * 2) + 1;
+      const rightIndex = leftIndex + 1;
+      let smallest = index;
+
+      if (leftIndex < heap.length && heap[leftIndex].priority < heap[smallest].priority) smallest = leftIndex;
+      if (rightIndex < heap.length && heap[rightIndex].priority < heap[smallest].priority) smallest = rightIndex;
+      if (smallest === index) break;
+
+      [heap[index], heap[smallest]] = [heap[smallest], heap[index]];
+      index = smallest;
+    }
+
+    return first;
+  }
+
+  function reconstructRoutedPath(stateKey, cameFrom, xCoords, yCoords) {
+    const path = [];
+    let cursor = stateKey;
+
+    while (cursor) {
+      const [xIndex, yIndex] = cursor.split(':');
+      path.push({
+        x: xCoords[Number(xIndex)],
+        y: yCoords[Number(yIndex)],
+      });
+      cursor = cameFrom.get(cursor);
+    }
+
+    return normalizePath(path.reverse());
+  }
+
+  function routeOrthogonalGrid(start, end, routingGrid, blockedRects, usedSegments, traversableCache) {
+    const { xCoords, yCoords } = routingGrid;
+    const xIndexByValue = new Map(xCoords.map((value, index) => [value, index]));
+    const yIndexByValue = new Map(yCoords.map((value, index) => [value, index]));
+    const startXIndex = xIndexByValue.get(Math.round(start.x));
+    const startYIndex = yIndexByValue.get(Math.round(start.y));
+    const endXIndex = xIndexByValue.get(Math.round(end.x));
+    const endYIndex = yIndexByValue.get(Math.round(end.y));
+
+    if (startXIndex === undefined || startYIndex === undefined || endXIndex === undefined || endYIndex === undefined) {
+      return [];
+    }
+
+    const heuristic = (xIndex, yIndex) => (
+      Math.abs(xCoords[xIndex] - end.x) + Math.abs(yCoords[yIndex] - end.y)
+    );
+    const makeKey = (xIndex, yIndex, direction) => `${xIndex}:${yIndex}:${direction}`;
+    const open = [];
+    const cameFrom = new Map();
+    const bestCost = new Map();
+    const startKey = makeKey(startXIndex, startYIndex, 'S');
+
+    bestCost.set(startKey, 0);
+    heapPush(open, {
+      key: startKey,
+      xIndex: startXIndex,
+      yIndex: startYIndex,
+      direction: 'S',
+      cost: 0,
+      priority: heuristic(startXIndex, startYIndex),
+    });
+
+    while (open.length) {
+      const current = heapPop(open);
+      if (!current || current.cost > (bestCost.get(current.key) ?? Infinity)) continue;
+
+      if (current.xIndex === endXIndex && current.yIndex === endYIndex) {
+        return reconstructRoutedPath(current.key, cameFrom, xCoords, yCoords);
+      }
+
+      const currentPoint = {
+        x: xCoords[current.xIndex],
+        y: yCoords[current.yIndex],
+      };
+      const neighbors = [];
+
+      if (current.xIndex > 0) neighbors.push({ xIndex: current.xIndex - 1, yIndex: current.yIndex, direction: 'H' });
+      if (current.xIndex < xCoords.length - 1) neighbors.push({ xIndex: current.xIndex + 1, yIndex: current.yIndex, direction: 'H' });
+      if (current.yIndex > 0) neighbors.push({ xIndex: current.xIndex, yIndex: current.yIndex - 1, direction: 'V' });
+      if (current.yIndex < yCoords.length - 1) neighbors.push({ xIndex: current.xIndex, yIndex: current.yIndex + 1, direction: 'V' });
+
+      neighbors.forEach((neighbor) => {
+        const neighborPoint = {
+          x: xCoords[neighbor.xIndex],
+          y: yCoords[neighbor.yIndex],
+        };
+        if (!isSegmentTraversable(currentPoint, neighborPoint, blockedRects, traversableCache)) return;
+
+        const stepLength = Math.abs(neighborPoint.x - currentPoint.x) + Math.abs(neighborPoint.y - currentPoint.y);
+        const turnPenalty = current.direction !== 'S' && current.direction !== neighbor.direction ? 320 : 0;
+        const overlapPenalty = (usedSegments.get(segmentKey(currentPoint, neighborPoint)) || 0) * 1800;
+        const nextCost = current.cost + stepLength + turnPenalty + overlapPenalty;
+        const nextKey = makeKey(neighbor.xIndex, neighbor.yIndex, neighbor.direction);
+
+        if (nextCost >= (bestCost.get(nextKey) ?? Infinity)) return;
+
+        bestCost.set(nextKey, nextCost);
+        cameFrom.set(nextKey, current.key);
+        heapPush(open, {
+          key: nextKey,
+          xIndex: neighbor.xIndex,
+          yIndex: neighbor.yIndex,
+          direction: neighbor.direction,
+          cost: nextCost,
+          priority: nextCost + heuristic(neighbor.xIndex, neighbor.yIndex),
+        });
+      });
+    }
+
+    return [];
+  }
+
+  function markRouteSegments(points, usedSegments) {
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const key = segmentKey(points[index], points[index + 1]);
+      usedSegments.set(key, (usedSegments.get(key) || 0) + 1);
+    }
+  }
+
+  function pathLength(points) {
+    let length = 0;
+    for (let index = 0; index < points.length - 1; index += 1) {
+      length += Math.abs(points[index + 1].x - points[index].x) + Math.abs(points[index + 1].y - points[index].y);
+    }
+    return length;
+  }
+
+  function bestSingleBendPath(start, end, blockedRects, traversableCache) {
+    const candidates = [];
+
+    if ((start.x === end.x || start.y === end.y) && isSegmentTraversable(start, end, blockedRects, traversableCache)) {
+      candidates.push([start, end]);
+    }
+
+    [
+      { x: start.x, y: end.y },
+      { x: end.x, y: start.y },
+    ].forEach((bend) => {
+      const firstOk = (bend.x === start.x && bend.y === start.y) || isSegmentTraversable(start, bend, blockedRects, traversableCache);
+      const secondOk = (bend.x === end.x && bend.y === end.y) || isSegmentTraversable(bend, end, blockedRects, traversableCache);
+      if (firstOk && secondOk) candidates.push(normalizePath([start, bend, end]));
+    });
+
+    if (!candidates.length) return [];
+
+    return candidates.sort((left, right) => {
+      if (left.length !== right.length) return left.length - right.length;
+      return pathLength(left) - pathLength(right);
+    })[0];
+  }
+
+  function simplifyOrthogonalPath(points, blockedRects, traversableCache) {
+    let simplified = normalizePath(points);
+    let changed = true;
+
+    while (changed) {
+      changed = false;
+
+      for (let startIndex = 0; startIndex < simplified.length - 2 && !changed; startIndex += 1) {
+        for (let endIndex = simplified.length - 1; endIndex >= startIndex + 2; endIndex -= 1) {
+          const replacement = bestSingleBendPath(
+            simplified[startIndex],
+            simplified[endIndex],
+            blockedRects,
+            traversableCache,
+          );
+          if (!replacement.length) continue;
+
+          const currentSlice = simplified.slice(startIndex, endIndex + 1);
+          if (replacement.length > currentSlice.length) continue;
+          if (replacement.length === currentSlice.length && pathLength(replacement) >= pathLength(currentSlice)) continue;
+
+          simplified = normalizePath([
+            ...simplified.slice(0, startIndex),
+            ...replacement,
+            ...simplified.slice(endIndex + 1),
+          ]);
+          changed = true;
+          break;
+        }
+      }
+    }
+
+    return simplified;
+  }
+
+  function drawVisibilityLinks(selectedLinks) {
+    const diagram = document.getElementById('visibilityDiagram');
+    const svg = document.getElementById('visibilityLinks');
+    if (!diagram || !svg) return;
 
     const bounds = diagram.getBoundingClientRect();
     const width = Math.max(diagram.scrollWidth, bounds.width);
@@ -446,54 +2612,1183 @@
     svg.setAttribute('height', height);
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     svg.innerHTML = '';
-    const showInferred = Boolean(document.getElementById('showInferredLinks')?.checked);
 
-    (currentDiagramData.links || []).forEach(link => {
-      if (link.type === 'scan_target' && !showInferred) return;
-      const source = document.getElementById(nodeId(link.source));
-      const target = document.getElementById(nodeId(link.target));
-      if (!source || !target) return;
+    const systemRects = Array.from(diagram.querySelectorAll('[data-system-id]')).map((element) => ({
+      id: element.dataset.systemId,
+      ...rectToDiagramSpace(element, bounds, diagram),
+    }));
+    const systemRectsById = new Map(systemRects.map((rect) => [rect.id, rect]));
 
-      const sourceRect = source.getBoundingClientRect();
-      const targetRect = target.getBoundingClientRect();
-      const x1 = sourceRect.right - bounds.left + diagram.scrollLeft;
-      const y1 = sourceRect.top + sourceRect.height / 2 - bounds.top + diagram.scrollTop;
-      const x2 = targetRect.left - bounds.left + diagram.scrollLeft;
-      const y2 = targetRect.top + targetRect.height / 2 - bounds.top + diagram.scrollTop;
-      const mid = Math.max(60, Math.abs(x2 - x1) * 0.45);
+    const descriptors = [];
+
+    selectedLinks.forEach((link) => {
+      const sourceElement = document.getElementById(nodeId(link.source_network_id));
+      const targetElement = document.getElementById(nodeId(link.target_network_id));
+      if (!sourceElement || !targetElement) return;
+
+      const sourceSystem = sourceElement.closest('[data-system-id]');
+      const targetSystem = targetElement.closest('[data-system-id]');
+      if (!sourceSystem || !targetSystem) return;
+
+      const sourceRect = rectToDiagramSpace(sourceElement, bounds, diagram);
+      const targetRect = rectToDiagramSpace(targetElement, bounds, diagram);
+      const sourceSystemRect = systemRectsById.get(sourceSystem.dataset.systemId);
+      const targetSystemRect = systemRectsById.get(targetSystem.dataset.systemId);
+      if (!sourceSystemRect || !targetSystemRect) return;
+
+      const { sourceSide, targetSide } = chooseSystemSides(sourceSystemRect, targetSystemRect);
+      descriptors.push({
+        link,
+        sourceElement,
+        targetElement,
+        sourceRect,
+        targetRect,
+        sourceSystemId: sourceSystem.dataset.systemId,
+        targetSystemId: targetSystem.dataset.systemId,
+        sourceSystemRect,
+        targetSystemRect,
+        sourceSide,
+        targetSide,
+        sourceLaneDepth: 0,
+        targetLaneDepth: 0,
+      });
+    });
+
+    const sourceLaneGroups = new Map();
+    const targetLaneGroups = new Map();
+
+    descriptors.forEach((descriptor) => {
+      const sourceKey = `${descriptor.sourceSystemId}:${descriptor.sourceSide}`;
+      const targetKey = `${descriptor.targetSystemId}:${descriptor.targetSide}`;
+      if (!sourceLaneGroups.has(sourceKey)) sourceLaneGroups.set(sourceKey, []);
+      if (!targetLaneGroups.has(targetKey)) targetLaneGroups.set(targetKey, []);
+      sourceLaneGroups.get(sourceKey).push(descriptor);
+      targetLaneGroups.get(targetKey).push(descriptor);
+    });
+
+    sourceLaneGroups.forEach((group) => {
+      group.sort((left, right) => left.targetRect.midY - right.targetRect.midY || left.sourceRect.midY - right.sourceRect.midY);
+      group.forEach((descriptor, index) => {
+        descriptor.sourceLaneDepth = laneDepth(index, 16);
+      });
+    });
+
+    targetLaneGroups.forEach((group) => {
+      group.sort((left, right) => left.sourceRect.midY - right.sourceRect.midY || left.targetRect.midY - right.targetRect.midY);
+      group.forEach((descriptor, index) => {
+        descriptor.targetLaneDepth = laneDepth(index, 16);
+      });
+    });
+
+    descriptors.forEach((descriptor) => {
+      descriptor.sourcePoints = systemSidePoints(
+        descriptor.sourceRect,
+        descriptor.sourceSystemRect,
+        descriptor.sourceSide,
+        descriptor.sourceLaneDepth,
+      );
+      descriptor.targetPoints = systemSidePoints(
+        descriptor.targetRect,
+        descriptor.targetSystemRect,
+        descriptor.targetSide,
+        descriptor.targetLaneDepth,
+      );
+    });
+
+    const routingGrid = buildRoutingGrid(descriptors, systemRects, width, height);
+    const usedSegments = new Map();
+    const traversableCache = new Map();
+
+    descriptors
+      .sort((left, right) => {
+        const horizontalSpan = Math.abs(right.sourceSystemRect.midX - right.targetSystemRect.midX)
+          - Math.abs(left.sourceSystemRect.midX - left.targetSystemRect.midX);
+        if (horizontalSpan !== 0) return horizontalSpan;
+        const rightWeight = (right.link.visible_host_count || 0) + (right.link.scan_count || 0);
+        const leftWeight = (left.link.visible_host_count || 0) + (left.link.scan_count || 0);
+        return rightWeight - leftWeight;
+      })
+      .forEach((descriptor) => {
+      const outerPath = routeOrthogonalGrid(
+        descriptor.sourcePoints.exit,
+        descriptor.targetPoints.exit,
+        routingGrid,
+        systemRects,
+        usedSegments,
+        traversableCache,
+      );
+      if (!outerPath.length) return;
+      const simplifiedOuterPath = simplifyOrthogonalPath(outerPath, systemRects, traversableCache);
+      markRouteSegments(simplifiedOuterPath, usedSegments);
+
+      const pathPoints = normalizePath([
+        descriptor.sourcePoints.anchor,
+        descriptor.sourcePoints.edge,
+        ...simplifiedOuterPath,
+        descriptor.targetPoints.edge,
+        descriptor.targetPoints.anchor,
+      ]);
+
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', `M ${x1} ${y1} C ${x1 + mid} ${y1}, ${x2 - mid} ${y2}, ${x2} ${y2}`);
-      path.dataset.type = link.type || '';
+      path.setAttribute('d', buildRoundedPath(pathPoints));
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      title.textContent = `${descriptor.link.origin_count || 0} origen(es) · ${descriptor.link.visible_host_count || 0} host(s) visibles · ${descriptor.link.scan_count || 0} escaneo(s)`;
+      path.appendChild(title);
       svg.appendChild(path);
     });
   }
 
-  async function loadAccessVectorDiagram() {
-    const diagram = document.getElementById('vectorDiagram');
-    diagram.innerHTML = '<svg class="vector-links" id="vectorLinks" aria-hidden="true"></svg><div class="vector-empty">Cargando diagrama...</div>';
-    try {
-      const response = await fetch(`/api/access-vector-diagram?organization=${encodeURIComponent(ORG_NAME)}`);
-      if (!response.ok) throw new Error(await response.text());
-      renderAccessVectorDiagram(await response.json());
-    } catch (error) {
-      console.error(error);
-      diagram.innerHTML = '<svg class="vector-links" id="vectorLinks" aria-hidden="true"></svg><div class="vector-empty">No se pudo cargar el diagrama.</div>';
+  function relationMatchesCurrentSelection(
+    relation,
+    originFilterApplied = isOriginFilterApplied(),
+    destinationFilterApplied = isDestinationFilterApplied(),
+    criticalFilterApplied = isCriticalFilterApplied(),
+    layerFilterApplied = isLayerFilterApplied(),
+    criticalIps = null,
+  ) {
+    if (originFilterApplied && !selectedOriginIds.has(relation.source_origin_id)) return false;
+    if (destinationFilterApplied && !selectedDestinationIds.has(relation.target_network_id)) return false;
+    if (layerFilterApplied && !(relation.layer_keys || []).some((layerId) => selectedLayerIds.has(layerId))) return false;
+    if (criticalFilterApplied) {
+      const targetIps = relationLayerSlice(relation, layerFilterApplied).targetIps;
+      if (!targetIps.some((targetIp) => criticalIps?.has(targetIp))) return false;
+    }
+    return true;
+  }
+
+  function relationLayerSlice(relation, layerFilterApplied = isLayerFilterApplied()) {
+    if (!layerFilterApplied) {
+      return {
+        targetIps: relation.target_ips || [],
+        scanIds: relation.scan_ids || [],
+      };
+    }
+
+    const targetIps = new Set();
+    const scanIds = new Set();
+
+    Array.from(selectedLayerIds).forEach((layerId) => {
+      const layerEntry = relation.layers?.[layerId];
+      if (!layerEntry) return;
+      (layerEntry.target_ips || []).forEach((targetIp) => targetIps.add(targetIp));
+      (layerEntry.scan_ids || []).forEach((scanId) => scanIds.add(scanId));
+    });
+
+    return {
+      targetIps: sortIpValues(targetIps),
+      scanIds: [...scanIds],
+    };
+  }
+
+  function destinationMetricsForCurrentState() {
+    const metrics = new Map();
+    if (!currentDiagramData || !isOriginFilterApplied()) return metrics;
+
+    const networksById = networkMap();
+    const layerFilterApplied = isLayerFilterApplied();
+    (currentDiagramData.relations || []).forEach((relation) => {
+      if (!relationMatchesCurrentSelection(relation, true, false, false, layerFilterApplied, null)) return;
+
+      const targetNetwork = networksById.get(relation.target_network_id);
+      if (!targetNetwork) return;
+
+      if (!metrics.has(relation.target_network_id)) {
+        metrics.set(relation.target_network_id, {
+          visibleIps: new Set(),
+          totalHostCount: Number(targetNetwork.known_host_count) || 0,
+        });
+      }
+
+      const entry = metrics.get(relation.target_network_id);
+      const relationSlice = relationLayerSlice(relation, layerFilterApplied);
+      if (Array.isArray(relationSlice.targetIps) && relationSlice.targetIps.length) {
+        relationSlice.targetIps.forEach((targetIp) => entry.visibleIps.add(targetIp));
+      } else {
+        for (let index = 0; index < (relation.visible_host_count || 0); index += 1) {
+          entry.visibleIps.add(`${relation.id}:${index}`);
+        }
+      }
+    });
+
+    return new Map(Array.from(metrics.entries()).map(([networkId, entry]) => [
+      networkId,
+      {
+        visibleHostCount: entry.visibleIps.size,
+        totalHostCount: Math.max(entry.visibleIps.size, entry.totalHostCount || 0),
+      },
+    ]));
+  }
+
+  function selectedLinksForCurrentState() {
+    const links = new Map();
+    const originFilterApplied = isOriginFilterApplied();
+    const destinationFilterApplied = isDestinationFilterApplied();
+    const criticalFilterApplied = isCriticalFilterApplied();
+    const layerFilterApplied = isLayerFilterApplied();
+    const criticalIps = criticalFilterApplied ? selectedCriticalIpSet() : null;
+
+    (currentDiagramData?.relations || []).forEach((relation) => {
+      if (!relationMatchesCurrentSelection(relation, originFilterApplied, destinationFilterApplied, criticalFilterApplied, layerFilterApplied, criticalIps)) return;
+      const relationSlice = relationLayerSlice(relation, layerFilterApplied);
+      const matchedTargetIps = criticalFilterApplied
+        ? (relationSlice.targetIps || []).filter((targetIp) => criticalIps.has(targetIp))
+        : (relationSlice.targetIps || []);
+
+      (relation.source_network_ids || []).forEach((sourceNetworkId) => {
+        if (!sourceNetworkId || sourceNetworkId === relation.target_network_id) return;
+        const key = `${sourceNetworkId}::${relation.target_network_id}`;
+        if (!links.has(key)) {
+          links.set(key, {
+            source_network_id: sourceNetworkId,
+            target_network_id: relation.target_network_id,
+            origin_ids: new Set(),
+            scan_ids: new Set(),
+            target_ips: new Set(),
+            scan_count: 0,
+            visible_host_count: 0,
+          });
+        }
+
+        const link = links.get(key);
+        link.origin_ids.add(relation.source_origin_id);
+        link.visible_host_count += matchedTargetIps.length || relation.visible_host_count || 0;
+        (relationSlice.scanIds || []).forEach((scanId) => link.scan_ids.add(scanId));
+        matchedTargetIps.forEach((targetIp) => link.target_ips.add(targetIp));
+      });
+    });
+
+    return Array.from(links.values()).map((link) => ({
+      ...link,
+      origin_count: link.origin_ids.size,
+      scan_count: link.scan_ids.size || link.scan_count,
+      visible_host_count: link.target_ips.size || link.visible_host_count,
+    }));
+  }
+
+  function refreshLinkPositions() {
+    if (!currentDiagramData) return;
+    drawVisibilityLinks(selectedLinksForCurrentState());
+  }
+
+  function ensureNetworkOriginContext(contextMap, networkId) {
+    if (!contextMap.has(networkId)) {
+      contextMap.set(networkId, {
+        sourceOriginIps: new Set(),
+        targetOriginIps: new Set(),
+        selectedPhysicalOrigins: new Set(),
+      });
+    }
+    return contextMap.get(networkId);
+  }
+
+  function applyNetworkOriginBadge(element, network, originsById, networkContext) {
+    const originBadge = element.querySelector('[data-network-origin]');
+    const originLabel = element.querySelector('[data-network-origin-label]');
+    const originValues = element.querySelector('[data-network-origin-values]');
+    const originContextTag = element.querySelector('[data-network-origin-context]');
+
+    const defaultOriginIps = sortIpValues(
+      (network?.origin_ids || [])
+        .map((originId) => originsById.get(originId)?.ip)
+        .filter(Boolean),
+    );
+    const sourceOriginIps = sortIpValues(networkContext?.sourceOriginIps || []);
+    const targetOriginIps = sortIpValues(networkContext?.targetOriginIps || []);
+    const physicalOrigins = [...(networkContext?.selectedPhysicalOrigins || [])]
+      .filter(Boolean)
+      .sort((left, right) => String(left).localeCompare(String(right)));
+
+    let badgeMode = 'default';
+    let displayIps = defaultOriginIps;
+    if (sourceOriginIps.length) {
+      badgeMode = 'source';
+      displayIps = sourceOriginIps;
+    } else if (targetOriginIps.length) {
+      badgeMode = 'target';
+      displayIps = targetOriginIps;
+    }
+
+    if (originBadge && originLabel && originValues) {
+      originBadge.classList.toggle('visibility-network-origin--source-focus', badgeMode === 'source');
+      originBadge.classList.toggle('visibility-network-origin--target-context', badgeMode === 'target');
+
+      if (displayIps.length) {
+        originBadge.hidden = false;
+        originBadge.title = displayIps.join(' · ');
+        originLabel.textContent = badgeMode === 'target' ? 'Desde' : 'Origen';
+        originValues.textContent = previewValues(displayIps);
+      } else {
+        originBadge.hidden = true;
+        originBadge.removeAttribute('title');
+        originValues.textContent = '';
+      }
+    }
+
+    const physicalPreview = previewValues(physicalOrigins, 1);
+    element.classList.toggle('visibility-network--origin-physical', Boolean(physicalPreview));
+    if (originContextTag) {
+      if (physicalPreview) {
+        originContextTag.hidden = false;
+        originContextTag.textContent = physicalPreview;
+        originContextTag.title = physicalOrigins.join(' · ');
+      } else {
+        originContextTag.hidden = true;
+        originContextTag.textContent = '';
+        originContextTag.removeAttribute('title');
+      }
     }
   }
 
-  function exportVectorJson() {
+  function updateDiagramSelection() {
     if (!currentDiagramData) return;
-    const blob = new Blob([JSON.stringify(currentDiagramData, null, 2)], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `diagrama_vectores_${ORG_NAME.toLowerCase()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+
+    const originsById = originMap();
+    const networksById = networkMap();
+    const selectedLinks = selectedLinksForCurrentState();
+    const activeNetworkIds = new Set();
+    const sourceNetworkIds = new Set();
+    const targetNetworkIds = new Set();
+    const sourceSystemIds = new Set();
+    const targetSystemIds = new Set();
+    const originFilterApplied = isOriginFilterApplied();
+    const destinationFilterApplied = isDestinationFilterApplied();
+    const criticalFilterApplied = isCriticalFilterApplied();
+    const destinationMetrics = destinationMetricsForCurrentState();
+    const singleSelectedOrigin = originFilterApplied && selectedOriginIds.size === 1
+      ? originsById.get(Array.from(selectedOriginIds)[0])
+      : null;
+    const criticalsById = criticalHostMap();
+    const networkOriginContext = new Map();
+    const hasFocusedSelection = originFilterApplied || destinationFilterApplied || criticalFilterApplied;
+
+    if (originFilterApplied) {
+      Array.from(selectedOriginIds).forEach((originId) => {
+        const origin = originsById.get(originId);
+        const physicalOriginLabel = originGroupLabel(origin || {});
+        (origin?.source_network_ids || []).forEach((networkId) => {
+          sourceNetworkIds.add(networkId);
+          activeNetworkIds.add(networkId);
+          const systemId = renderedSystemIdForNetwork(networkId, networksById);
+          if (systemId) sourceSystemIds.add(systemId);
+          const contextEntry = ensureNetworkOriginContext(networkOriginContext, networkId);
+          if (origin?.ip) contextEntry.sourceOriginIps.add(origin.ip);
+          if (physicalOriginLabel) contextEntry.selectedPhysicalOrigins.add(physicalOriginLabel);
+        });
+      });
+    }
+
+    if (destinationFilterApplied) {
+      Array.from(selectedDestinationIds).forEach((networkId) => {
+        targetNetworkIds.add(networkId);
+        activeNetworkIds.add(networkId);
+        const systemId = renderedSystemIdForNetwork(networkId, networksById);
+        if (systemId) targetSystemIds.add(systemId);
+      });
+    }
+
+    if (criticalFilterApplied) {
+      Array.from(selectedCriticalIds).forEach((criticalId) => {
+        const criticalHost = criticalsById.get(criticalId);
+        (criticalHost?.network_ids || []).forEach((networkId) => {
+          targetNetworkIds.add(networkId);
+          activeNetworkIds.add(networkId);
+          const systemId = renderedSystemIdForNetwork(networkId, networksById);
+          if (systemId) targetSystemIds.add(systemId);
+        });
+      });
+    }
+
+    selectedLinks.forEach((link) => {
+      sourceNetworkIds.add(link.source_network_id);
+      targetNetworkIds.add(link.target_network_id);
+      activeNetworkIds.add(link.source_network_id);
+      activeNetworkIds.add(link.target_network_id);
+
+      const sourceSystemId = renderedSystemIdForNetwork(link.source_network_id, networksById);
+      const targetSystemId = renderedSystemIdForNetwork(link.target_network_id, networksById);
+
+      if (sourceSystemId) sourceSystemIds.add(sourceSystemId);
+      if (targetSystemId) targetSystemIds.add(targetSystemId);
+
+      if (hasFocusedSelection) {
+        Array.from(link.origin_ids || []).forEach((originId) => {
+          const origin = originsById.get(originId);
+          if (!origin?.ip) return;
+          ensureNetworkOriginContext(networkOriginContext, link.source_network_id).sourceOriginIps.add(origin.ip);
+          ensureNetworkOriginContext(networkOriginContext, link.target_network_id).targetOriginIps.add(origin.ip);
+        });
+      }
+    });
+
+    document.querySelectorAll('[data-network-id]').forEach((element) => {
+      const networkId = element.dataset.networkId;
+      element.classList.toggle('visibility-network--active', activeNetworkIds.has(networkId));
+      element.classList.toggle('visibility-network--source', sourceNetworkIds.has(networkId));
+      element.classList.toggle('visibility-network--target', targetNetworkIds.has(networkId));
+      applyNetworkOriginBadge(
+        element,
+        networksById.get(networkId),
+        originsById,
+        networkOriginContext.get(networkId),
+      );
+
+      const metric = destinationMetrics.get(networkId);
+      const countBadge = element.querySelector('[data-network-target-count]');
+      if (countBadge) {
+        if (metric && metric.visibleHostCount > 0) {
+          countBadge.textContent = `${metric.visibleHostCount}/${metric.totalHostCount}`;
+          countBadge.hidden = false;
+        } else {
+          countBadge.hidden = true;
+        }
+      }
+
+      const resultsLink = element.querySelector('[data-network-results-link]');
+      if (resultsLink) {
+        const network = networksById.get(networkId);
+        const resultsUrl = metric && singleSelectedOrigin ? buildResultsOverviewUrl(singleSelectedOrigin, network) : '';
+        if (resultsUrl) {
+          resultsLink.href = resultsUrl;
+          resultsLink.hidden = false;
+        } else {
+          resultsLink.hidden = true;
+          resultsLink.removeAttribute('href');
+        }
+      }
+    });
+
+    document.querySelectorAll('[data-system-id]').forEach((element) => {
+      const systemId = element.dataset.systemId;
+      const isActive = Array.from(element.querySelectorAll('[data-network-id]'))
+        .some((networkElement) => activeNetworkIds.has(networkElement.dataset.networkId));
+      element.classList.toggle('visibility-system--active', isActive);
+      element.classList.toggle('visibility-system--source', sourceSystemIds.has(systemId));
+      element.classList.toggle('visibility-system--target', targetSystemIds.has(systemId));
+    });
+
+    requestAnimationFrame(refreshLinkPositions);
   }
 
-  window.addEventListener('resize', () => requestAnimationFrame(drawVectorLinks));
-  document.getElementById('diagramShell').addEventListener('scroll', () => requestAnimationFrame(drawVectorLinks));
-  document.addEventListener('DOMContentLoaded', loadAccessVectorDiagram);
+  function selectVisibleOrigins() {
+    if (!currentDiagramData) return;
+    setFilterMode('origin');
+    getFilteredOrigins(currentDiagramData.origins || []).forEach((origin) => selectedOriginIds.add(origin.id));
+    renderOriginFilters(currentDiagramData);
+    updateDiagramSelection();
+  }
+
+  function clearOriginSelection() {
+    setFilterMode('origin');
+    selectedOriginIds.clear();
+    renderOriginFilters(currentDiagramData);
+    updateDiagramSelection();
+  }
+
+  function selectVisibleDestinations() {
+    if (!currentDiagramData) return;
+    setFilterMode('destination');
+    getFilteredDestinations(destinationOptions(currentDiagramData)).forEach((destination) => selectedDestinationIds.add(destination.id));
+    renderDestinationFilters(currentDiagramData);
+    updateDiagramSelection();
+  }
+
+  function clearDestinationSelection() {
+    setFilterMode('destination');
+    selectedDestinationIds.clear();
+    renderDestinationFilters(currentDiagramData);
+    updateDiagramSelection();
+  }
+
+  function selectVisibleCriticals() {
+    if (!currentDiagramData) return;
+    setFilterMode('critical');
+    getFilteredCriticalHosts(criticalOptions(currentDiagramData)).forEach((criticalHost) => selectedCriticalIds.add(criticalHost.id));
+    renderCriticalFilters(currentDiagramData);
+    updateDiagramSelection();
+  }
+
+  function clearCriticalSelection() {
+    setFilterMode('critical');
+    selectedCriticalIds.clear();
+    renderCriticalFilters(currentDiagramData);
+    updateDiagramSelection();
+  }
+
+  function selectAllLayers() {
+    if (!currentDiagramData) return;
+    selectedLayerIds = new Set(layerOptions(currentDiagramData).map((layer) => layer.id));
+    renderLayerFilters(currentDiagramData);
+    updateDiagramSelection();
+  }
+
+  function clearLayerSelection() {
+    selectedLayerIds.clear();
+    renderLayerFilters(currentDiagramData);
+    updateDiagramSelection();
+  }
+
+  function togglePurdueMode() {
+    purdueModeEnabled = !purdueModeEnabled;
+    updateModeControls();
+    if (currentDiagramData) {
+      renderVisibilityDiagram(currentDiagramData);
+    }
+  }
+
+  async function loadAccessVectorDiagram() {
+    const diagram = document.getElementById('visibilityDiagram');
+    const originFilters = document.getElementById('originFilters');
+    const destinationFilters = document.getElementById('destinationFilters');
+    const criticalFilters = document.getElementById('criticalFilters');
+    const layerFilters = document.getElementById('layerFilters');
+    const originSummary = document.getElementById('originSelectionSummary');
+    const destinationSummary = document.getElementById('destinationSelectionSummary');
+    const criticalSummary = document.getElementById('criticalSelectionSummary');
+    const layerSummary = document.getElementById('layerSelectionSummary');
+    const previousOriginTotal = currentDiagramData?.origins?.length || 0;
+    const previousDestinationTotal = destinationOptions(currentDiagramData).length;
+    const previousCriticalTotal = criticalOptions(currentDiagramData).length;
+    const previousLayerTotal = layerOptions(currentDiagramData).length;
+
+    diagram.innerHTML = '<svg class="visibility-links" id="visibilityLinks" aria-hidden="true"></svg><div class="visibility-empty">Cargando diagrama...</div>';
+    originFilters.innerHTML = '<div class="visibility-empty">Cargando or&iacute;genes...</div>';
+    destinationFilters.innerHTML = '<div class="visibility-empty">Cargando destinos...</div>';
+    criticalFilters.innerHTML = '<div class="visibility-empty">Cargando cr&iacute;ticos...</div>';
+    layerFilters.innerHTML = '<span class="visibility-empty">Cargando capas...</span>';
+    originSummary.textContent = 'Cargando orígenes...';
+    destinationSummary.textContent = 'Cargando destinos...';
+    criticalSummary.textContent = 'Cargando críticos...';
+    layerSummary.textContent = 'Cargando capas...';
+
+    try {
+      const response = await fetch(`/api/access-vector-diagram?organization=${encodeURIComponent(ORG_NAME)}`);
+      if (!response.ok) throw new Error(await response.text());
+      currentDiagramData = await response.json();
+
+      const allOriginIds = new Set((currentDiagramData.origins || []).map((origin) => origin.id));
+      const allDestinationIds = new Set(destinationOptions(currentDiagramData).map((destination) => destination.id));
+      const allCriticalIds = new Set(criticalOptions(currentDiagramData).map((criticalHost) => criticalHost.id));
+      const allLayerIds = new Set(layerOptions(currentDiagramData).map((layer) => layer.id));
+
+      if (!hasInitializedCriticalSelection && !hasInitializedOriginSelection && !hasInitializedDestinationSelection) {
+        if (allCriticalIds.size) {
+          selectedCriticalIds = new Set(allCriticalIds);
+          selectedOriginIds = new Set();
+          selectedDestinationIds = new Set();
+          currentFilterMode = 'critical';
+        } else {
+          selectedCriticalIds = new Set();
+          selectedOriginIds = new Set(allOriginIds);
+          selectedDestinationIds = new Set(allDestinationIds);
+          currentFilterMode = 'origin';
+        }
+        hasInitializedCriticalSelection = true;
+        hasInitializedOriginSelection = true;
+        hasInitializedDestinationSelection = true;
+      } else {
+        selectedOriginIds = reconcileSelectedIds(selectedOriginIds, allOriginIds, previousOriginTotal);
+        selectedDestinationIds = reconcileSelectedIds(selectedDestinationIds, allDestinationIds, previousDestinationTotal);
+        selectedCriticalIds = reconcileSelectedIds(selectedCriticalIds, allCriticalIds, previousCriticalTotal);
+      }
+
+      if (!hasInitializedLayerSelection) {
+        selectedLayerIds = new Set(Array.from(allLayerIds).filter((layerId) => layerId !== 'l2'));
+        hasInitializedLayerSelection = true;
+      } else {
+        selectedLayerIds = reconcileSelectedIds(selectedLayerIds, allLayerIds, previousLayerTotal);
+      }
+
+      renderStats(currentDiagramData);
+      renderOriginFilters(currentDiagramData);
+      renderDestinationFilters(currentDiagramData);
+      renderCriticalFilters(currentDiagramData);
+      renderLayerFilters(currentDiagramData);
+      renderVisibilityDiagram(currentDiagramData);
+      updateModeControls();
+    } catch (error) {
+      console.error(error);
+      currentDiagramData = null;
+      currentLayout = null;
+      renderStats(null);
+      diagram.innerHTML = '<svg class="visibility-links" id="visibilityLinks" aria-hidden="true"></svg><div class="visibility-empty">No se pudo cargar el diagrama de visibilidad.</div>';
+      originFilters.innerHTML = '<div class="visibility-empty">No se pudieron cargar los or&iacute;genes.</div>';
+      destinationFilters.innerHTML = '<div class="visibility-empty">No se pudieron cargar los destinos.</div>';
+      criticalFilters.innerHTML = '<div class="visibility-empty">No se pudieron cargar los cr&iacute;ticos.</div>';
+      layerFilters.innerHTML = '<span class="visibility-empty">No se pudieron cargar las capas.</span>';
+      originSummary.textContent = 'No se pudieron cargar los filtros.';
+      destinationSummary.textContent = 'No se pudieron cargar los filtros.';
+      criticalSummary.textContent = 'No se pudieron cargar los filtros.';
+      layerSummary.textContent = 'No se pudieron cargar los filtros.';
+    }
+  }
+
+  function exportDiagramStyles(fontFamily) {
+    return `
+      .export-root {
+        --text-secondary: #94a3b8;
+        width: 100%;
+        height: 100%;
+        font-family: ${fontFamily || 'system-ui, sans-serif'};
+        color: #d6e2f2;
+      }
+
+      .export-legend {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.72rem 0.95rem 0;
+        box-sizing: border-box;
+      }
+
+      .export-legend-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.42rem;
+        min-height: 34px;
+        padding: 0.5rem 0.72rem;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.86);
+        color: var(--text-secondary);
+        font-size: 0.82rem;
+        font-weight: 600;
+        box-sizing: border-box;
+      }
+
+      .export-legend-button::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.34);
+        box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.1);
+        flex: 0 0 auto;
+      }
+
+      .export-legend-button strong {
+        color: inherit;
+        font-weight: 700;
+      }
+
+      .export-legend-button--origin {
+        border-color: rgba(239, 68, 68, 0.58);
+        background: rgba(127, 29, 29, 0.24);
+        color: #fecaca;
+        box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.16), 0 0 16px rgba(239, 68, 68, 0.1);
+      }
+
+      .export-legend-button--origin::before {
+        background: rgba(239, 68, 68, 0.92);
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+      }
+
+      .export-legend-button--destination {
+        border-color: rgba(34, 197, 94, 0.56);
+        background: rgba(20, 83, 45, 0.22);
+        color: #bbf7d0;
+        box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.14), 0 0 16px rgba(34, 197, 94, 0.1);
+      }
+
+      .export-legend-button--destination::before {
+        background: rgba(34, 197, 94, 0.92);
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+      }
+
+      .export-legend-button--critical {
+        border-color: rgba(249, 115, 22, 0.58);
+        background: rgba(154, 52, 18, 0.24);
+        color: #fdba74;
+        box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.16), 0 0 16px rgba(249, 115, 22, 0.1);
+      }
+
+      .export-legend-button--critical::before {
+        background: rgba(249, 115, 22, 0.92);
+        box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
+      }
+
+      .export-legend-button--layer {
+        border-color: rgba(59, 130, 246, 0.58);
+        background: rgba(30, 64, 175, 0.26);
+        color: #bfdbfe;
+        box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.16), 0 0 16px rgba(59, 130, 246, 0.1);
+      }
+
+      .export-legend-button--layer::before {
+        background: rgba(59, 130, 246, 0.94);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+      }
+
+      .export-diagram-wrap {
+        position: relative;
+        width: 100%;
+        height: calc(100% - 56px);
+        margin-top: 0.18rem;
+      }
+
+      .visibility-diagram {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        min-width: 100%;
+        min-height: 100%;
+        padding: 0.9rem 0.95rem 1rem;
+      }
+
+      .visibility-board {
+        position: relative;
+        z-index: 1;
+      }
+
+      .visibility-system {
+        position: absolute;
+        border: 2px dashed rgba(148, 163, 184, 0.24);
+        border-radius: 18px;
+        background: rgba(15, 23, 42, 0.22);
+        padding: 2.15rem 1.14rem 0.9rem;
+        overflow: visible;
+        box-sizing: border-box;
+      }
+
+      .visibility-system--active {
+        box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.08);
+      }
+
+      .visibility-system--source {
+        border-color: rgba(239, 68, 68, 0.34);
+        box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.08);
+      }
+
+      .visibility-system--target {
+        border-color: rgba(34, 197, 94, 0.3);
+        box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.08);
+      }
+
+      .visibility-system--purdue {
+        border-style: solid;
+        border-color: rgba(250, 204, 21, 0.28);
+        background: linear-gradient(180deg, rgba(113, 63, 18, 0.13), rgba(15, 23, 42, 0.22));
+      }
+
+      .visibility-system--purdue-unknown {
+        border-color: rgba(148, 163, 184, 0.28);
+        background: linear-gradient(180deg, rgba(51, 65, 85, 0.16), rgba(15, 23, 42, 0.22));
+      }
+
+      .visibility-system-header {
+        position: absolute;
+        top: -0.66rem;
+        left: 0.82rem;
+        padding: 0 0.46rem;
+        background: rgba(4, 10, 20, 0.96);
+      }
+
+      .visibility-system-header h3 {
+        margin: 0;
+        font-size: 0.84rem;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+        color: #dbe7f6;
+      }
+
+      .visibility-system-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.56rem;
+        padding: 0;
+      }
+
+      .visibility-network {
+        position: relative;
+        border: 1.5px solid rgba(110, 138, 176, 0.7);
+        border-radius: 15px;
+        background: linear-gradient(180deg, rgba(17, 27, 46, 0.96), rgba(12, 20, 35, 0.96));
+        padding: 0.46rem 0.68rem 0.5rem;
+        margin: 0 0.12rem;
+        color: #d6e2f2;
+        box-sizing: border-box;
+      }
+
+      .visibility-network--active {
+        box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.06);
+      }
+
+      .visibility-network--source {
+        border-color: rgba(239, 68, 68, 0.92);
+        box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.16), 0 0 22px rgba(239, 68, 68, 0.08);
+      }
+
+      .visibility-network--target {
+        border-color: rgba(34, 197, 94, 0.9);
+        box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.14), 0 0 22px rgba(34, 197, 94, 0.08);
+      }
+
+      .visibility-network--origin-physical {
+        background:
+          linear-gradient(180deg, rgba(37, 99, 235, 0.28), rgba(19, 34, 58, 0.94)),
+          linear-gradient(180deg, rgba(17, 27, 46, 0.96), rgba(12, 20, 35, 0.96));
+        box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.16), 0 0 0 1px rgba(96, 165, 250, 0.12);
+      }
+
+      .visibility-network::before,
+      .visibility-network::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        width: 8px;
+        height: 8px;
+        border: 2px solid rgba(148, 163, 184, 0.78);
+        border-radius: 999px;
+        background: rgba(4, 10, 20, 0.98);
+        transform: translateY(-50%);
+        z-index: 5;
+      }
+
+      .visibility-network::before {
+        left: -7px;
+      }
+
+      .visibility-network::after {
+        right: -7px;
+      }
+
+      .visibility-network--source::before,
+      .visibility-network--source::after {
+        border-color: rgba(239, 68, 68, 0.92);
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
+      }
+
+      .visibility-network--target::before,
+      .visibility-network--target::after {
+        border-color: rgba(34, 197, 94, 0.9);
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.08);
+      }
+
+      .visibility-network-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.46rem;
+      }
+
+      .visibility-network-title {
+        margin: 0;
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: 0.8rem;
+        font-weight: 800;
+        line-height: 1.18;
+        color: #f3f7fb;
+        overflow-wrap: anywhere;
+      }
+
+      .visibility-network-target-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        min-width: 3rem;
+        padding: 0.14rem 0.42rem;
+        border: 1px solid rgba(251, 146, 60, 0.38);
+        border-radius: 999px;
+        background: rgba(154, 52, 18, 0.22);
+        color: #fdba74;
+        font-size: 0.64rem;
+        font-weight: 800;
+        line-height: 1.1;
+        white-space: nowrap;
+        box-sizing: border-box;
+      }
+
+      .visibility-network-target-count[hidden] {
+        display: none;
+      }
+
+      .visibility-network-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 0.18rem;
+        margin-top: 0.28rem;
+      }
+
+      .visibility-network-range {
+        font-size: 0.68rem;
+        color: #a4b4c8;
+        font-weight: 600;
+      }
+
+      .visibility-network-origin {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.34rem;
+        width: fit-content;
+        max-width: 100%;
+        margin-top: 0.08rem;
+        padding: 0.16rem 0.42rem;
+        border-radius: 999px;
+        background: rgba(96, 165, 250, 0.12);
+        color: #cfe2ff;
+        font-size: 0.64rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+        box-sizing: border-box;
+        transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+      }
+
+      .visibility-network--source .visibility-network-origin {
+        background: rgba(239, 68, 68, 0.14);
+        color: #fecaca;
+      }
+
+      .visibility-network--target .visibility-network-origin {
+        background: rgba(34, 197, 94, 0.14);
+        color: #bbf7d0;
+      }
+
+      .visibility-network-origin--source-focus {
+        background: rgba(239, 68, 68, 0.18) !important;
+        color: #fee2e2 !important;
+        box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.18);
+      }
+
+      .visibility-network-origin--target-context {
+        background: rgba(148, 163, 184, 0.1) !important;
+        color: rgba(207, 226, 255, 0.72) !important;
+        opacity: 0.72;
+        box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.12);
+      }
+
+      .visibility-network-origin-context {
+        position: absolute;
+        top: -0.82rem;
+        right: 0.82rem;
+        z-index: 8;
+        max-width: calc(100% - 1.6rem);
+        padding: 0.14rem 0.46rem;
+        border: 1px solid rgba(96, 165, 250, 0.42);
+        border-radius: 999px;
+        background: rgba(8, 15, 28, 0.96);
+        color: #bfdbfe;
+        font-size: 0.6rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        box-shadow: 0 8px 20px rgba(2, 6, 23, 0.34);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        box-sizing: border-box;
+      }
+
+      .visibility-network-origin-context[hidden] {
+        display: none;
+      }
+
+      .visibility-network-origin-label {
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-size: 0.56rem;
+        opacity: 0.92;
+      }
+
+      .visibility-network-origin-values {
+        overflow-wrap: anywhere;
+      }
+
+      .visibility-network-critical {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.34rem;
+        width: fit-content;
+        max-width: 100%;
+        margin-top: 0.08rem;
+        padding: 0.16rem 0.42rem;
+        border-radius: 999px;
+        background: rgba(249, 115, 22, 0.14);
+        color: #fdba74;
+        font-size: 0.64rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+        box-sizing: border-box;
+      }
+
+      .visibility-network-critical-label {
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-size: 0.56rem;
+        opacity: 0.92;
+      }
+
+      .visibility-network-critical-values {
+        overflow-wrap: anywhere;
+      }
+
+      .visibility-network-critical-star {
+        color: #fb923c;
+        font-size: 0.72rem;
+        line-height: 1;
+      }
+
+      .visibility-network-result-link {
+        display: none !important;
+      }
+    `;
+  }
+
+  async function exportVisibilityPng() {
+    const diagram = document.getElementById('visibilityDiagram');
+    const linksSvg = document.getElementById('visibilityLinks');
+    if (!diagram || !linksSvg) return;
+
+    const width = Math.max(diagram.scrollWidth, Math.ceil(diagram.getBoundingClientRect().width));
+    const height = Math.max(diagram.scrollHeight, Math.ceil(diagram.getBoundingClientRect().height));
+    const legendHeight = 62;
+    const exportHeight = height + legendHeight;
+    const fontFamily = getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
+    const clone = diagram.cloneNode(true);
+    clone.querySelector('#visibilityLinks')?.remove();
+    clone.removeAttribute('id');
+    clone.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'));
+    clone.style.width = `${width}px`;
+    clone.style.height = `${height}px`;
+    const legendMarkup = [
+      { className: 'export-legend-button--origin', html: document.getElementById('originFilterToggle')?.innerHTML || 'Orígenes' },
+      { className: 'export-legend-button--destination', html: document.getElementById('destinationFilterToggle')?.innerHTML || 'Destinos' },
+      { className: 'export-legend-button--critical', html: document.getElementById('criticalFilterToggle')?.innerHTML || 'Críticos' },
+      { className: 'export-legend-button--layer', html: layerExportLabel() },
+      { className: 'export-legend-button--layer', html: `Purdue <strong>${purdueModeEnabled ? 'ON' : 'OFF'}</strong>` },
+    ].map((item) => `<div class="export-legend-button ${item.className}">${item.html}</div>`).join('');
+
+    const svgMarkup = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${exportHeight}" viewBox="0 0 ${width} ${exportHeight}">
+        <defs>
+          <linearGradient id="exportVisibilityBg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgb(2, 6, 23)" stop-opacity="0.98" />
+            <stop offset="100%" stop-color="rgb(8, 15, 28)" stop-opacity="0.98" />
+          </linearGradient>
+          <pattern id="exportVisibilityGrid" width="32" height="32" patternUnits="userSpaceOnUse">
+            <path d="M 32 0 L 0 0 0 32" fill="none" stroke="rgb(148, 163, 184)" stroke-opacity="0.05" stroke-width="1" />
+          </pattern>
+        </defs>
+        <style>
+          .export-lines path {
+            fill: none;
+            stroke: rgba(103, 232, 249, 0.46);
+            stroke-width: 1.9;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            shape-rendering: geometricPrecision;
+            filter: drop-shadow(0 0 5px rgba(56, 189, 248, 0.16));
+          }
+        </style>
+        <rect width="${width}" height="${exportHeight}" fill="url(#exportVisibilityBg)" />
+        <rect width="${width}" height="${exportHeight}" fill="url(#exportVisibilityGrid)" />
+        <foreignObject x="0" y="0" width="${width}" height="${exportHeight}">
+          <div xmlns="http://www.w3.org/1999/xhtml" class="export-root">
+            <style>${exportDiagramStyles(fontFamily)}</style>
+            <div class="export-legend">${legendMarkup}</div>
+            <div class="export-diagram-wrap">${clone.outerHTML}</div>
+          </div>
+        </foreignObject>
+        <g class="export-lines" transform="translate(0 ${legendHeight})">
+          ${linksSvg.innerHTML}
+        </g>
+      </svg>
+    `;
+
+    const blob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = url;
+
+    try {
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = reject;
+      });
+
+      const canvas = document.createElement('canvas');
+      const scale = 2;
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(exportHeight * scale);
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('No se pudo inicializar el canvas');
+      context.scale(scale, scale);
+      context.drawImage(image, 0, 0, width, exportHeight);
+
+      const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!pngBlob) throw new Error('No se pudo generar la imagen PNG');
+
+      const downloadUrl = URL.createObjectURL(pngBlob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `diagrama_visibilidad_${ORG_NAME.toLowerCase()}.png`;
+      link.click();
+      URL.revokeObjectURL(downloadUrl);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    bindFilterToggle('originFilterToggle', 'origin', 'originFilterMenu');
+    bindFilterToggle('destinationFilterToggle', 'destination', 'destinationFilterMenu');
+    bindFilterToggle('criticalFilterToggle', 'critical', 'criticalFilterMenu');
+
+    document.getElementById('originFilterDropdown').addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+
+    document.getElementById('destinationFilterDropdown').addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+
+    document.getElementById('criticalFilterDropdown').addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+
+    document.getElementById('originSearchInput').addEventListener('input', (event) => {
+      originSearchTerm = event.target.value || '';
+      renderOriginFilters(currentDiagramData);
+    });
+
+    document.getElementById('destinationSearchInput').addEventListener('input', (event) => {
+      destinationSearchTerm = event.target.value || '';
+      renderDestinationFilters(currentDiagramData);
+    });
+
+    document.getElementById('criticalSearchInput').addEventListener('input', (event) => {
+      criticalSearchTerm = event.target.value || '';
+      renderCriticalFilters(currentDiagramData);
+    });
+
+    document.getElementById('selectVisibleOriginsBtn').addEventListener('click', selectVisibleOrigins);
+    document.getElementById('clearOriginSelectionBtn').addEventListener('click', clearOriginSelection);
+    document.getElementById('selectVisibleDestinationsBtn').addEventListener('click', selectVisibleDestinations);
+    document.getElementById('clearDestinationSelectionBtn').addEventListener('click', clearDestinationSelection);
+    document.getElementById('selectVisibleCriticalsBtn').addEventListener('click', selectVisibleCriticals);
+    document.getElementById('clearCriticalSelectionBtn').addEventListener('click', clearCriticalSelection);
+    document.getElementById('selectAllLayersBtn').addEventListener('click', selectAllLayers);
+    document.getElementById('clearLayerSelectionBtn').addEventListener('click', clearLayerSelection);
+    document.getElementById('purdueToggleBtn').addEventListener('click', togglePurdueMode);
+    document.getElementById('refreshVisibilityBtn').addEventListener('click', loadAccessVectorDiagram);
+    document.getElementById('exportVisibilityPngBtn').addEventListener('click', exportVisibilityPng);
+    document.getElementById('diagramShell').addEventListener('scroll', () => requestAnimationFrame(refreshLinkPositions));
+    window.addEventListener('resize', () => {
+      if (!currentDiagramData) return;
+      requestAnimationFrame(() => renderVisibilityDiagram(currentDiagramData));
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!FILTER_MENU_IDS.some((menuId) => document.getElementById(menuId)?.contains(event.target))) {
+        closeAllFilterMenus();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeAllFilterMenus();
+    });
+
+    loadAccessVectorDiagram();
+  });
 </script>
 {% endblock %}

@@ -4,10 +4,10 @@ from typing import List, Optional
 class ScanConfig(BaseModel):
     organization: str
     location: str
-    target_range: Optional[str] = "0.0.0.0/0"  # Opcional, por defecto para pasivo
+    target_range: Optional[str] = None
     interface: str = ""
     myip: Optional[str] = None
-    scan_mode: str = "active"  # active o passive
+    scan_mode: str = "active"  # active o specific
     # Opciones para escaneos activos
     host_discovery: bool = False
     nmap: bool = False
@@ -24,8 +24,6 @@ class ScanConfig(BaseModel):
     ioxid: bool = False
     screenshots: bool = False
     source_code: bool = False
-    # Opciones para escaneos pasivos
-    pcap_filter: Optional[str] = None  # Filtro BPF para tshark (ej: "tcp port 80")
 
 class Neo4jConfig(BaseModel):
     ip: str

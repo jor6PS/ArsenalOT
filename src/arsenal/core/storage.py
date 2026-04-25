@@ -65,6 +65,17 @@ class ScanStorage:
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scan_origins (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_name TEXT NOT NULL,
+                location TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (organization_name) REFERENCES organizations(name) ON DELETE CASCADE,
+                UNIQUE(organization_name, location)
+            )
+        """)
         
         # Tabla de escaneos (metadatos)
         cursor.execute("""
@@ -364,11 +375,6 @@ class ScanStorage:
             pass
         
         try:
-            cursor.execute("ALTER TABLE scans ADD COLUMN pcap_file TEXT")
-        except sqlite3.OperationalError:
-            pass
-        
-        try:
             cursor.execute("ALTER TABLE scans ADD COLUMN myip TEXT")
         except sqlite3.OperationalError:
             pass
@@ -383,6 +389,10 @@ class ScanStorage:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_scans_org_location 
             ON scans(organization_name, location)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_scan_origins_org
+            ON scan_origins(organization_name, location)
         """)
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_scans_started 
@@ -451,33 +461,6 @@ class ScanStorage:
             ON host_scan_metadata(host_id)
         """)
         
-        # Tabla de conversaciones pasivas
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS passive_conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                scan_id INTEGER NOT NULL,
-                src_ip TEXT NOT NULL,
-                src_mac TEXT,
-                src_port INTEGER,
-                dst_ip TEXT NOT NULL,
-                dst_mac TEXT,
-                dst_port INTEGER,
-                protocol TEXT,
-                last_seen TIMESTAMP NOT NULL,
-                FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
-            )
-        """)
-        
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_passive_conv_scan 
-            ON passive_conversations(scan_id)
-        """)
-        
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_passive_conv_ips
-            ON passive_conversations(src_ip, dst_ip)
-        """)
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS pwndoc_audits (
                 org_name   TEXT PRIMARY KEY,
@@ -546,6 +529,64 @@ class ScanStorage:
 
         if auto_pwndoc:
             self._ensure_pwndoc_audit(name.upper())
+
+    def add_scan_origin(self, organization: str, location: str) -> str:
+        """Registra un origen reutilizable para nuevos escaneos."""
+        org = (organization or "").strip().upper()
+        loc = (location or "").strip().upper()
+        if not org or not loc:
+            raise ValueError("Organización y origen son obligatorios.")
+
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR IGNORE INTO organizations (name, description) VALUES (?, '')",
+            (org,),
+        )
+        cursor.execute("""
+            INSERT OR IGNORE INTO scan_origins (organization_name, location)
+            VALUES (?, ?)
+        """, (org, loc))
+        conn.commit()
+        conn.close()
+        return loc
+
+    def get_scan_origins(self, organization: Optional[str] = None) -> List[str]:
+        """Devuelve orígenes declarados y orígenes ya usados por escaneos."""
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        declared_filters = ["location IS NOT NULL", "TRIM(location) != ''"]
+        declared_params = []
+        used_filters = [
+            "location IS NOT NULL",
+            "TRIM(location) != ''",
+            "COALESCE(scan_mode, 'active') != 'passive'",
+        ]
+        used_params = []
+        if organization:
+            declared_filters.append("UPPER(organization_name) = UPPER(?)")
+            declared_params.append(organization)
+            used_filters.append("UPPER(organization_name) = UPPER(?)")
+            used_params.append(organization)
+
+        rows = cursor.execute(f"""
+            SELECT DISTINCT location
+            FROM (
+                SELECT location
+                FROM scan_origins
+                WHERE {' AND '.join(declared_filters)}
+                UNION
+                SELECT location
+                FROM scans
+                WHERE {' AND '.join(used_filters)}
+            )
+            ORDER BY location
+        """, declared_params + used_params).fetchall()
+        conn.close()
+        return [row["location"] for row in rows]
 
     def _ensure_pwndoc_audit(self, org_name: str):
         """Crea la auditoría PwnDoc para la org si no existe (silencioso)."""
@@ -642,7 +683,6 @@ class ScanStorage:
                    enable_screenshots: bool = False,
                    enable_source_code: bool = False,
                    scan_mode: str = 'active',
-                   pcap_file: str = None,
                    started_at: Optional[datetime] = None) -> int:
         """Inicia un nuevo escaneo y retorna su ID."""
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
@@ -651,6 +691,7 @@ class ScanStorage:
         
         # Asegurar que la organización existe
         self.create_organization(organization)
+        self.add_scan_origin(organization, location)
         
         # Crear registro de escaneo
         cursor.execute("""
@@ -658,12 +699,12 @@ class ScanStorage:
             (organization_name, location, scan_type, target_range, 
              interface, myip, nmap_command, started_at, status, created_by,
              enable_version_detection, enable_vulnerability_scan,
-             enable_screenshots, enable_source_code, scan_mode, pcap_file)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+             enable_screenshots, enable_source_code, scan_mode)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
         """, (organization.upper(), location.upper(), scan_type, target_range,
               interface, myip, nmap_command, started_at or datetime.now(), created_by,
               enable_version_detection, enable_vulnerability_scan,
-              enable_screenshots, enable_source_code, scan_mode, pcap_file))
+              enable_screenshots, enable_source_code, scan_mode))
         
         scan_id = cursor.lastrowid
         conn.commit()
@@ -679,10 +720,6 @@ class ScanStorage:
         (scan_dir / "evidence" / "img").mkdir(exist_ok=True)
         (scan_dir / "evidence" / "source").mkdir(exist_ok=True)
         (scan_dir / "evidence" / "vuln").mkdir(exist_ok=True)
-        
-        # Crear subdirectorio para archivos pcap en escaneos pasivos
-        if scan_mode == 'passive':
-            (scan_dir / "pcap").mkdir(exist_ok=True)
         
         return scan_id
 
@@ -1593,6 +1630,10 @@ class ScanStorage:
             DELETE FROM scans 
             WHERE organization_name = ? AND location = ?
         """, (organization.upper(), location.upper()))
+        cursor.execute("""
+            DELETE FROM scan_origins
+            WHERE organization_name = ? AND location = ?
+        """, (organization.upper(), location.upper()))
         
         # Eliminar hosts huérfanos (que no tienen ningún scan_result)
         for host_id in host_ids:
@@ -1635,18 +1676,30 @@ class ScanStorage:
 
         try:
             old_count = cursor.execute("""
-                SELECT COUNT(*) FROM scans
-                WHERE UPPER(organization_name) = UPPER(?)
-                  AND UPPER(location) = UPPER(?)
-            """, (org, old)).fetchone()[0]
+                SELECT COUNT(*) FROM (
+                    SELECT location FROM scans
+                    WHERE UPPER(organization_name) = UPPER(?)
+                      AND UPPER(location) = UPPER(?)
+                    UNION
+                    SELECT location FROM scan_origins
+                    WHERE UPPER(organization_name) = UPPER(?)
+                      AND UPPER(location) = UPPER(?)
+                )
+            """, (org, old, org, old)).fetchone()[0]
             if old_count == 0:
                 raise ValueError(f"El origen '{old}' no existe en la organización '{org}'.")
 
             new_count = cursor.execute("""
-                SELECT COUNT(*) FROM scans
-                WHERE UPPER(organization_name) = UPPER(?)
-                  AND UPPER(location) = UPPER(?)
-            """, (org, new)).fetchone()[0]
+                SELECT COUNT(*) FROM (
+                    SELECT location FROM scans
+                    WHERE UPPER(organization_name) = UPPER(?)
+                      AND UPPER(location) = UPPER(?)
+                    UNION
+                    SELECT location FROM scan_origins
+                    WHERE UPPER(organization_name) = UPPER(?)
+                      AND UPPER(location) = UPPER(?)
+                )
+            """, (org, new, org, new)).fetchone()[0]
             if new_count > 0:
                 raise ValueError(f"Ya existe el origen '{new}' en la organización '{org}'.")
 
@@ -1657,6 +1710,15 @@ class ScanStorage:
                   AND UPPER(location) = UPPER(?)
             """, (new, org, old))
             scans_updated = cursor.rowcount
+            cursor.execute("""
+                INSERT OR IGNORE INTO scan_origins (organization_name, location)
+                VALUES (?, ?)
+            """, (org, new))
+            cursor.execute("""
+                DELETE FROM scan_origins
+                WHERE UPPER(organization_name) = UPPER(?)
+                  AND UPPER(location) = UPPER(?)
+            """, (org, old))
 
             devices_updated = 0
             device_rows = cursor.execute("""
@@ -1732,7 +1794,7 @@ class ScanStorage:
         try:
             from py2neo import Graph
             neo4j_user = os.getenv("NEO4J_USERNAME", "neo4j")
-            neo4j_pass = os.getenv("NEO4J_PASSWORD", "neo4j1")
+            neo4j_pass = os.getenv("NEO4J_PASSWORD", "change-this-neo4j-password")
             neo4j_host = os.getenv("NEO4J_HOST", "localhost")
             graph = Graph(f"bolt://{neo4j_host}:7687", auth=(neo4j_user, neo4j_pass))
             graph.run("""
@@ -2208,7 +2270,7 @@ class ScanStorage:
         from py2neo import Graph
         
         neo4j_user = os.getenv("NEO4J_USERNAME", "neo4j")
-        neo4j_pass = os.getenv("NEO4J_PASSWORD", "neo4j1")
+        neo4j_pass = os.getenv("NEO4J_PASSWORD", "change-this-neo4j-password")
         neo4j_host = os.getenv("NEO4J_HOST", "localhost")
         
         try:
@@ -2269,7 +2331,7 @@ class ScanStorage:
             import os
             from py2neo import Graph
             neo4j_user = os.getenv("NEO4J_USERNAME", "neo4j")
-            neo4j_pass = os.getenv("NEO4J_PASSWORD", "neo4j1")
+            neo4j_pass = os.getenv("NEO4J_PASSWORD", "change-this-neo4j-password")
             neo4j_host = os.getenv("NEO4J_HOST", "localhost")
             graph = Graph(f"bolt://{neo4j_host}:7687", auth=(neo4j_user, neo4j_pass))
             graph.run("MATCH (n) DETACH DELETE n")
@@ -2434,225 +2496,6 @@ class ScanStorage:
                     """, (scan_id, host_id, interfaces_json))
             
             conn.commit()
-        finally:
-            conn.close()
-
-
-    def save_passive_conversation(self, scan_id: int, src_ip: str, dst_ip: str,
-                                 src_port: int = None, dst_port: int = None,
-                                 protocol: str = None, src_mac: str = None,
-                                 dst_mac: str = None):
-        """Guarda una conversación entre dos hosts detectada de forma pasiva."""
-        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
-        conn.execute("PRAGMA journal_mode=WAL")
-        cursor = conn.cursor()
-        
-        try:
-            # Obtener info del escaneo
-            scan = cursor.execute("SELECT organization_name, target_range FROM scans WHERE id = ?", (scan_id,)).fetchone()
-            if not scan:
-                conn.close()
-                return
-            org_name, target_range = scan
-
-            # Intentar actualizar si ya existe la conversación en este escaneo
-            # (IPs y puertos en cualquier dirección para simplificar, o dirección específica)
-            # Por ahora guardamos dirección específica src -> dst
-            now = datetime.now()
-            cursor.execute("""
-                INSERT INTO passive_conversations 
-                (scan_id, src_ip, src_mac, src_port, dst_ip, dst_mac, dst_port, protocol, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (scan_id, src_ip, src_mac, src_port, dst_ip, dst_mac, dst_port, protocol, now))
-            
-            # AISLAMIENTO: Poblar metadata para ambos hosts
-            for ip, mac in [(src_ip, src_mac), (dst_ip, dst_mac)]:
-                if not ip: continue
-                # Calcular subnet
-                subnet = self._get_effective_subnet(org_name, ip, target_range)
-                
-                # Asegurar host global
-                cursor.execute("""
-                    INSERT INTO hosts (ip_address, first_seen, last_seen, is_private, subnet)
-                    VALUES (?, ?, ?, 1, ?)
-                    ON CONFLICT(ip_address) DO UPDATE SET 
-                        last_seen = MAX(last_seen, excluded.last_seen),
-                        subnet = CASE 
-                            WHEN subnet IS NULL OR subnet IN ('10.0.0.0/8', '192.168.0.0/16', '172.16.0.0/12', 'Unknown') 
-                            THEN excluded.subnet 
-                            ELSE subnet 
-                        END
-                """, (ip, now, now, subnet))
-                h_id = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (ip,)).fetchone()[0]
-                # Poblar metadata scan
-                cursor.execute("""
-                    INSERT INTO host_scan_metadata (scan_id, host_id, mac_address, last_seen)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(scan_id, host_id) DO UPDATE SET
-                        mac_address = COALESCE(excluded.mac_address, mac_address),
-                        last_seen = COALESCE(excluded.last_seen, last_seen)
-                """, (scan_id, h_id, mac, now))
-
-            conn.commit()
-        except Exception as e:
-            print(f"⚠️  Error guardando conversación pasiva: {e}")
-            conn.rollback()
-        finally:
-            conn.close()
-
-    def save_passive_conversations_bulk(self, scan_id: int, conversations: List[Dict]):
-        """Guarda múltiples conversaciones pasivas de forma eficiente."""
-        if not conversations:
-            return True
-            
-        conn = sqlite3.connect(str(self.db_path), timeout=60.0)
-        conn.execute("PRAGMA journal_mode=WAL")
-        cursor = conn.cursor()
-        
-        try:
-            # Obtener info del escaneo
-            scan = cursor.execute("SELECT organization_name, target_range FROM scans WHERE id = ?", (scan_id,)).fetchone()
-            if not scan:
-                conn.close()
-                return False
-            org_name, target_range = scan
-
-            now = datetime.now()
-            # Preparar datos para executemany
-            data = []
-            for c in conversations:
-                # Usar el timestamp real si viene en el objeto, si no usar 'now'
-                c_timestamp = c.get('timestamp') or c.get('last_seen') or now
-                data.append((
-                    scan_id, c.get('src_ip'), c.get('src_mac'), c.get('src_port'),
-                    c.get('dst_ip'), c.get('dst_mac'), c.get('dst_port'),
-                    c.get('protocol'), c_timestamp
-                ))
-            
-            cursor.executemany("""
-                INSERT INTO passive_conversations 
-                (scan_id, src_ip, src_mac, src_port, dst_ip, dst_mac, dst_port, protocol, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, data)
-
-            # AISLAMIENTO: Poblar host_scan_metadata para hosts detectados pasivamente
-            # Extraer IPs únicas y sus MACs de este lote
-            unique_hosts = {} # ip -> {mac, last_seen}
-            for c in conversations:
-                c_now = c.get('timestamp') or c.get('last_seen') or now
-                # Source
-                sip = c.get('src_ip')
-                smac = c.get('src_mac')
-                if sip:
-                    if sip not in unique_hosts or c_now > unique_hosts[sip]['last_seen']:
-                        unique_hosts[sip] = {'mac': smac, 'last_seen': c_now}
-                # Destination
-                dip = c.get('dst_ip')
-                dmac = c.get('dst_mac')
-                if dip:
-                    if dip not in unique_hosts or c_now > unique_hosts[dip]['last_seen']:
-                        unique_hosts[dip] = {'mac': dmac, 'last_seen': c_now}
-
-            for ip, info in unique_hosts.items():
-                # Primero asegurar que el host existe en la tabla global para tener un host_id
-                # (save_passive_conversation usualmente no crea el host si no existe, 
-                # pero para aislamiento necesitamos que exista el host_id)
-                # NOTA: save_discovered_host ya hace esto de forma segura.
-                # Para simplificar y ser eficiente, usamos una query directa.
-                subnet = self._get_effective_subnet(org_name, ip, target_range)
-                cursor.execute("""
-                    INSERT INTO hosts (ip_address, first_seen, last_seen, is_private, subnet)
-                    VALUES (?, ?, ?, 1, ?)
-                    ON CONFLICT(ip_address) DO UPDATE SET 
-                        last_seen = MAX(last_seen, excluded.last_seen),
-                        subnet = CASE 
-                            WHEN subnet IS NULL OR subnet IN ('10.0.0.0/8', '192.168.0.0/16', '172.16.0.0/12', 'Unknown') 
-                            THEN excluded.subnet 
-                            ELSE subnet 
-                        END
-                """, (ip, info['last_seen'], info['last_seen'], subnet))
-                
-                h_id = cursor.execute("SELECT id FROM hosts WHERE ip_address = ?", (ip,)).fetchone()[0]
-                
-                cursor.execute("""
-                    INSERT INTO host_scan_metadata (scan_id, host_id, mac_address, last_seen)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(scan_id, host_id) DO UPDATE SET
-                        mac_address = COALESCE(excluded.mac_address, mac_address),
-                        last_seen = COALESCE(excluded.last_seen, last_seen)
-                """, (scan_id, h_id, info['mac'], info['last_seen']))
-
-            conn.commit()
-            return True
-        except Exception as e:
-            print(f"⚠️ Error en guardado masivo de conversaciones: {e}")
-            conn.rollback()
-            return False
-        finally:
-            conn.close()
-
-    def get_passive_results(self, scan_id: int = None, organization: str = None, 
-                           location: str = None) -> List[Dict]:
-        """Obtiene resultados de conversaciones pasivas filtrados."""
-        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        query = """
-            SELECT 
-                pc.id, pc.scan_id,
-                pc.src_ip, pc.src_mac, pc.src_port,
-                pc.dst_ip, pc.dst_mac, pc.dst_port,
-                pc.protocol, pc.last_seen,
-                s.organization_name, s.location
-            FROM passive_conversations pc
-            JOIN scans s ON pc.scan_id = s.id
-            WHERE 1=1
-        """
-        params = []
-        if scan_id:
-            query += " AND pc.scan_id = ?"
-            params.append(scan_id)
-        if organization:
-            query += " AND UPPER(s.organization_name) = UPPER(?)"
-            params.append(organization)
-        if location:
-            query += " AND UPPER(s.location) = UPPER(?)"
-            params.append(location)
-
-        query += " ORDER BY pc.last_seen DESC"
-        
-        try:
-            rows = cursor.execute(query, params).fetchall()
-            return [dict(r) for r in rows]
-        finally:
-            conn.close()
-
-    def get_passive_stats(self, scan_id: int) -> Dict[str, int]:
-        """Obtiene estadísticas de un escaneo pasivo."""
-        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
-        cursor = conn.cursor()
-
-        try:
-            # Hosts únicos (origen o destino)
-            hosts_query = """
-                SELECT COUNT(DISTINCT ip) FROM (
-                    SELECT src_ip as ip FROM passive_conversations WHERE scan_id = ?
-                    UNION
-                    SELECT dst_ip as ip FROM passive_conversations WHERE scan_id = ?
-                )
-            """
-            hosts_count = cursor.execute(hosts_query, (scan_id, scan_id)).fetchone()[0]
-
-            # Número de conversaciones
-            conv_count = cursor.execute(
-                "SELECT COUNT(*) FROM passive_conversations WHERE scan_id = ?", (scan_id,)
-            ).fetchone()[0]
-
-            return {
-                "hosts_count": hosts_count,
-                "conversations_count": conv_count
-            }
         finally:
             conn.close()
 

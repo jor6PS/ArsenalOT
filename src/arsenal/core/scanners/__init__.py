@@ -7,16 +7,13 @@ proporcionando técnicas avanzadas de escaneo basadas en mejores prácticas de p
 
 from .host_discovery import HostDiscovery
 from .port_scanner import PortScanner
-from .passive_capture import PassiveCapture
 from .service_detection import ServiceDetection
 from .ioxid_scanner import IOXIDResolverScanner
 
 __all__ = [
     'HostDiscovery',
     'PortScanner',
-    'PassiveCapture',
     'ServiceDetection',
     'IOXIDResolverScanner'
 ]
-
 

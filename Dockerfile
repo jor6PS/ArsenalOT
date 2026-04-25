@@ -9,10 +9,7 @@ ENV PYTHONPATH /app/src
 # Instalar dependencias del sistema necesarias
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nmap \
-    tshark \
-    tcpdump \
     arp-scan \
-    libpcap-dev \
     gcc \
     python3-dev \
     sudo \
@@ -41,11 +38,6 @@ RUN git clone https://github.com/FortyNorthSecurity/EyeWitness.git /opt/EyeWitne
     pip install --no-cache-dir -r requirements.txt && \
     ln -s /opt/EyeWitness/Python/EyeWitness.py /usr/bin/eyewitness && \
     chmod +x /usr/bin/eyewitness
-
-# Configurar tshark y permisos
-RUN groupadd -r wireshark || true && \
-    usermod -aG wireshark root && \
-    setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap
 
 # Establecer el directorio de trabajo
 WORKDIR /app

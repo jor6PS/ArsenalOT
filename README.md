@@ -6,8 +6,6 @@ Esta herramienta permite no solo obtener información detallada sobre los puerto
 ## Capacidades Principales
 - **Descubrimiento de Activos**: Utiliza múltiples técnicas ARP e ICMP para un mapeo rápido y preciso de la red para focalizar el escaneo posterior y reducir tiempos.
 - **Escaneo de Servicios Flexible**: Perfiles que van desde escaneos rápidos y estándar hasta escaneos sigilosos (lentos para no saturar la red) o enfocados exclusivamente en entornos industriales (telemetría Modbus, S7, Ethernet/IP, etc.).
-- **Captura Pasiva**: Redirección a MarlinSpike para analizar PCAPs fuera de ArsenalOT.
-- **MarlinSpike**: Servicio incluido en Docker Compose con su configuración por defecto; ArsenalOT solo abre su interfaz web.
 - **Exportación e Integración**: Almacenamiento local SQLite, exportación a JSON y **volcado directo a Neo4j** para visualización avanzada de grafos de red.
 - **Interfaz Web Moderna**: Centralización de los escaneos gestionados por un backend FastAPI y un entorno visual amigable y centralizado.
 - **Dashboard de Reconocimiento**: Gestión por organización, sistemas, redes, dispositivos críticos y electrónica de red.
@@ -17,7 +15,7 @@ Esta herramienta permite no solo obtener información detallada sobre los puerto
 - **Importación NetExec**: Importación controlada de workspaces para credenciales y datos de pentest.
 
 > [!IMPORTANT]
-> ArsenalOT debe utilizarse únicamente en redes propias, laboratorios o entornos donde exista autorización explícita. Los resultados, PCAP, credenciales importadas y bases SQLite pueden contener información sensible.
+> ArsenalOT debe utilizarse únicamente en redes propias, laboratorios o entornos donde exista autorización explícita. Los resultados, credenciales importadas y bases SQLite pueden contener información sensible.
 
 ---
 
@@ -40,7 +38,6 @@ docker-compose up -d --build
 *   **ArsenalOT Web**: [http://localhost:8000](http://localhost:8000)
 *   **Neo4j Browser**: [http://localhost:7474](http://localhost:7474)
 *   **Neo4j Graph Viewer**: [http://localhost:7777](http://localhost:7777)
-*   **MarlinSpike**: [http://localhost:5001](http://localhost:5001)
 *   **PwnDoc**: [https://localhost:8443](https://localhost:8443)
 
 > [!TIP]
@@ -50,11 +47,11 @@ docker-compose up -d --build
 
 ## 🔐 Buenas Prácticas de Seguridad
 
-- No subas `.env`, `results/`, bases `.db`/`.sqlite`, PCAP, evidencias ni exportaciones de clientes.
+- No subas `.env`, `results/`, bases `.db`/`.sqlite`, evidencias ni exportaciones de clientes.
 - Cambia `NEO4J_PASSWORD` y `PWNDOC_PASSWORD` en `.env` antes de usar el stack fuera de un laboratorio local.
 - Mantén Neo4j y PwnDoc accesibles solo desde interfaces de confianza.
 - Evita compartir workspaces NetExec o bitácoras con credenciales reales.
-- Revisa el alcance antes de lanzar perfiles agresivos, capturas pasivas o scripts OT.
+- Revisa el alcance antes de lanzar perfiles agresivos o scripts OT.
 - Ejecuta Docker en una red aislada cuando no necesites acceso directo a interfaces físicas.
 
 Variables mínimas recomendadas en `.env`:
@@ -66,14 +63,6 @@ Variables mínimas recomendadas en `.env`:
 - `PWNDOC_URL`: URL local de la API de PwnDoc.
 - `PWNDOC_USER`: usuario de PwnDoc.
 - `PWNDOC_PASSWORD`: contraseña propia y no reutilizada.
-- `MARLINSPIKE_PUBLIC_URL`: URL que se abrirá desde ArsenalOT, normalmente `http://127.0.0.1:5001`.
-- `MARLINSPIKE_ADMIN_PASSWORD`: contraseña del usuario `admin` de MarlinSpike en el primer arranque.
-- `MARLINSPIKE_DB_PASSWORD`: contraseña de PostgreSQL para MarlinSpike.
-- `MARLINSPIKE_SECRET_KEY`: clave de sesión de MarlinSpike.
-- `MARLINSPIKE_UPLOAD_LIMIT_MB`: límite mínimo por usuario para subir PCAPs a MarlinSpike. Por defecto es `1024` MB.
-- `MARLINSPIKE_PCAP_MAX_SIZE` y `MARLINSPIKE_PCAP_PROCESS_SIZE`: límites globales de MarlinSpike en bytes. Por defecto son `5368709120` bytes.
-
-ArsenalOT no ejecuta capturas pasivas, no sube PCAPs a MarlinSpike y no consulta ni muestra resultados pasivos. El flujo pasivo queda preparado como acceso directo: abre MarlinSpike y gestiona allí los proyectos, cargas de PCAP y análisis.
 
 ---
 
@@ -84,7 +73,7 @@ Si prefieres no usar Docker, puedes realizar una instalación tradicional en tu 
 ### 1. Dependencias del Sistema
 ```bash
 sudo apt-get update
-sudo apt-get install -y nmap tshark arp-scan firefox-esr
+sudo apt-get install -y nmap arp-scan firefox-esr
 # Instalación de geckodriver... (ver scripts de ayuda)
 ```
 

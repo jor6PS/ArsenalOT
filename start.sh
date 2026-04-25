@@ -13,8 +13,8 @@ if [ ! -d "venv" ]; then
 fi
 
 # 2. Buscar si el usuario actual tiene permisos sudo activos o pedirle la contraseña de antemano
-# Nmap y tshark necesitan permisos root para los escaneos avanzados (SYN scan, OS fingerprinting)
-echo "🔑 Verificando permisos de superusuario (necesario para Nmap y capturas de red)..."
+# Nmap necesita permisos root para los escaneos avanzados (SYN scan, OS fingerprinting)
+echo "🔑 Verificando permisos de superusuario (necesario para Nmap avanzado)..."
 sudo -v
 
 if [ $? -ne 0 ]; then

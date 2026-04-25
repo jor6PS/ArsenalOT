@@ -52,7 +52,7 @@ def get_interface_ip(ifname: str) -> str:
         return None
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -71,7 +71,7 @@ from arsenal.core.export_import import export_data, import_data
 from fastapi import UploadFile, File, Form
 from arsenal.core.parsers.nmap_parser import NmapXMLParser
 from arsenal.core.parsers.vulnerability_parser import VulnerabilityParser
-from arsenal.core.scanners import HostDiscovery, PortScanner, PassiveCapture, ServiceDetection
+from arsenal.core.scanners import HostDiscovery, PortScanner, ServiceDetection
 import shutil
 import ipaddress
 import re
@@ -94,10 +94,7 @@ from arsenal.web.routes.api import router as api_router
 from arsenal.web.routes import scans as scans_module
 from arsenal.web.routes.scans import router as scans_router
 from arsenal.web.routes.export_import import router as export_import_router
-from arsenal.web.routes.exploitation import (
-    router as exploitation_router,
-    nxc_router as exploitation_nxc_router,
-)
+from arsenal.web.routes.exploitation import router as exploitation_router, nxc_router as recon_nxc_router
 from arsenal.web.routes.bitacora import router as bitacora_router
 from arsenal.web.routes.pwndoc import router as pwndoc_router
 
@@ -107,16 +104,10 @@ app.include_router(api_router)
 app.include_router(scans_router)
 app.include_router(export_import_router)
 app.include_router(exploitation_router)
-app.include_router(exploitation_nxc_router)
+app.include_router(recon_nxc_router)
 app.include_router(bitacora_router)
 app.include_router(pwndoc_router)
 
-
-@app.get("/marlinspike", include_in_schema=False)
-async def open_marlinspike():
-    """Open the configured MarlinSpike UI."""
-    url = os.getenv("MARLINSPIKE_PUBLIC_URL", "http://127.0.0.1:5001").strip()
-    return RedirectResponse(url=url or "http://127.0.0.1:5001")
 
 @app.post("/api/scans/cleanup-zombies")
 async def cleanup_zombie_scans_endpoint(max_hours: float = 2.0):
@@ -191,8 +182,8 @@ async def get_scan_status(scan_id: int):
     cursor = conn.cursor()
     
     scan = cursor.execute("""
-        SELECT id, status, hosts_discovered, ports_found, error_message, 
-               started_at, completed_at, target_range, scan_mode, pcap_file,
+        SELECT id, status, hosts_discovered, ports_found, error_message,
+               started_at, completed_at, target_range, scan_mode,
                organization_name, location
         FROM scans WHERE id = ?
     """, (scan_id,)).fetchone()
@@ -213,9 +204,6 @@ async def get_scan_status(scan_id: int):
     nmap_xml_path = scan_dir / "evidence" / "nmap_scan.xml"
     result['has_nmap'] = nmap_xml_path.exists() if scan_dir.exists() else False
     
-    # Verificar si tiene archivo PCAP (acceso directo a sqlite3.Row, no usar .get())
-    pcap_file_val = scan['pcap_file'] if scan['pcap_file'] is not None else None
-    result['has_pcap'] = bool(pcap_file_val and Path(pcap_file_val).exists())
     phases = storage.get_scan_phases(scan_id)
     result['phases'] = phases
     if result['status'] in ('completed', 'failed'):
@@ -232,14 +220,14 @@ async def get_scan_status(scan_id: int):
 
 @app.get("/api/scan/{scan_id}/info")
 async def get_scan_info(scan_id: int):
-    """Obtiene información sobre un escaneo (si tiene nmap, pcap, etc)."""
+    """Obtiene información sobre un escaneo y sus evidencias disponibles."""
     try:
         conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
         scan = cursor.execute("""
-            SELECT id, organization_name, location, scan_mode, pcap_file
+            SELECT id, organization_name, location, scan_mode
             FROM scans WHERE id = ?
         """, (scan_id,)).fetchone()
         conn.close()
@@ -249,8 +237,6 @@ async def get_scan_info(scan_id: int):
         
         # Acceder correctamente a sqlite3.Row (no tiene .get())
         scan_mode_val = scan['scan_mode'] if scan['scan_mode'] is not None else 'active'
-        pcap_file_val = scan['pcap_file'] if scan['pcap_file'] is not None else None
-        
         # Verificar si tiene archivo XML de Nmap
         scan_dir = storage.get_scan_directory(
             scan['organization_name'],
@@ -260,17 +246,10 @@ async def get_scan_info(scan_id: int):
         nmap_xml_path = scan_dir / "evidence" / "nmap_scan.xml"
         has_nmap = nmap_xml_path.exists() if scan_dir.exists() else False
         
-        # Verificar si tiene archivo PCAP
-        has_pcap = False
-        if pcap_file_val:
-            pcap_path = Path(pcap_file_val)
-            has_pcap = pcap_path.exists()
-        
         return {
             "scan_id": scan['id'],
             "scan_mode": scan_mode_val,
-            "has_nmap": has_nmap,
-            "has_pcap": has_pcap
+            "has_nmap": has_nmap
         }
     except HTTPException:
         raise
@@ -283,18 +262,12 @@ async def get_scan_info(scan_id: int):
 
 @app.post("/api/scan/start")
 async def start_scan(config: ScanConfig):
-    """Inicia un nuevo escaneo (activo, pasivo o específico)."""
+    """Inicia un nuevo escaneo activo o específico."""
     # Validar scan_mode
-    if config.scan_mode not in ["active", "passive", "specific"]:
+    if config.scan_mode not in ["active", "specific"]:
         raise HTTPException(
             status_code=400, 
-            detail=f"Modo de escaneo inválido: '{config.scan_mode}'. Debe ser 'active', 'passive' o 'specific'"
-        )
-
-    if config.scan_mode == "passive":
-        raise HTTPException(
-            status_code=400,
-            detail="El escaneo pasivo se gestiona directamente en MarlinSpike. Abre /marlinspike para cargar PCAPs y analizarlos alli."
+            detail=f"Modo de escaneo inválido: '{config.scan_mode}'. Debe ser 'active' o 'specific'"
         )
     
     # Validar target_range para escaneos activos o específicos
@@ -431,56 +404,6 @@ async def cancel_scan(scan_id: int):
             raise HTTPException(status_code=404, detail="Escaneo no encontrado para borrar")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error cancelando y borrando escaneo: {str(e)}")
-
-@app.get("/api/scan/{scan_id}/pcap")
-async def download_pcap(scan_id: int):
-    """Descarga el archivo pcap de un escaneo pasivo."""
-    try:
-        # Obtener información del escaneo
-        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        scan = cursor.execute("""
-            SELECT organization_name, location, pcap_file, scan_mode 
-            FROM scans WHERE id = ?
-        """, (scan_id,)).fetchone()
-        conn.close()
-        
-        if not scan:
-            raise HTTPException(status_code=404, detail="Escaneo no encontrado")
-        
-        scan_mode_val = scan['scan_mode'] if scan['scan_mode'] is not None else 'active'
-        if scan_mode_val != 'passive':
-            raise HTTPException(status_code=400, detail="Este escaneo no es pasivo, no tiene archivo pcap")
-        
-        pcap_file = scan['pcap_file']
-        if not pcap_file:
-            raise HTTPException(status_code=404, detail="No se encontró archivo pcap para este escaneo. El escaneo pasivo puede no haber generado archivo aún.")
-        
-        pcap_path = Path(pcap_file)
-        if not pcap_path.exists():
-            raise HTTPException(
-                status_code=404, 
-                detail=f"El archivo pcap no existe en el sistema de archivos: {pcap_file}"
-            )
-        
-        # Retornar el archivo
-        return FileResponse(
-            path=str(pcap_path),
-            filename=pcap_path.name,
-            media_type='application/vnd.tcpdump.pcap',
-            headers={
-                "Content-Disposition": f"attachment; filename={pcap_path.name}"
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        error_detail = traceback.format_exc()
-        print(f"❌ Error descargando PCAP para escaneo {scan_id}: {e}")
-        print(error_detail)
-        raise HTTPException(status_code=500, detail=f"Error descargando archivo pcap: {str(e)}")
 
 @app.post("/api/scan/import-xml")
 async def import_nmap_xml(
@@ -642,20 +565,6 @@ async def import_nmap_xml(
         "message": f"Se procesaron {len(xml_file)} archivos."
     }
 
-@app.post("/api/scan/import-pcap")
-async def import_pcap(
-    pcap_file: List[UploadFile] = File(...),
-    organization: str = Form(...),
-    location: str = Form(...),
-    myip: Optional[str] = Form(None),
-    interface: Optional[str] = Form(None)
-):
-    """Los PCAPs pasivos se cargan directamente desde la UI de MarlinSpike."""
-    raise HTTPException(
-        status_code=400,
-        detail="La importacion de PCAPs pasivos se gestiona directamente en MarlinSpike. Abre /marlinspike."
-    )
-
 @app.get("/api/scan/{scan_id}/results/live")
 async def get_scan_results_live(scan_id: int):
     """Obtiene resultados parciales de un escaneo en progreso o completado."""
@@ -712,15 +621,7 @@ async def get_scan_results_live(scan_id: int):
         LIMIT 5000
     """
     
-    # Inicializar variables para evitar UnboundLocalError
     active_results = []
-    passive_results = []
-    
-    # Determinar si el escaneo tiene modo pasivo habilitado
-    # Un escaneo puede tener ambos si se implementa en el futuro, pero por ahora suele ser uno u otro
-    is_passive_mode = scan['scan_mode'] == 'passive'
-    
-    # 1. Obtener resultados activos (de la tabla scan_results)
     results = cursor.execute(query, (scan_id,)).fetchall()
     for row in results:
         result_dict = dict(row)
@@ -728,28 +629,17 @@ async def get_scan_results_live(scan_id: int):
         result_dict['has_screenshot'] = any(e['enrichment_type'] == 'Screenshot' for e in enrichments)
         result_dict['has_source_code'] = any(e['enrichment_type'] == 'Websource' for e in enrichments)
         active_results.append(result_dict)
-    
-    # 2. ArsenalOT no muestra resultados pasivos locales.
-    passive_results = []
 
-    # 3. Estadísticas
-    hosts_count = 0
-    ports_count = 0
-    if is_passive_mode:
-        hosts_count = 0
-        ports_count = 0
-    else:
-        stats_row = cursor.execute("""
-            SELECT COUNT(DISTINCT h.id) as hosts_count, COUNT(sr.id) as ports_count
-            FROM scan_results sr JOIN hosts h ON h.id = sr.host_id
-            JOIN scans s ON s.id = sr.scan_id
-            WHERE sr.scan_id = ?
-              AND COALESCE(s.scan_mode, 'active') != 'passive'
-              AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'
-        """, (scan_id,)).fetchone()
-        if stats_row:
-            hosts_count = stats_row['hosts_count']
-            ports_count = stats_row['ports_count']
+    stats_row = cursor.execute("""
+        SELECT COUNT(DISTINCT h.id) as hosts_count, COUNT(sr.id) as ports_count
+        FROM scan_results sr JOIN hosts h ON h.id = sr.host_id
+        JOIN scans s ON s.id = sr.scan_id
+        WHERE sr.scan_id = ?
+          AND COALESCE(s.scan_mode, 'active') != 'passive'
+          AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'
+    """, (scan_id,)).fetchone()
+    hosts_count = stats_row['hosts_count'] if stats_row else 0
+    ports_count = stats_row['ports_count'] if stats_row else 0
 
     # Identificar IPs críticas de la organización para marcar los resultados
     critical_ips = set()
@@ -769,10 +659,6 @@ async def get_scan_results_live(scan_id: int):
     for res in active_results:
         res['is_critical'] = res.get('ip_address') in critical_ips
         
-    for res in passive_results:
-        res['src_is_critical'] = res.get('src_ip') in critical_ips
-        res['dst_is_critical'] = res.get('dst_ip') in critical_ips
-    
     conn.close()
     
     # Obtener error_message si existe (sqlite3.Row no tiene .get())
@@ -801,7 +687,7 @@ async def get_scan_results_live(scan_id: int):
         if started:
             end_time = completed or datetime.now()
             elapsed_seconds = max(0, int((end_time - started).total_seconds()))
-            if scan["status"] == "running" and scan["scan_mode"] != "passive" and 5 <= progress_percent < 100:
+            if scan["status"] == "running" and 5 <= progress_percent < 100:
                 eta_seconds = max(0, int(elapsed_seconds * (100 - progress_percent) / progress_percent))
     except Exception:
         elapsed_seconds = None
@@ -812,7 +698,6 @@ async def get_scan_results_live(scan_id: int):
         "status": scan["status"],
         "error_message": error_message,
         "active": active_results,
-        "passive": passive_results,
         "stats": {
             "hosts": hosts_count,
             "ports": ports_count
@@ -821,14 +706,16 @@ async def get_scan_results_live(scan_id: int):
         "progress_percent": progress_percent,
         "elapsed_seconds": elapsed_seconds,
         "eta_seconds": eta_seconds,
-        "eta_label": "Sin ETA en captura pasiva" if scan["scan_mode"] == "passive" and scan["status"] == "running" else None
+        "eta_label": None
     }
 
 @app.get("/api/results")
 async def get_results(
     organization: Optional[str] = None,
     location: Optional[str] = None,
-    scan_id: Optional[int] = None
+    scan_id: Optional[int] = None,
+    source_ip: Optional[str] = None,
+    target_range: Optional[str] = None,
 ):
     """Obtiene resultados de escaneos con información de screenshots y source code."""
     conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
@@ -884,11 +771,33 @@ async def get_results(
     if scan_id:
         query += " AND s.id = ?"
         params.append(scan_id)
+
+    if source_ip:
+        query += " AND TRIM(s.myip) = TRIM(?)"
+        params.append(source_ip)
     
     query += " ORDER BY s.started_at DESC, h.ip_address, COALESCE(sr.port, 0)"
     
     # 1. Obtener resultados activos
     results = cursor.execute(query, params).fetchall()
+    target_network = None
+    if target_range:
+        try:
+            target_network = ipaddress.ip_network(str(target_range).strip(), strict=False)
+        except ValueError:
+            target_network = None
+
+    if target_network is not None:
+        filtered_results = []
+        for row in results:
+            try:
+                ip_obj = ipaddress.ip_address(str(row["ip_address"] or "").strip())
+            except ValueError:
+                continue
+            if ip_obj.version == target_network.version and ip_obj in target_network:
+                filtered_results.append(row)
+        results = filtered_results
+
     enriched_results = []
     for row in results:
         result_dict = dict(row)
@@ -923,9 +832,6 @@ async def get_results(
 
         enriched_results.append(result_dict)
 
-    # 2. Si pedimos un scan específico, no mezclamos pasivos aquí (se hará en otro endpoint)
-    # Anteriormente se mezclaban aquí, pero causaba confusión en la UI.
-    
     # Enriquecer con flag is_critical si se filtró por organización
     if organization:
         try:
@@ -949,15 +855,6 @@ async def get_results(
     conn.close()
     
     return enriched_results
-
-@app.get("/api/results/passive")
-async def get_passive_results_api(
-    organization: Optional[str] = None,
-    location: Optional[str] = None,
-    scan_id: Optional[int] = None
-):
-    """Compatibilidad: ArsenalOT no expone resultados pasivos locales."""
-    return []
 
 @app.delete("/api/scan/{scan_id}")
 async def delete_scan(scan_id: int):
@@ -1112,17 +1009,12 @@ async def get_nmap_xml(scan_id: int):
         cursor = conn.cursor()
         
         scan = cursor.execute("""
-            SELECT organization_name, location, scan_mode FROM scans WHERE id = ?
+        SELECT organization_name, location FROM scans WHERE id = ?
         """, (scan_id,)).fetchone()
         conn.close()
         
         if not scan:
             raise HTTPException(status_code=404, detail="Escaneo no encontrado")
-        
-        # Verificar que el escaneo sea activo (tiene nmap) - acceso directo a sqlite3.Row
-        scan_mode_val = scan['scan_mode'] if scan['scan_mode'] is not None else 'active'
-        if scan_mode_val == 'passive':
-            raise HTTPException(status_code=400, detail="Este escaneo es pasivo y no tiene archivo XML de Nmap")
         
         scan_dir = storage.get_scan_directory(
             scan['organization_name'], 
@@ -1406,32 +1298,6 @@ async def import_scans(file: UploadFile = File(...)):
         # Importar datos
         import_stats = import_data(storage, temp_path)
 
-        imported_scan_ids = list(import_stats.get("imported_scan_ids", []))
-        passive_scan_ids = []
-        if imported_scan_ids:
-            conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-            conn.row_factory = sqlite3.Row
-            try:
-                for imported_scan_id in imported_scan_ids:
-                    row = conn.execute(
-                        "SELECT scan_mode FROM scans WHERE id = ?",
-                        (imported_scan_id,),
-                    ).fetchone()
-                    if row and (row["scan_mode"] or "active") == "passive":
-                        passive_scan_ids.append(imported_scan_id)
-            finally:
-                conn.close()
-
-        for imported_scan_id in passive_scan_ids:
-            storage.delete_scan(imported_scan_id)
-
-        if passive_scan_ids:
-            import_stats["passive_scans_skipped"] = len(passive_scan_ids)
-            import_stats["passive_scan_ids_removed"] = passive_scan_ids
-            import_stats["imported_scan_ids"] = [
-                scan_id for scan_id in imported_scan_ids if scan_id not in set(passive_scan_ids)
-            ]
-        
         # Eliminar archivo temporal
         if temp_path.exists():
             temp_path.unlink()
@@ -2015,7 +1881,7 @@ async def run_post_intelligence(org_name: str):
         # Conectar a Neo4j usando variables de entorno (definidas en .env / docker-compose)
         _neo4j_host = os.getenv("NEO4J_HOST", "127.0.0.1")
         _neo4j_user = os.getenv("NEO4J_USERNAME", "neo4j")
-        _neo4j_pass = os.getenv("NEO4J_PASSWORD", "neo4j123")
+        _neo4j_pass = os.getenv("NEO4J_PASSWORD", "change-this-neo4j-password")
         graph = get_neo4j_graph(_neo4j_host, _neo4j_user, _neo4j_pass)
 
         networks_created = 0

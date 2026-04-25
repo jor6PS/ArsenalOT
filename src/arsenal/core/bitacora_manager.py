@@ -459,12 +459,12 @@ class BitacoraManager:
     # Orden y etiquetas de las técnicas de descubrimiento. La capa indica
     # qué tipo de visibilidad implica desde el origen hasta el segmento:
     # L2 (mismo dominio de broadcast) vs L3 (alcance enrutado) vs L7.
-    _TECHNIQUE_ORDER = ('arp', 'ping', 'ports', 'passive', 'ioxid')
+    _TECHNIQUE_ORDER = ('arp', 'ping', 'ports', 'web', 'ioxid')
     _TECHNIQUE_LABELS = {
         'arp':     'ARP (L2)',
         'ping':    'Ping (L3)',
         'ports':   'Ports (L3)',
-        'passive': 'Pasivo',
+        'web':     'Web (L7)',
         'ioxid':   'IOXID (L7)',
     }
 
@@ -490,8 +490,8 @@ class BitacoraManager:
             # Si el registro de nmap_ports no tiene puerto es un host marcado
             # 'up' por nmap (ping efectivo); con puerto sí implica L3 + servicio.
             return 'ports' if has_port else 'ping'
-        if m in ('passive_capture', 'specific_capture'):
-            return 'passive'
+        if m == 'specific_capture':
+            return 'web'
         if m == 'ioxid':
             return 'ioxid'
         # 'enrichment', 'imported', 'nmap_import' no son técnicas de
@@ -526,6 +526,8 @@ class BitacoraManager:
             ).fetchone()
             if not scan:
                 return ''
+            if (scan['scan_mode'] or 'active') == 'passive':
+                return ''
 
             org = scan['organization_name']
 
@@ -550,53 +552,29 @@ class BitacoraManager:
                 except ValueError:
                     pass
 
-            is_passive = (scan['scan_mode'] or 'active') == 'passive'
-
-            if is_passive:
-                ip_rows = conn.execute(
-                    """SELECT DISTINCT src_ip AS ip FROM passive_conversations WHERE scan_id = ?
-                       UNION
-                       SELECT DISTINCT dst_ip AS ip FROM passive_conversations WHERE scan_id = ?""",
-                    (scan_id, scan_id)
-                ).fetchall()
-                hosts = [{'ip_address': r['ip'], 'hostname': None,
-                          'mac_address': None, 'vendor': None}
-                         for r in ip_rows]
-                port_map: Dict = {}
-                for pr in conn.execute(
-                    """SELECT DISTINCT dst_ip, dst_port, protocol
-                       FROM passive_conversations
-                       WHERE scan_id = ? AND dst_port IS NOT NULL
-                       ORDER BY dst_ip, dst_port""",
-                    (scan_id,)
-                ).fetchall():
-                    port_map.setdefault(pr['dst_ip'], []).append(
-                        f"{pr['dst_port']}/{pr['protocol'] or 'tcp'}"
-                    )
-            else:
-                hosts = [dict(r) for r in conn.execute(
-                    """SELECT DISTINCT h.ip_address, h.hostname,
-                              h.mac_address, h.vendor
-                       FROM scan_results sr
-                       JOIN hosts h ON h.id = sr.host_id
-                       WHERE sr.scan_id = ?
-                       ORDER BY h.ip_address""",
-                    (scan_id,)
-                ).fetchall()]
-                port_map = {}
-                for pr in conn.execute(
-                    """SELECT h.ip_address, sr.port, sr.protocol, sr.service_name
-                       FROM scan_results sr
-                       JOIN hosts h ON h.id = sr.host_id
-                       WHERE sr.scan_id = ?
-                         AND sr.port IS NOT NULL AND sr.state = 'open'
-                       ORDER BY h.ip_address, sr.port""",
-                    (scan_id,)
-                ).fetchall():
-                    svc = pr['service_name'] or str(pr['port'])
-                    port_map.setdefault(pr['ip_address'], []).append(
-                        f"{pr['port']}/{svc}"
-                    )
+            hosts = [dict(r) for r in conn.execute(
+                """SELECT DISTINCT h.ip_address, h.hostname,
+                          h.mac_address, h.vendor
+                   FROM scan_results sr
+                   JOIN hosts h ON h.id = sr.host_id
+                   WHERE sr.scan_id = ?
+                   ORDER BY h.ip_address""",
+                (scan_id,)
+            ).fetchall()]
+            port_map = {}
+            for pr in conn.execute(
+                """SELECT h.ip_address, sr.port, sr.protocol, sr.service_name
+                   FROM scan_results sr
+                   JOIN hosts h ON h.id = sr.host_id
+                   WHERE sr.scan_id = ?
+                     AND sr.port IS NOT NULL AND sr.state = 'open'
+                   ORDER BY h.ip_address, sr.port""",
+                (scan_id,)
+            ).fetchall():
+                svc = pr['service_name'] or str(pr['port'])
+                port_map.setdefault(pr['ip_address'], []).append(
+                    f"{pr['port']}/{svc}"
+                )
         finally:
             conn.close()
 
@@ -635,9 +613,8 @@ class BitacoraManager:
         except Exception:
             pass
 
-        mode_lbl   = 'Pasivo' if is_passive else 'Activo'
-        origin_lbl = (f"ESCANEO PASIVO {scan_id}" if is_passive
-                      else f"Escaneo {scan_id}")
+        mode_lbl   = 'Activo'
+        origin_lbl = f"Escaneo {scan_id}"
         total_hosts = len(hosts) or (scan['hosts_discovered'] or 0)
         total_ports = sum(len(v) for v in port_map.values()) or (scan['ports_found'] or 0)
 
@@ -744,7 +721,8 @@ class BitacoraManager:
                        FROM scans
                        WHERE UPPER(organization_name) = UPPER(?)
                          AND UPPER(location) = UPPER(?)
-                         AND status = 'completed'"""
+                         AND status = 'completed'
+                         AND COALESCE(scan_mode, 'active') != 'passive'"""
             params = [org_name, location]
             if ip_filter is not None:
                 base_q += " AND myip = ?"
@@ -793,7 +771,6 @@ class BitacoraManager:
 
             for s in scans:
                 sid      = s['id']
-                is_pass  = (s['scan_mode'] or 'active') == 'passive'
 
                 # Duración
                 dur = ''
@@ -805,79 +782,53 @@ class BitacoraManager:
                 except Exception:
                     pass
 
-                if is_pass:
-                    ip_rows = conn.execute(
-                        """SELECT DISTINCT src_ip AS ip
-                             FROM passive_conversations WHERE scan_id = ?
-                           UNION
-                           SELECT DISTINCT dst_ip AS ip
-                             FROM passive_conversations WHERE scan_id = ?""",
-                        (sid, sid)
-                    ).fetchall()
-                    h_count = len(ip_rows)
-                    p_count = 0
-                    for r in ip_rows:
-                        all_hosts.setdefault(r['ip'], {
-                            'hostname': None, 'mac_address': None, 'vendor': None})
-                        host_techniques.setdefault(r['ip'], set()).add('passive')
-                    for pr in conn.execute(
-                        """SELECT DISTINCT dst_ip, dst_port, protocol
-                             FROM passive_conversations
-                            WHERE scan_id = ? AND dst_port IS NOT NULL""",
-                        (sid,)
-                    ).fetchall():
-                        port_map.setdefault(pr['dst_ip'], set()).add(
-                            f"{pr['dst_port']}/{pr['protocol'] or 'tcp'}"
-                        )
-                        p_count += 1
-                else:
-                    h_rows = conn.execute(
-                        """SELECT h.ip_address, h.hostname,
-                                  h.mac_address, h.vendor,
-                                  sr.discovery_method, sr.port
-                             FROM scan_results sr
-                             JOIN hosts h ON h.id = sr.host_id
-                            WHERE sr.scan_id = ?""",
-                        (sid,)
-                    ).fetchall()
-                    seen_ips = set()
-                    for h in h_rows:
-                        ip = h['ip_address']
-                        seen_ips.add(ip)
-                        if ip not in all_hosts or (h['mac_address'] and
-                                not all_hosts[ip]['mac_address']):
-                            all_hosts[ip] = {
-                                'hostname':    h['hostname'],
-                                'mac_address': h['mac_address'],
-                                'vendor':      h['vendor'],
-                            }
-                        tech = self._method_to_technique(
-                            h['discovery_method'], bool(h['mac_address']),
-                            has_port=h['port'] is not None,
-                        )
-                        if tech:
-                            host_techniques.setdefault(ip, set()).add(tech)
-                    h_count = len(seen_ips)
-                    p_count = 0
-                    for pr in conn.execute(
-                        """SELECT h.ip_address, sr.port, sr.service_name
-                             FROM scan_results sr
-                             JOIN hosts h ON h.id = sr.host_id
-                            WHERE sr.scan_id = ?
-                              AND sr.port IS NOT NULL AND sr.state = 'open'""",
-                        (sid,)
-                    ).fetchall():
-                        svc = pr['service_name'] or str(pr['port'])
-                        port_map.setdefault(pr['ip_address'], set()).add(
-                            f"{pr['port']}/{svc}"
-                        )
-                        p_count += 1
+                h_rows = conn.execute(
+                    """SELECT h.ip_address, h.hostname,
+                              h.mac_address, h.vendor,
+                              sr.discovery_method, sr.port
+                         FROM scan_results sr
+                         JOIN hosts h ON h.id = sr.host_id
+                        WHERE sr.scan_id = ?""",
+                    (sid,)
+                ).fetchall()
+                seen_ips = set()
+                for h in h_rows:
+                    ip = h['ip_address']
+                    seen_ips.add(ip)
+                    if ip not in all_hosts or (h['mac_address'] and
+                            not all_hosts[ip]['mac_address']):
+                        all_hosts[ip] = {
+                            'hostname':    h['hostname'],
+                            'mac_address': h['mac_address'],
+                            'vendor':      h['vendor'],
+                        }
+                    tech = self._method_to_technique(
+                        h['discovery_method'], bool(h['mac_address']),
+                        has_port=h['port'] is not None,
+                    )
+                    if tech:
+                        host_techniques.setdefault(ip, set()).add(tech)
+                h_count = len(seen_ips)
+                p_count = 0
+                for pr in conn.execute(
+                    """SELECT h.ip_address, sr.port, sr.service_name
+                         FROM scan_results sr
+                         JOIN hosts h ON h.id = sr.host_id
+                        WHERE sr.scan_id = ?
+                          AND sr.port IS NOT NULL AND sr.state = 'open'""",
+                    (sid,)
+                ).fetchall():
+                    svc = pr['service_name'] or str(pr['port'])
+                    port_map.setdefault(pr['ip_address'], set()).add(
+                        f"{pr['port']}/{svc}"
+                    )
+                    p_count += 1
 
                 scan_stats.append({
                     'id':      sid,
                     'date':    str(s['started_at'] or '')[:10],
                     'target':  s['target_range'] or '—',
-                    'mode':    'Pasivo' if is_pass else 'Activo',
+                    'mode':    'Activo',
                     'hosts':   h_count,
                     'ports':   p_count,
                     'dur':     dur,
@@ -957,8 +908,8 @@ class BitacoraManager:
                 '',
                 ('> _Visibilidad por capa — **ARP (L2)**: descubrimiento por capa 2'
                  ' (mismo segmento broadcast); **Ping (L3)** / **Ports (L3)**:'
-                 ' visibilidad por capa 3 (enrutada); **Pasivo**: tráfico observado'
-                ' en captura; **IOXID (L7)**: enumeración DCOM._'),
+                 ' visibilidad por capa 3 (enrutada); **Web (L7)**: evidencias web;'
+                 ' **IOXID (L7)**: enumeración DCOM._'),
                 '',
                 '| Red | Nombre | Sistema | Purdue | Tipo | Visibilidad | Hosts únicos |',
                 '|:---|:---|:---|:---:|:---|:---|---:|',

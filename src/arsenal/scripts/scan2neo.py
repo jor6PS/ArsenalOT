@@ -4,7 +4,7 @@ Importar resultados de escaneos desde scans.db a Neo4j (Versión oficial - Remod
 Implementa:
 - Aislamiento por origen (DISCOVERY_SOURCE).
 - Correlación inteligente (PROBABLY_SAME_HOST).
-- Metadatos de escaneo explícitos (Escaneo_Activo_ID / Escaneo_Pasivo_ID).
+- Metadatos de escaneo explícitos por origen.
 - Limpieza de nombres de subred.
 - Nodos de SERVICIO independientes.
 """
@@ -68,7 +68,7 @@ def _json_items_as_text(value) -> str:
 def connect_to_neo4j(ip: str, username: str = None, password: str = None) -> Graph:
     """Conectar a la base de datos Neo4j."""
     username = username or os.getenv("NEO4J_USERNAME") or "neo4j"
-    password = password or os.getenv("NEO4J_PASSWORD") or "neo4j1"
+    password = password or os.getenv("NEO4J_PASSWORD") or "change-this-neo4j-password"
     
     try:
         graph = Graph(f"bolt://{ip}:7687", auth=(username, password))
@@ -133,7 +133,7 @@ def get_scans_data(db_path: str, org: str = None, location: str = None,
                     }
     except: pass
 
-    # 2. Filtrar escaneos. Los pasivos se gestionan en MarlinSpike y no se exportan a Neo4j.
+    # 2. Filtrar escaneos vigentes.
     query_scans = "SELECT * FROM scans WHERE COALESCE(scan_mode, 'active') != 'passive' AND (status = 'completed' OR (scan_mode = 'netexec' AND status != 'failed'))"
     params = []
     if org:
@@ -153,7 +153,6 @@ def get_scans_data(db_path: str, org: str = None, location: str = None,
         scan_id = scan['id']
         scan_dict = dict(scan)
         scan_dict['hosts'] = []
-        scan_dict['passive_conversations'] = []
         
         o_name = scan['organization_name'].upper()
         
@@ -259,84 +258,6 @@ def get_scans_data(db_path: str, org: str = None, location: str = None,
                 active_hosts_map[ip]['services'].append(service_dict)
 
         scan_dict['hosts'] = list(active_hosts_map.values())
-        
-        # Conversaciones pasivas
-        conversations_rows = cursor.execute("SELECT * FROM passive_conversations WHERE scan_id = ?", (scan_id,)).fetchall()
-        conversations = [dict(c) for c in conversations_rows]
-        scan_dict['passive_conversations'] = conversations
-        
-        if scan['scan_mode'] == 'passive':
-            passive_ips_info = {} 
-            for conv in conversations:
-                passive_ips_info[conv['src_ip']] = conv['src_mac']
-                passive_ips_info[conv['dst_ip']] = conv['dst_mac']
-            
-            # Obtener todos los hosts en una sola consulta
-            unique_ips = list(passive_ips_info.keys())
-            h_info_map = {}
-            if unique_ips:
-                # SQLite tiene un límite de variables, pero para IPs únicas suele estar bien
-                # No obstante, por seguridad dividimos en fragmentos de 500
-                for i in range(0, len(unique_ips), 500):
-                    batch_ips = unique_ips[i:i+500]
-                    placeholders = ','.join(['?'] * len(batch_ips))
-                    # JOIN con host_scan_metadata para aislamiento
-                    query_h = f"""
-                        SELECT h.ip_address, h.subnet, h.first_seen,
-                               m.hostname as isolation_hostname,
-                               m.hostnames_json as isolation_hostnames,
-                               m.mac_address as isolation_mac,
-                               m.vendor as isolation_vendor,
-                               m.interfaces_json as isolation_interfaces,
-                               h.interfaces_json as global_interfaces,
-                               m.last_seen as isolation_last_seen
-                        FROM hosts h
-                        LEFT JOIN host_scan_metadata m ON m.host_id = h.id AND m.scan_id = ?
-                        WHERE h.ip_address IN ({placeholders})
-                    """
-                    rows = cursor.execute(query_h, [scan_id] + batch_ips).fetchall()
-                    for row in rows:
-                        h_info_map[row['ip_address']] = dict(row)
-
-            for ip, mac in passive_ips_info.items():
-                h_info = h_info_map.get(ip)
-                subnet = None
-                if o_name in network_names_map:
-                    for net_range in network_names_map[o_name].keys():
-                        if is_ip_in_network(ip, net_range):
-                            subnet = net_range
-                            break
-                if not subnet and h_info:
-                    subnet = h_info.get('subnet')
-                
-                # AISLAMIENTO ESTRICTO: No heredamos nada de la tabla global hosts
-                # Solo usamos lo que diga el escaneo actual (captura o metadata)
-                net_info = network_names_map.get(o_name, {}).get(subnet or "Unknown", {})
-                subnet_name = net_info.get('name') or "Unknown"
-                system_name = net_info.get('system') or "Internal"
-                
-                is_crit = ip in critical_ips_map.get(o_name, {})
-                crit_info = critical_ips_map.get(o_name, {}).get(ip, {})
-                
-                scan_dict['hosts'].append({
-                    'ip': ip,
-                    'hostname': h_info.get('isolation_hostname') or '',
-                    'organization': o_name,
-                    'mi_ip': scan['myip'] or 'N/A',
-                    'vendor': (h_info.get('isolation_vendor') if h_info else '') or '',
-                    'mac': mac or (h_info.get('isolation_mac') if h_info else '') or '', # Captura pcap > metadata scan
-                    'os_info': '', # Aislado
-                    'hostnames': _json_items_as_text(h_info.get('isolation_hostnames')) if h_info else '',
-                    'interfaces': _json_items_as_text(h_info.get('isolation_interfaces') or h_info.get('global_interfaces')) if h_info else '',
-                    'timestamp': h_info.get('isolation_last_seen') if h_info else None,
-                    'network_range': subnet if subnet and subnet != "Unknown" else None,
-                    'network_name': subnet_name,
-                    'network_system': system_name,
-                    'is_critical': is_crit,
-                    'critical_name': crit_info.get('name'),
-                    'critical_reason': crit_info.get('reason'),
-                    'services': [] 
-                })
         
         all_data.append(scan_dict)
         
@@ -450,7 +371,6 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
     for scan in all_scans:
         org_name = scan['organization_name'].upper()
         scan_mode = scan['scan_mode'] or 'active'
-        is_active = scan_mode != 'passive'
         is_netexec = scan_mode == 'netexec'
 
         # 1. Nodo ORGANIZACION — incluye estadísticas agregadas de toda la org
@@ -463,8 +383,6 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
         duration = _duration_seconds(scan.get('started_at'), scan.get('completed_at'))
         if is_netexec:
             origin_name = f"NetExec import #{scan['id']}"
-        elif not is_active:
-            origin_name = "ESCANEO PASIVO"
         else:
             origin_name = f"Escaneo {scan['id']}"
 
@@ -476,7 +394,6 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
             'SCAN_TYPE': scan['scan_type'] or '',
             'SCAN_MODE': scan['scan_mode'] or '',
             'TARGET_RANGE': scan['target_range'] or '',
-            'PCAP_FILE': scan.get('pcap_file') or ('N/A' if is_active else scan.get('target_range', '')),
             'INTERFACE': scan['interface'] or '',
             'COMMAND': scan.get('nmap_command') or 'N/A',
             'STARTED_AT': scan['started_at'] or '',
@@ -586,34 +503,6 @@ def process_to_neo4j_v2(graph: Graph, all_scans: List[Dict]):
                 MATCH (h:HOST {ORGANIZACION: $org, IP: row.host_ip, DISCOVERY_SOURCE: $ds})
                 MERGE (h)-[:HAS_SERVICE]->(s)
             """, data=services_data, org=org_name, ds=discovery_source)
-
-
-        # --- EJECUTAR BULK CONVERSACIONES (PASIVO) ---
-        if not is_active and scan['passive_conversations']:
-            print(f"📦 [Scan {scan['id']}] Exportando {len(scan['passive_conversations'])} conversaciones...")
-            
-            # Normalizar para evitar nulls en las propiedades del MERGE (causa SemanticError)
-            normalized_convs = []
-            for c in scan['passive_conversations']:
-                normalized_convs.append({
-                    'src_ip': c['src_ip'],
-                    'dst_ip': c['dst_ip'],
-                    'dst_port': c['dst_port'] if c['dst_port'] is not None else 0,
-                    'protocol': c['protocol'] if c['protocol'] is not None else 'N/A',
-                    'last_seen': c['last_seen']
-                })
-
-            # Fragmentar para evitar queries gigantescas
-            batch_size = 1000
-            for i in range(0, len(normalized_convs), batch_size):
-                batch = normalized_convs[i:i+batch_size]
-                graph.run("""
-                    UNWIND $data AS conv
-                    MATCH (src:HOST {ORGANIZACION: $org, IP: conv.src_ip, DISCOVERY_SOURCE: $ds})
-                    MATCH (dst:HOST {ORGANIZACION: $org, IP: conv.dst_ip, DISCOVERY_SOURCE: $ds})
-                    MERGE (src)-[r:COMMUNICATES_WITH {discovery_id: $scan_id, port: conv.dst_port, protocol: conv.protocol}]->(dst)
-                    SET r.last_seen = conv.last_seen
-                """, data=batch, org=org_name, ds=discovery_source, scan_id=scan['id'])
 
         # Rellenar ip_nodes_map para el paso 7 (esto requiere otra query o matcheo)
         # Como es para correlación, podemos hacerlo más eficiente después.
@@ -740,7 +629,7 @@ def export_single_scan(scan_id: int) -> Dict:
 
     host = os.getenv("NEO4J_HOST", "127.0.0.1")
     user = os.getenv("NEO4J_USERNAME", "neo4j")
-    password = os.getenv("NEO4J_PASSWORD", "neo4j123")
+    password = os.getenv("NEO4J_PASSWORD", "change-this-neo4j-password")
 
     try:
         graph = connect_to_neo4j(host, user, password)
