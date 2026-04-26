@@ -47,6 +47,47 @@
     --glass-blur: blur(16px);
 }
 
+/* Light Mode - Override variables for light theme */
+[data-theme="light"] {
+    /* Paleta de Colores Base - Light */
+    --bg-base: #F8FAFC;
+    --bg-surface: rgba(241, 245, 249, 0.95);
+    --bg-surface-hover: rgba(226, 232, 240, 0.85);
+    --bg-surface-active: rgba(203, 213, 225, 0.95);
+
+    /* Acentos - Indigo y Emerald (oscuros para light) */
+    --accent-primary: #4338CA;
+    /* Indigo oscuro */
+    --accent-primary-hover: #3730A3;
+    --accent-secondary: #0369A1;
+    /* Sky Blue oscuro */
+
+    /* Colores Críticos / Estado (oscuros para light) */
+    --success: #15803D;
+    /* Emerald oscuro */
+    --success-bg: rgba(21, 128, 61, 0.08);
+    --warning: #D97706;
+    /* Amber oscuro */
+    --warning-bg: rgba(217, 119, 6, 0.08);
+    --danger: #DC2626;
+    /* Red oscuro */
+    --danger-bg: rgba(220, 38, 38, 0.08);
+    --info: #1D4ED8;
+    /* Blue oscuro */
+    --info-bg: rgba(29, 78, 216, 0.08);
+
+    /* Textos - Light mode */
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --text-muted: #64748B;
+
+    /* Bordes y Sombras - Light mode */
+    --border-color: rgba(0, 0, 0, 0.08);
+    --border-highlight: rgba(0, 0, 0, 0.12);
+    --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
+    --shadow-glow: 0 0 16px rgba(67, 56, 202, 0.15);
+}
+
 body {
     background-color: var(--bg-base);
     color: var(--text-primary);

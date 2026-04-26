@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" id="themeRoot">
 {% import "icons.html" as icons %}
 
 <head>
@@ -21,6 +21,11 @@
             <ul class="nav-menu">
                 <li><a href="/" class="nav-link">Dashboard</a></li>
                 <li><a href="/pentest" class="nav-link">Auditor&iacute;a</a></li>
+                <li style="margin-left: auto;">
+                    <button id="themeToggleBtn" class="nav-link" style="background: none; border: none; padding: 0.5rem 1rem; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center;" title="Alternar modo claro/oscuro">
+                        <span id="themeIcon">🌙</span>
+                    </button>
+                </li>
             </ul>
         </div>
     </nav>

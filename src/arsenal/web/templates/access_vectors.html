@@ -36,11 +36,18 @@
     border-radius: 10px;
     background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.92));
     box-shadow: 0 18px 38px rgba(0, 0, 0, 0.18);
+    transition: all 0.3s ease;
+  }
+
+  [data-theme="light"] .visibility-toolbar {
+    background: linear-gradient(135deg, rgba(241, 245, 249, 0.98), rgba(226, 232, 240, 0.95));
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.08);
   }
 
   .visibility-toolbar h2 {
     margin: 0;
     font-size: 1.06rem;
+    color: var(--text-primary);
   }
 
   .visibility-toolbar p {
@@ -62,6 +69,11 @@
     background: var(--visibility-panel);
     box-shadow: 0 16px 38px rgba(0, 0, 0, 0.18);
     overflow: visible;
+    transition: all 0.3s ease;
+  }
+
+  [data-theme="light"] .visibility-diagram-panel {
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.08);
   }
 
   .visibility-diagram-header {
@@ -72,6 +84,12 @@
     border-radius: 12px 12px 0 0;
     background: linear-gradient(180deg, rgba(4, 10, 20, 0.97), rgba(7, 14, 26, 0.94));
     backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+  }
+
+  [data-theme="light"] .visibility-diagram-header {
+    background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.95));
+    border-bottom-color: rgba(0, 0, 0, 0.10);
   }
 
   .visibility-header-copy {
@@ -115,6 +133,13 @@
     background: linear-gradient(180deg, rgba(4, 10, 20, 0.96), rgba(7, 14, 26, 0.9));
     box-shadow: 0 16px 30px rgba(0, 0, 0, 0.24);
     backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+  }
+
+  [data-theme="light"] .visibility-filterbar-shell {
+    border-color: rgba(0, 0, 0, 0.10);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 244, 246, 0.95));
+    box-shadow: 0 16px 30px rgba(0, 0, 0, 0.08);
   }
 
   .visibility-filter-menu {
@@ -135,6 +160,12 @@
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
+  }
+
+  [data-theme="light"] .visibility-filter-toggle {
+    border-color: rgba(0, 0, 0, 0.10);
+    background: rgba(241, 245, 249, 0.90);
+    color: var(--text-secondary);
   }
 
   .visibility-filter-toggle::before {
@@ -617,15 +648,28 @@
 
   .visibility-system--purdue {
     border-style: solid;
-    border-color: rgba(250, 204, 21, 0.28);
-    background:
-      linear-gradient(180deg, rgba(113, 63, 18, 0.13), rgba(15, 23, 42, 0.22));
+    border-width: 2px;
+    border-color: rgba(107, 114, 128, 0.50);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.15);
   }
 
   .visibility-system--purdue-unknown {
-    border-color: rgba(148, 163, 184, 0.28);
-    background:
-      linear-gradient(180deg, rgba(51, 65, 85, 0.16), rgba(15, 23, 42, 0.22));
+    border-color: rgba(148, 163, 184, 0.40);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.10);
+  }
+
+  /* Separador visual entre capas IT y OT en modo Purdue */
+  .visibility-system--purdue::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(107, 114, 128, 0.30) 10%, rgba(107, 114, 128, 0.30) 90%, transparent);
+    border-top: 1px dashed rgba(107, 114, 128, 0.40);
   }
 
   .visibility-system-header {
@@ -634,6 +678,7 @@
     left: 0.82rem;
     padding: 0 0.46rem;
     background: rgba(4, 10, 20, 0.96);
+    z-index: 10;
   }
 
   .visibility-system-header h3 {
@@ -642,6 +687,25 @@
     font-weight: 800;
     letter-spacing: 0.01em;
     color: #dbe7f6;
+  }
+
+  /* Light mode - Purdue */
+  [data-theme="light"] .visibility-system--purdue {
+    border-color: rgba(100, 116, 139, 0.50);
+    box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.15);
+  }
+
+  [data-theme="light"] .visibility-system--purdue::after {
+    border-top-color: rgba(100, 116, 139, 0.40);
+    background: linear-gradient(90deg, transparent, rgba(100, 116, 139, 0.30) 10%, rgba(100, 116, 139, 0.30) 90%, transparent);
+  }
+
+  [data-theme="light"] .visibility-system-header {
+    background: rgba(248, 250, 252, 0.96);
+  }
+
+  [data-theme="light"] .visibility-system-header h3 {
+    color: #0F172A;
   }
 
   .visibility-system-content {
@@ -667,13 +731,34 @@
   }
 
   .visibility-network--source {
-    border-color: rgba(239, 68, 68, 0.92);
-    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.16), 0 0 22px rgba(239, 68, 68, 0.08);
+    border: 2px dashed rgba(239, 68, 68, 0.92);
+    box-shadow: inset 0 0 0 0px rgba(239, 68, 68, 0.06), 0 0 22px rgba(239, 68, 68, 0.12);
+    position: relative;
+  }
+
+  .visibility-network--source::after {
+    content: attr(data-network-range);
+    position: absolute;
+    left: -10px;
+    top: -1.2em;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: rgba(239, 68, 68, 0.92);
+    background: inherit;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    z-index: 10;
   }
 
   .visibility-network--target {
     border-color: rgba(34, 197, 94, 0.9);
     box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.14), 0 0 22px rgba(34, 197, 94, 0.08);
+  }
+
+  /* Asegurar que etiqueta "CRÍTICO" no se corte */
+  .visibility-network-critical-label {
+    white-space: nowrap;
   }
 
   .visibility-network--origin-physical {
@@ -940,6 +1025,69 @@
       right: auto;
     }
   }
+
+  /* Light Mode - Override visibility variables */
+  [data-theme="light"] .visibility-page {
+    --visibility-source: #DC2626;
+    --visibility-source-soft: rgba(220, 38, 38, 0.12);
+    --visibility-target: #15803D;
+    --visibility-target-soft: rgba(21, 128, 61, 0.12);
+    --visibility-critical: #D97706;
+    --visibility-critical-soft: rgba(217, 119, 6, 0.12);
+    --visibility-link: rgba(2, 132, 199, 0.50);
+    --visibility-panel: rgba(255, 255, 255, 0.98);
+    --visibility-panel-strong: rgba(248, 250, 252, 0.95);
+    --visibility-surface: rgba(243, 244, 246, 0.90);
+    --visibility-network: rgba(255, 255, 255, 0.98);
+    --visibility-border: rgba(0, 0, 0, 0.12);
+  }
+
+  /* Light Mode - Adjust toolbar gradient */
+  [data-theme="light"] .visibility-toolbar {
+    background: linear-gradient(135deg, rgba(241, 245, 249, 0.98), rgba(226, 232, 240, 0.95));
+  }
+
+  /* Light Mode - Adjust diagram header gradient */
+  [data-theme="light"] .visibility-diagram-header {
+    border-bottom-color: rgba(0, 0, 0, 0.10);
+    background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.95));
+  }
+
+  /* Light Mode - Adjust filter bar shell */
+  [data-theme="light"] .visibility-filterbar-shell {
+    border-color: rgba(0, 0, 0, 0.10);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 244, 246, 0.95));
+  }
+
+  /* Light Mode - Adjust filter toggles */
+  [data-theme="light"] .visibility-filter-toggle {
+    border-color: rgba(0, 0, 0, 0.10);
+    background: rgba(241, 245, 249, 0.90);
+  }
+
+  [data-theme="light"] .visibility-filter-toggle--origin:hover,
+  [data-theme="light"] .visibility-filter-menu--open .visibility-filter-toggle--origin {
+    border-color: rgba(220, 38, 38, 0.40);
+    background: rgba(220, 38, 38, 0.06);
+  }
+
+  [data-theme="light"] .visibility-filter-toggle--destination:hover,
+  [data-theme="light"] .visibility-filter-menu--open .visibility-filter-toggle--destination {
+    border-color: rgba(21, 128, 61, 0.40);
+    background: rgba(21, 128, 61, 0.06);
+  }
+
+  [data-theme="light"] .visibility-filter-toggle--critical:hover,
+  [data-theme="light"] .visibility-filter-menu--open .visibility-filter-toggle--critical {
+    border-color: rgba(217, 119, 6, 0.40);
+    background: rgba(217, 119, 6, 0.06);
+  }
+
+  [data-theme="light"] .visibility-filter-toggle--layer:hover,
+  [data-theme="light"] .visibility-filter-menu--open .visibility-filter-toggle--layer {
+    border-color: rgba(29, 78, 216, 0.40);
+    background: rgba(29, 78, 216, 0.06);
+  }
 </style>
 
 <div class="visibility-page">
@@ -951,6 +1099,7 @@
     <div class="visibility-actions">
       <button class="btn btn-secondary" type="button" id="refreshVisibilityBtn">Actualizar</button>
       <button class="btn btn-primary" type="button" id="exportVisibilityPngBtn">Exportar PNG</button>
+      <button class="btn btn-primary" type="button" id="exportVisibilityDrawioBtn">Exportar DrawIO</button>
     </div>
   </div>
 
@@ -1978,7 +2127,7 @@
     return { width, height, positions };
   }
 
-  function renderNetworkCard(network, origins) {
+  function renderNetworkCard(network, origins, networksWithRelations = new Set()) {
     const originIps = sortIpValues(origins
       .map((origin) => origin.ip)
       .filter(Boolean));
@@ -1987,6 +2136,8 @@
       .sort((left, right) => String(left.ip || '').localeCompare(String(right.ip || ''), undefined, { numeric: true }));
 
     const originPreview = previewValues(originIps);
+    const hasNetworkRelations = networksWithRelations.has(network.id);
+    const shouldShowOrigin = originPreview && hasNetworkRelations;
     const criticalPreview = previewValues(criticalHosts.map((host) => host.ip));
     const criticalHtml = criticalPreview ? `
       <div class="visibility-network-critical" title="${escapeHtml(criticalHosts.map((host) => host.device_name ? `${host.ip} (${host.device_name})` : host.ip).join(' · '))}">
@@ -2015,7 +2166,7 @@
             class="visibility-network-origin"
             data-network-origin
             title="${escapeHtml(originIps.join(' · '))}"
-            ${originPreview ? '' : 'hidden'}
+            ${shouldShowOrigin ? '' : 'hidden'}
           >
             <span class="visibility-network-origin-label" data-network-origin-label>Origen</span>
             <span class="visibility-network-origin-values" data-network-origin-values>${escapeHtml(originPreview)}</span>
@@ -2075,6 +2226,12 @@
       return;
     }
 
+    const networksWithRelations = new Set();
+    (data?.relations || []).forEach((relation) => {
+      if (relation.target_network_id) networksWithRelations.add(relation.target_network_id);
+      (relation.source_network_ids || []).forEach((networkId) => networksWithRelations.add(networkId));
+    });
+
     currentLayout = buildPurdueLayout(groups);
 
     const groupsHtml = groups.map((group) => {
@@ -2086,7 +2243,7 @@
           const origins = (network.origin_ids || [])
             .map((originId) => originsById.get(originId))
             .filter(Boolean);
-          return renderNetworkCard(network, origins);
+          return renderNetworkCard(network, origins, networksWithRelations);
         }).join('');
 
       return `
@@ -2132,6 +2289,12 @@
       return;
     }
 
+    const networksWithRelations = new Set();
+    (data?.relations || []).forEach((relation) => {
+      if (relation.target_network_id) networksWithRelations.add(relation.target_network_id);
+      (relation.source_network_ids || []).forEach((networkId) => networksWithRelations.add(networkId));
+    });
+
     currentLayout = buildSystemLayout(data, systems);
 
     const systemsHtml = systems.map((system) => {
@@ -2145,7 +2308,7 @@
             const origins = (network.origin_ids || [])
               .map((originId) => originsById.get(originId))
               .filter(Boolean);
-            return renderNetworkCard(network, origins);
+            return renderNetworkCard(network, origins, networksWithRelations);
           }).join('')
         : '<div class="visibility-empty">Sistema sin redes.</div>';
 
@@ -2317,6 +2480,20 @@
   }
 
   function chooseSystemSides(sourceSystemRect, targetSystemRect) {
+    // En modo Purdue, usar top/bottom; en otro caso, usar left/right
+    if (purdueModeEnabled) {
+      if (sourceSystemRect.id === targetSystemRect.id) {
+        const routeOnBottom = sourceSystemRect.midY <= ((currentLayout?.height || 0) / 2);
+        return routeOnBottom
+          ? { sourceSide: 'bottom', targetSide: 'bottom' }
+          : { sourceSide: 'top', targetSide: 'top' };
+      }
+
+      return targetSystemRect.midY >= sourceSystemRect.midY
+        ? { sourceSide: 'bottom', targetSide: 'top' }
+        : { sourceSide: 'top', targetSide: 'bottom' };
+    }
+
     if (sourceSystemRect.id === targetSystemRect.id) {
       const routeOnRight = sourceSystemRect.midX <= ((currentLayout?.width || 0) / 2);
       return routeOnRight
@@ -3366,8 +3543,8 @@
 
       .visibility-system--purdue {
         border-style: solid;
-        border-color: rgba(250, 204, 21, 0.28);
-        background: linear-gradient(180deg, rgba(113, 63, 18, 0.13), rgba(15, 23, 42, 0.22));
+        border-color: rgba(107, 114, 128, 0.40);
+        background: transparent;
       }
 
       .visibility-system--purdue-unknown {
@@ -3633,6 +3810,96 @@
     `;
   }
 
+  function exportVisibilityDrawio() {
+    if (!currentDiagramData) return;
+
+    const width = 1200;
+    const height = 800;
+    const cellMap = new Map();
+    let cellId = 2;
+
+    // Crear estructura DrawIO
+    let cells = '';
+    const padding = 40;
+    const colWidth = 250;
+    const rowHeight = 180;
+
+    // Agregar sistemas y redes
+    const systems = currentDiagramData.systems || [];
+    const networks = currentDiagramData.networks || [];
+    const origins = currentDiagramData.origins || [];
+    const relations = currentDiagramData.relations || [];
+
+    // Crear nodos para redes
+    let colIndex = 0;
+    let rowIndex = 0;
+    networks.forEach((network, idx) => {
+      const x = padding + (colIndex * colWidth);
+      const y = padding + (rowIndex * rowHeight);
+
+      // Color según tipo
+      let color = 'ffffff';
+      if (network.critical_hosts && network.critical_hosts.length > 0) {
+        color = 'ffebee';
+      }
+
+      const networkId = `network_${network.id}`;
+      cellMap.set(network.id, networkId);
+
+      const label = `${network.display_name}\n${network.range}`;
+      cells += `<mxCell id="${networkId}" value="${escapeXmlAttr(label)}" style="shape=rectangle;rounded=1;fillColor=#${color};strokeColor=#999999;fontSize=11;fontFamily=Verdana" vertex="1" parent="1"><mxGeometry x="${x}" y="${y}" width="200" height="80" as="geometry"/></mxCell>`;
+
+      colIndex++;
+      if (colIndex >= 4) {
+        colIndex = 0;
+        rowIndex++;
+      }
+    });
+
+    // Crear relaciones
+    relations.forEach((relation) => {
+      const sourceId = cellMap.get(relation.source_network_ids?.[0]);
+      const targetId = cellMap.get(relation.target_network_id);
+
+      if (sourceId && targetId) {
+        const edgeId = `edge_${relation.target_network_id}_${relation.source_network_ids?.[0]}`;
+        const label = `${relation.visible_host_count || 0} hosts`;
+        cells += `<mxCell id="${edgeId}" value="${escapeXmlAttr(label)}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=9;fontFamily=Verdana" edge="1" parent="1" source="${sourceId}" target="${targetId}"><mxGeometry relative="1" as="geometry"/></mxCell>`;
+      }
+    });
+
+    const drawioXml = `<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="${new Date().toISOString()}" version="20.0">
+  <diagram name="Diagrama de Visibilidad">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        ${cells}
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>`;
+
+    const blob = new Blob([drawioXml], { type: 'application/x-drawio' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `diagrama_visibilidad_${ORG_NAME.toLowerCase()}.drawio`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function escapeXmlAttr(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
   async function exportVisibilityPng() {
     const diagram = document.getElementById('visibilityDiagram');
     const linksSvg = document.getElementById('visibilityLinks');
@@ -3643,12 +3910,16 @@
     const legendHeight = 62;
     const exportHeight = height + legendHeight;
     const fontFamily = getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
+    const htmlElement = document.getElementById('themeRoot') || document.documentElement;
+    const isDarkMode = !htmlElement.hasAttribute('data-theme') || htmlElement.getAttribute('data-theme') === 'dark';
+
     const clone = diagram.cloneNode(true);
     clone.querySelector('#visibilityLinks')?.remove();
     clone.removeAttribute('id');
     clone.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'));
     clone.style.width = `${width}px`;
     clone.style.height = `${height}px`;
+
     const legendMarkup = [
       { className: 'export-legend-button--origin', html: document.getElementById('originFilterToggle')?.innerHTML || 'Orígenes' },
       { className: 'export-legend-button--destination', html: document.getElementById('destinationFilterToggle')?.innerHTML || 'Destinos' },
@@ -3657,26 +3928,34 @@
       { className: 'export-legend-button--layer', html: `Purdue <strong>${purdueModeEnabled ? 'ON' : 'OFF'}</strong>` },
     ].map((item) => `<div class="export-legend-button ${item.className}">${item.html}</div>`).join('');
 
+    // Colores según modo
+    const bgGradient = isDarkMode
+      ? '<stop offset="0%" stop-color="rgb(2, 6, 23)" stop-opacity="0.98" /><stop offset="100%" stop-color="rgb(8, 15, 28)" stop-opacity="0.98" />'
+      : '<stop offset="0%" stop-color="rgb(248, 250, 252)" stop-opacity="0.98" /><stop offset="100%" stop-color="rgb(241, 245, 249)" stop-opacity="0.98" />';
+
+    const gridColor = isDarkMode ? 'rgb(148, 163, 184)' : 'rgb(100, 116, 139)';
+    const lineColor = isDarkMode ? 'rgba(103, 232, 249, 0.46)' : 'rgba(2, 132, 199, 0.50)';
+    const lineDropshadow = isDarkMode ? 'rgba(56, 189, 248, 0.16)' : 'rgba(2, 132, 199, 0.12)';
+
     const svgMarkup = `
       <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${exportHeight}" viewBox="0 0 ${width} ${exportHeight}">
         <defs>
           <linearGradient id="exportVisibilityBg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="rgb(2, 6, 23)" stop-opacity="0.98" />
-            <stop offset="100%" stop-color="rgb(8, 15, 28)" stop-opacity="0.98" />
+            ${bgGradient}
           </linearGradient>
           <pattern id="exportVisibilityGrid" width="32" height="32" patternUnits="userSpaceOnUse">
-            <path d="M 32 0 L 0 0 0 32" fill="none" stroke="rgb(148, 163, 184)" stroke-opacity="0.05" stroke-width="1" />
+            <path d="M 32 0 L 0 0 0 32" fill="none" stroke="${gridColor}" stroke-opacity="0.05" stroke-width="1" />
           </pattern>
         </defs>
         <style>
           .export-lines path {
             fill: none;
-            stroke: rgba(103, 232, 249, 0.46);
+            stroke: ${lineColor};
             stroke-width: 1.9;
             stroke-linecap: round;
             stroke-linejoin: round;
             shape-rendering: geometricPrecision;
-            filter: drop-shadow(0 0 5px rgba(56, 189, 248, 0.16));
+            filter: drop-shadow(0 0 5px ${lineDropshadow});
           }
         </style>
         <rect width="${width}" height="${exportHeight}" fill="url(#exportVisibilityBg)" />
@@ -3772,6 +4051,7 @@
     document.getElementById('purdueToggleBtn').addEventListener('click', togglePurdueMode);
     document.getElementById('refreshVisibilityBtn').addEventListener('click', loadAccessVectorDiagram);
     document.getElementById('exportVisibilityPngBtn').addEventListener('click', exportVisibilityPng);
+    document.getElementById('exportVisibilityDrawioBtn').addEventListener('click', exportVisibilityDrawio);
     document.getElementById('diagramShell').addEventListener('scroll', () => requestAnimationFrame(refreshLinkPositions));
     window.addEventListener('resize', () => {
       if (!currentDiagramData) return;

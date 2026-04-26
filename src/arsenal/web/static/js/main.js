@@ -75,3 +75,59 @@ async function safeFetch(url, options = {}) {
     }
 }
 
+// Theme Toggle - Light/Dark Mode
+function initTheme() {
+    const htmlElement = document.getElementById('themeRoot') || document.documentElement;
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const themeIcon = document.getElementById('themeIcon');
+
+    // Detectar preferencia guardada o del sistema
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+
+    // Aplicar tema inicial
+    setTheme(initialTheme);
+
+    // Agregar event listener al botón
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', toggleTheme);
+    }
+
+    // Escuchar cambios de preferencia del sistema
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('theme')) {
+            setTheme(e.matches ? 'dark' : 'light');
+        }
+    });
+}
+
+function setTheme(theme) {
+    const htmlElement = document.getElementById('themeRoot') || document.documentElement;
+    const themeIcon = document.getElementById('themeIcon');
+
+    if (theme === 'light') {
+        htmlElement.setAttribute('data-theme', 'light');
+        localStorage.setItem('theme', 'light');
+        if (themeIcon) themeIcon.textContent = '☀️';
+    } else {
+        htmlElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'dark');
+        if (themeIcon) themeIcon.textContent = '🌙';
+    }
+}
+
+function toggleTheme() {
+    const htmlElement = document.getElementById('themeRoot') || document.documentElement;
+    const currentTheme = htmlElement.getAttribute('data-theme') || 'dark';
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+}
+
+// Inicializar tema cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTheme);
+} else {
+    initTheme();
+}
+
