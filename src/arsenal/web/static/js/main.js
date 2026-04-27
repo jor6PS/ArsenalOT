@@ -1,5 +1,79 @@
 // Utilidades generales
 
+// ── Theme ─────────────────────────────────────────────────────────
+const THEME_KEY = 'arsenal-theme';
+const SIDEBAR_KEY = 'arsenal-sidebar';
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
+}
+
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────
+function setSidebarCollapsed(collapsed) {
+    const sidebar = document.getElementById('sidebar');
+    const sidebarW = collapsed ? 'var(--sidebar-w-collapsed)' : '260px';
+    if (!sidebar) return;
+    if (collapsed) {
+        sidebar.classList.add('is-collapsed');
+    } else {
+        sidebar.classList.remove('is-collapsed');
+    }
+    document.documentElement.style.setProperty('--sidebar-w', collapsed ? '68px' : '260px');
+    localStorage.setItem(SIDEBAR_KEY, collapsed ? 'collapsed' : 'expanded');
+}
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    const isCollapsed = sidebar.classList.contains('is-collapsed');
+    setSidebarCollapsed(!isCollapsed);
+}
+
+// ── Sidebar groups ────────────────────────────────────────────────
+function sidebarGroupToggle(groupId) {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    group.classList.toggle('is-open');
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+(function initArsenalUI() {
+    // Apply saved theme
+    const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
+    // Apply saved sidebar state
+    const savedSidebar = localStorage.getItem(SIDEBAR_KEY);
+    if (savedSidebar === 'collapsed') {
+        setSidebarCollapsed(true);
+    }
+
+    // Bind theme toggle
+    const themeBtn = document.getElementById('themeToggle');
+    if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+
+    // Bind sidebar toggle
+    const sidebarBtn = document.getElementById('sidebarToggle');
+    if (sidebarBtn) sidebarBtn.addEventListener('click', toggleSidebar);
+
+    // Mobile: close sidebar when clicking outside
+    document.addEventListener('click', (e) => {
+        const sidebar = document.getElementById('sidebar');
+        if (!sidebar) return;
+        if (window.innerWidth <= 768 && sidebar.classList.contains('is-mobile-open')) {
+            if (!sidebar.contains(e.target)) {
+                sidebar.classList.remove('is-mobile-open');
+            }
+        }
+    });
+})();
+
 // Formatear fechas
 function formatDate(dateString) {
     const date = new Date(dateString);

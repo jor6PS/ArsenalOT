@@ -1,37 +1,250 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 {% import "icons.html" as icons %}
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ArsenalOT{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
     {% block extra_css %}{% endblock %}
+    <!-- Early theme + sidebar state to prevent flash -->
+    <script>
+        (function() {
+            var t = localStorage.getItem('arsenal-theme');
+            if (t) document.documentElement.setAttribute('data-theme', t);
+            var s = localStorage.getItem('arsenal-sidebar');
+            if (s === 'collapsed') document.documentElement.style.setProperty('--sidebar-w', '68px');
+        })();
+    </script>
 </head>
 
 <body>
-    <nav class="navbar">
-        <div class="nav-container">
-            <div class="nav-brand">
-                <a href="/" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
-                    <h1><span>{{ icons.icon('shield', 'svg-icon brand-icon') }}</span> ArsenalOT</h1>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+
+        <!-- Header: brand + toggle -->
+        <div class="sidebar-header">
+            <a href="/" class="sidebar-brand" title="ArsenalOT — Inicio">
+                <img src="/static/images/logo.png" alt="ArsenalOT logo" class="sidebar-logo">
+                <span class="sidebar-brand-text">Arsenal<span class="sidebar-brand-ot">OT</span></span>
+            </a>
+            <button class="sidebar-collapse-btn" id="sidebarToggle" title="Colapsar menú" aria-label="Toggle sidebar">
+                <svg viewBox="0 0 24 24" class="svg-icon" style="width:1rem;height:1rem;flex-shrink:0">
+                    <line x1="3" y1="6" x2="21" y2="6"/>
+                    <line x1="3" y1="12" x2="21" y2="12"/>
+                    <line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Nav -->
+        <nav class="sidebar-nav" id="sidebarNav" aria-label="Navegación principal">
+            {% set path = request.url.path %}
+
+            <!-- Principal -->
+            <div class="sidebar-section">
+                <span class="sidebar-section-label">Principal</span>
+                <a href="/" class="sidebar-item{% if path == '/' %} sidebar-item--active{% endif %}" title="Dashboard">
+                    <span class="sidebar-item-icon">{{ icons.icon('dashboard', 'svg-icon') }}</span>
+                    <span class="sidebar-item-label">Dashboard</span>
+                </a>
+                <a href="/pentest" class="sidebar-item{% if path.startswith('/pentest') %} sidebar-item--active{% endif %}" title="Auditorías">
+                    <span class="sidebar-item-icon">{{ icons.icon('audit', 'svg-icon') }}</span>
+                    <span class="sidebar-item-label">Auditor&iacute;as</span>
                 </a>
             </div>
-            <ul class="nav-menu">
-                <li><a href="/" class="nav-link">Dashboard</a></li>
-                <li><a href="/pentest" class="nav-link">Auditor&iacute;a</a></li>
-            </ul>
+
+            <!-- Herramientas externas -->
+            <div class="sidebar-section">
+                <span class="sidebar-section-label">Herramientas</span>
+                <a href="https://localhost:8443" target="_blank" rel="noopener noreferrer" class="sidebar-item sidebar-item--external" title="PwnDoc — Informes">
+                    <span class="sidebar-item-icon">{{ icons.icon('report', 'svg-icon') }}</span>
+                    <span class="sidebar-item-label">PwnDoc</span>
+                    <svg viewBox="0 0 24 24" class="sidebar-external-icon svg-icon" aria-hidden="true">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        <polyline points="15 3 21 3 21 9"/>
+                        <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                </a>
+                <a href="http://localhost:7474" target="_blank" rel="noopener noreferrer" class="sidebar-item sidebar-item--external" title="Neo4j Browser">
+                    <span class="sidebar-item-icon">{{ icons.icon('database', 'svg-icon') }}</span>
+                    <span class="sidebar-item-label">Neo4j Browser</span>
+                    <svg viewBox="0 0 24 24" class="sidebar-external-icon svg-icon" aria-hidden="true">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        <polyline points="15 3 21 3 21 9"/>
+                        <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                </a>
+                <a href="http://localhost:7777" target="_blank" rel="noopener noreferrer" class="sidebar-item sidebar-item--external" title="Graph Viewer">
+                    <span class="sidebar-item-icon">{{ icons.icon('graph', 'svg-icon') }}</span>
+                    <span class="sidebar-item-label">Graph Viewer</span>
+                    <svg viewBox="0 0 24 24" class="sidebar-external-icon svg-icon" aria-hidden="true">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        <polyline points="15 3 21 3 21 9"/>
+                        <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                </a>
+                <a href="/docs" target="_blank" rel="noopener noreferrer" class="sidebar-item sidebar-item--external" title="API Docs">
+                    <span class="sidebar-item-icon">{{ icons.icon('api', 'svg-icon') }}</span>
+                    <span class="sidebar-item-label">API Docs</span>
+                    <svg viewBox="0 0 24 24" class="sidebar-external-icon svg-icon" aria-hidden="true">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        <polyline points="15 3 21 3 21 9"/>
+                        <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Organización (solo cuando hay org_name en el contexto) -->
+            {% if org_name is defined and org_name %}
+            {% set org_url = org_name | urlencode %}
+            <div class="sidebar-section sidebar-section--org">
+                <span class="sidebar-section-label sidebar-section-label--org">
+                    <svg viewBox="0 0 8 8" style="width:6px;height:6px;fill:currentColor;flex-shrink:0" aria-hidden="true"><circle cx="4" cy="4" r="4"/></svg>
+                    <span class="sidebar-item-label">{{ org_name }}</span>
+                </span>
+
+                <!-- Inicio org -->
+                <a href="/pentest/{{ org_url }}" class="sidebar-item{% if path == '/pentest/' ~ org_url %} sidebar-item--active{% endif %}" title="{{ org_name }} — Inicio">
+                    <span class="sidebar-item-icon">{{ icons.icon('building', 'svg-icon') }}</span>
+                    <span class="sidebar-item-label">Inicio</span>
+                </a>
+
+                <!-- Fases -->
+                <div class="sidebar-group is-open" id="sg-fases">
+                    <button class="sidebar-group-btn" onclick="sidebarGroupToggle('sg-fases')" title="Fases" type="button">
+                        <span class="sidebar-item-icon">{{ icons.icon('network', 'svg-icon') }}</span>
+                        <span class="sidebar-item-label">Fases</span>
+                        <svg viewBox="0 0 24 24" class="sidebar-group-caret svg-icon" aria-hidden="true">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                    <div class="sidebar-group-body">
+                        <!-- Reconocimiento: expandible con sub-vistas -->
+                        <div class="sidebar-group is-open" id="sg-recon">
+                            <button class="sidebar-group-btn sidebar-item--sub" onclick="sidebarGroupToggle('sg-recon')" type="button" title="Reconocimiento">
+                                <span class="sidebar-item-icon">{{ icons.icon('search', 'svg-icon') }}</span>
+                                <span class="sidebar-item-label">Reconocimiento</span>
+                                <svg viewBox="0 0 24 24" class="sidebar-group-caret svg-icon" aria-hidden="true">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </button>
+                            <div class="sidebar-group-body">
+                                <a href="/pentest/{{ org_url }}/recon" class="sidebar-item sidebar-item--sub sidebar-item--subsub{% if path == '/pentest/' ~ org_url ~ '/recon' %} sidebar-item--active{% endif %}" title="Dashboard de reconocimiento">
+                                    <span class="sidebar-item-icon">{{ icons.icon('dashboard', 'svg-icon') }}</span>
+                                    <span class="sidebar-item-label">Dashboard</span>
+                                </a>
+                                <a href="/pentest/{{ org_url }}/recon/scan" class="sidebar-item sidebar-item--sub sidebar-item--subsub{% if path == '/pentest/' ~ org_url ~ '/recon/scan' %} sidebar-item--active{% endif %}" title="Nuevo escaneo">
+                                    <span class="sidebar-item-icon">{{ icons.icon('search', 'svg-icon') }}</span>
+                                    <span class="sidebar-item-label">Nuevo escaneo</span>
+                                </a>
+                            </div>
+                        </div>
+                        <a href="/pentest/{{ org_url }}/exploitation" class="sidebar-item sidebar-item--sub" title="Explotación IT">
+                            <span class="sidebar-item-icon">{{ icons.icon('exploit', 'svg-icon') }}</span>
+                            <span class="sidebar-item-label">Explotaci&oacute;n IT</span>
+                        </a>
+                        <a href="/pentest/{{ org_url }}/exploitation-ot" class="sidebar-item sidebar-item--sub" title="Explotación OT">
+                            <span class="sidebar-item-icon">{{ icons.icon('factory', 'svg-icon') }}</span>
+                            <span class="sidebar-item-label">Explotaci&oacute;n OT</span>
+                        </a>
+                        <span class="sidebar-item sidebar-item--sub sidebar-item--disabled" title="Próximamente">
+                            <span class="sidebar-item-icon">{{ icons.icon('key', 'svg-icon') }}</span>
+                            <span class="sidebar-item-label">Acceso Inicial</span>
+                            <span class="sidebar-badge">Pronto</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Resultados -->
+                <div class="sidebar-group is-open" id="sg-results">
+                    <button class="sidebar-group-btn" onclick="sidebarGroupToggle('sg-results')" title="Resultados" type="button">
+                        <span class="sidebar-item-icon">{{ icons.icon('overview', 'svg-icon') }}</span>
+                        <span class="sidebar-item-label">Resultados</span>
+                        <svg viewBox="0 0 24 24" class="sidebar-group-caret svg-icon" aria-hidden="true">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                    <div class="sidebar-group-body">
+                        <a href="/pentest/{{ org_url }}/recon/results" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/results' %} sidebar-item--active{% endif %}" title="Overview">
+                            <span class="sidebar-item-icon">{{ icons.icon('dashboard', 'svg-icon') }}</span>
+                            <span class="sidebar-item-label">Overview</span>
+                        </a>
+                        <a href="/pentest/{{ org_url }}/recon/neo4j" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/neo4j' %} sidebar-item--active{% endif %}" title="Neo4j">
+                            <span class="sidebar-item-icon">{{ icons.icon('database', 'svg-icon') }}</span>
+                            <span class="sidebar-item-label">Neo4j</span>
+                        </a>
+                        <a href="/pentest/{{ org_url }}/recon/findings" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/findings' %} sidebar-item--active{% endif %}" title="Findings">
+                            <span class="sidebar-item-icon">{{ icons.icon('finding', 'svg-icon') }}</span>
+                            <span class="sidebar-item-label">Findings</span>
+                        </a>
+                        <a href="/pentest/{{ org_url }}/recon/access-vectors" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/access-vectors' %} sidebar-item--active{% endif %}" title="Diagrama de visibilidad">
+                            <span class="sidebar-item-icon">{{ icons.icon('network', 'svg-icon') }}</span>
+                            <span class="sidebar-item-label">Visibilidad</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Documentación -->
+                <div class="sidebar-group is-open" id="sg-docs">
+                    <button class="sidebar-group-btn" onclick="sidebarGroupToggle('sg-docs')" title="Documentación" type="button">
+                        <span class="sidebar-item-icon">{{ icons.icon('book', 'svg-icon') }}</span>
+                        <span class="sidebar-item-label">Documentaci&oacute;n</span>
+                        <svg viewBox="0 0 24 24" class="sidebar-group-caret svg-icon" aria-hidden="true">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                    <div class="sidebar-group-body">
+                        <a href="/pentest/{{ org_url }}/bitacora" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/bitacora' %} sidebar-item--active{% endif %}" title="Bitácora">
+                            <span class="sidebar-item-icon">{{ icons.icon('book', 'svg-icon') }}</span>
+                            <span class="sidebar-item-label">Bit&aacute;cora</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+        </nav>
+
+        <!-- Footer: theme toggle -->
+        <div class="sidebar-footer">
+            <button class="sidebar-theme-btn" id="themeToggle" title="Cambiar tema" type="button">
+                <span class="sidebar-theme-icon sidebar-theme-dark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" class="svg-icon">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </span>
+                <span class="sidebar-theme-icon sidebar-theme-light" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" class="svg-icon">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                </span>
+                <span class="sidebar-item-label">Tema</span>
+            </button>
         </div>
-    </nav>
+    </aside>
 
-    <main class="main-content">
-        {% block content %}{% endblock %}
-    </main>
-
-    <footer class="footer">
-        <p>&copy; 2025 ArsenalOT - Sistema de gesti&oacute;n de escaneos de red</p>
-    </footer>
+    <!-- Page wrapper (shifts right with sidebar) -->
+    <div class="page-wrapper" id="pageWrapper">
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+        <footer class="footer">
+            <p>&copy; 2025 ArsenalOT &mdash; Sistema de gesti&oacute;n de pentesting OT/IT</p>
+        </footer>
+    </div>
 
     <script src="/static/js/main.js"></script>
     {% block extra_js %}{% endblock %}

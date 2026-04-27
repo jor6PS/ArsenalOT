@@ -940,6 +940,74 @@
       right: auto;
     }
   }
+
+  /* ── Light mode ─────────────────────────────────────────────── */
+  [data-theme="light"] .visibility-page {
+    --visibility-panel: rgba(245, 247, 252, 0.98);
+    --visibility-panel-strong: rgba(235, 239, 250, 0.95);
+    --visibility-surface: rgba(255, 255, 255, 0.88);
+    --visibility-network: rgba(240, 244, 255, 0.96);
+    --visibility-border: rgba(90, 132, 206, 0.18);
+  }
+  [data-theme="light"] .visibility-toolbar {
+    background: linear-gradient(135deg, rgba(240, 244, 255, 0.96), rgba(230, 236, 252, 0.94));
+    border-color: rgba(90, 132, 206, 0.18);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+  }
+  [data-theme="light"] .visibility-diagram-header {
+    background: linear-gradient(180deg, rgba(238, 242, 255, 0.99), rgba(230, 236, 252, 0.97));
+    border-bottom-color: rgba(90, 132, 206, 0.14);
+  }
+  [data-theme="light"] .visibility-filterbar-shell {
+    background: linear-gradient(180deg, rgba(240, 244, 255, 0.98), rgba(232, 238, 252, 0.96));
+    border-color: rgba(90, 132, 206, 0.16);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  }
+  [data-theme="light"] .visibility-filter-toggle {
+    background: rgba(255, 255, 255, 0.86);
+    border-color: rgba(90, 132, 206, 0.22);
+    color: var(--text-secondary);
+  }
+  [data-theme="light"] .visibility-filter-toggle:hover,
+  [data-theme="light"] .visibility-filter-menu--open .visibility-filter-toggle {
+    background: rgba(255, 255, 255, 0.98);
+    color: var(--text-primary);
+  }
+  [data-theme="light"] .visibility-layer-option {
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(59, 130, 246, 0.24);
+    color: var(--text-secondary);
+  }
+  [data-theme="light"] .visibility-layer-option--selected {
+    background: rgba(219, 234, 254, 0.7);
+    color: #1e40af;
+  }
+  [data-theme="light"] .visibility-filter-dropdown {
+    background: rgba(248, 250, 255, 0.99);
+    border-color: rgba(90, 132, 206, 0.18);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.1);
+  }
+  [data-theme="light"] .visibility-filter-toolbar {
+    background: rgba(240, 244, 255, 0.98);
+    border-bottom-color: rgba(90, 132, 206, 0.12);
+  }
+  [data-theme="light"] .visibility-search {
+    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(90, 132, 206, 0.2);
+    color: var(--text-primary);
+  }
+  [data-theme="light"] .visibility-selection-summary {
+    background: rgba(240, 244, 255, 0.9);
+    border-bottom-color: rgba(90, 132, 206, 0.1);
+  }
+  [data-theme="light"] .visibility-filter-group {
+    background: rgba(255, 255, 255, 0.65);
+    border-color: rgba(90, 132, 206, 0.12);
+  }
+  [data-theme="light"] .visibility-purdue-toggle {
+    background: rgba(254, 243, 199, 0.5);
+    border-color: rgba(234, 179, 8, 0.36);
+  }
 </style>
 
 <div class="visibility-page">

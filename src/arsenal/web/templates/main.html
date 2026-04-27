@@ -6,6 +6,9 @@
 {% block extra_css %}
 <style>
     .home-shell { display: grid; gap: 1.5rem; }
+    .home-brand-row { display: flex; align-items: center; gap: 1.1rem; margin-bottom: .85rem; }
+    .home-logo { height: 80px; width: auto; flex-shrink: 0; filter: drop-shadow(0 0 20px rgba(0,200,255,0.45)) drop-shadow(0 0 6px rgba(90,132,206,0.5)); animation: logoPulse 4s ease-in-out infinite; }
+    @keyframes logoPulse { 0%,100% { filter: drop-shadow(0 0 20px rgba(0,200,255,0.45)) drop-shadow(0 0 6px rgba(90,132,206,0.5)); } 50% { filter: drop-shadow(0 0 34px rgba(0,200,255,0.75)) drop-shadow(0 0 14px rgba(90,132,206,0.7)); } }
     .home-hero {
         display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
         gap: 1.25rem; align-items: stretch; padding: 1.5rem;
@@ -44,8 +47,10 @@
 <div class="home-shell">
     <section class="home-hero">
         <div>
-            <div class="home-kicker">Panel principal</div>
-            <h1 class="home-title">ArsenalOT</h1>
+            <div class="home-brand-row">
+                <img src="/static/images/logo.png" alt="ArsenalOT" class="home-logo">
+                <h1 class="home-title">ArsenalOT</h1>
+            </div>
             <p class="home-subtitle">Accede desde un &uacute;nico sitio al flujo de auditor&iacute;a, la generaci&oacute;n de informes y las herramientas de an&aacute;lisis asociadas al entorno local.</p>
             <div class="home-actions">
                 <a class="home-action" href="/pentest">Abrir auditor&iacute;a</a>
