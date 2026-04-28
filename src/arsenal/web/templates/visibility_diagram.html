@@ -395,8 +395,17 @@
 
   .visibility-filter-actions {
     display: flex;
-    gap: 0.45rem;
+    gap: 0.3rem;
     flex-wrap: wrap;
+  }
+
+  .visibility-filter-actions .btn,
+  .visibility-layer-strip > .btn {
+    min-height: 28px;
+    padding: 0.28rem 0.48rem;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    line-height: 1.1;
   }
 
   .visibility-selection-summary {
@@ -2231,11 +2240,10 @@
           <div
             class="visibility-network-origin"
             data-network-origin
-            title="${escapeHtml(originIps.join(' · '))}"
-            ${originPreview ? '' : 'hidden'}
+            hidden
           >
             <span class="visibility-network-origin-label" data-network-origin-label>Origen</span>
-            <span class="visibility-network-origin-values" data-network-origin-values>${escapeHtml(originPreview)}</span>
+            <span class="visibility-network-origin-values" data-network-origin-values></span>
           </div>
           ${criticalHtml}
         </div>
@@ -3159,11 +3167,6 @@
     const originValues = element.querySelector('[data-network-origin-values]');
     const originContextTag = element.querySelector('[data-network-origin-context]');
 
-    const defaultOriginIps = sortIpValues(
-      (network?.origin_ids || [])
-        .map((originId) => originsById.get(originId)?.ip)
-        .filter(Boolean),
-    );
     const sourceOriginIps = sortIpValues(networkContext?.sourceOriginIps || []);
     const targetOriginIps = sortIpValues(networkContext?.targetOriginIps || []);
     const physicalOrigins = [...(networkContext?.selectedPhysicalOrigins || [])]
@@ -3171,7 +3174,7 @@
       .sort((left, right) => String(left).localeCompare(String(right)));
 
     let badgeMode = 'default';
-    let displayIps = defaultOriginIps;
+    let displayIps = [];
     if (sourceOriginIps.length) {
       badgeMode = 'source';
       displayIps = sourceOriginIps;
@@ -3180,9 +3183,7 @@
       displayIps = targetOriginIps;
     }
 
-    // When a focused selection is active and this network is not part of it,
-    // hide the origin badge to avoid showing irrelevant origin IPs.
-    const shouldHideBadge = hasFocusedSelection && badgeMode === 'default';
+    const shouldHideBadge = badgeMode === 'default' || !hasFocusedSelection;
 
     if (originBadge && originLabel && originValues) {
       originBadge.classList.toggle('visibility-network-origin--source-focus', badgeMode === 'source');
@@ -3299,8 +3300,8 @@
     document.querySelectorAll('[data-network-id]').forEach((element) => {
       const networkId = element.dataset.networkId;
       element.classList.toggle('visibility-network--active', activeNetworkIds.has(networkId));
-      element.classList.toggle('visibility-network--source', sourceNetworkIds.has(networkId));
-      element.classList.toggle('visibility-network--target', targetNetworkIds.has(networkId));
+      element.classList.toggle('visibility-network--source', hasFocusedSelection && sourceNetworkIds.has(networkId));
+      element.classList.toggle('visibility-network--target', hasFocusedSelection && targetNetworkIds.has(networkId));
       applyNetworkOriginBadge(
         element,
         networksById.get(networkId),
@@ -3339,8 +3340,8 @@
       const isActive = Array.from(element.querySelectorAll('[data-network-id]'))
         .some((networkElement) => activeNetworkIds.has(networkElement.dataset.networkId));
       element.classList.toggle('visibility-system--active', isActive);
-      element.classList.toggle('visibility-system--source', sourceSystemIds.has(systemId));
-      element.classList.toggle('visibility-system--target', targetSystemIds.has(systemId));
+      element.classList.toggle('visibility-system--source', hasFocusedSelection && sourceSystemIds.has(systemId));
+      element.classList.toggle('visibility-system--target', hasFocusedSelection && targetSystemIds.has(systemId));
     });
 
     requestAnimationFrame(refreshLinkPositions);
