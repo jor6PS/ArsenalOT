@@ -542,35 +542,108 @@ def _load_netexec_data(db_path: str, scan_id: int) -> Dict:
     return out
 
 
+def _neo_prop_name(*parts) -> str:
+    text = "_".join(str(p or "") for p in parts if str(p or "").strip())
+    clean = "".join(ch if ch.isalnum() else "_" for ch in text.upper())
+    while "__" in clean:
+        clean = clean.replace("__", "_")
+    return clean.strip("_")[:120] or "VALUE"
+
+
+def _neo_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "SÍ" if value else "NO"
+    if isinstance(value, (list, tuple, set)):
+        return ", ".join(_neo_text(v) for v in value if _neo_text(v))
+    if isinstance(value, dict):
+        return ", ".join(
+            f"{k}={_neo_text(v)}"
+            for k, v in value.items()
+            if _neo_text(v)
+        )
+    return str(value)
+
+
+def _netexec_host_props(payload: Dict) -> Dict:
+    protocols = payload.get('protocols') or {}
+    props = {
+        'NXC_DOMAIN': _neo_text(payload.get('domain')),
+        'NXC_OS': _neo_text(payload.get('os')),
+        'NXC_PROTOCOLS': ", ".join(sorted(protocols.keys())),
+        'NXC_SHARES': ", ".join(
+            f"{s.get('name', '')}{' (R)' if s.get('read') else ''}{' (W)' if s.get('write') else ''}".strip()
+            for s in (payload.get('shares') or [])
+            if s.get('name')
+        ),
+        'NXC_ADMIN_USERS': _neo_text(payload.get('admin_users') or []),
+        'NXC_LOGGEDIN_USERS': _neo_text(payload.get('loggedin_users') or []),
+        'NXC_LOOT_FILES': str(len(payload.get('loot_files') or [])),
+    }
+    for proto, info in protocols.items():
+        if not isinstance(info, dict):
+            continue
+        for key, value in info.items():
+            if value is None or value == "":
+                continue
+            props[_neo_prop_name('NXC', proto, key)] = _neo_text(value)
+    return props
+
+
+def _netexec_service_rows(ip: str, payload: Dict) -> List[Dict]:
+    rows = []
+    for proto, info in (payload.get('protocols') or {}).items():
+        if not isinstance(info, dict):
+            continue
+        service_props = {
+            'NXC_PROTOCOLO': proto,
+            'NXC_DETALLE': _neo_text({k: v for k, v in info.items() if k != 'port'}),
+        }
+        if proto == 'smb':
+            service_props['NXC_SHARES'] = _neo_text([
+                f"{s.get('name', '')}{' (R)' if s.get('read') else ''}{' (W)' if s.get('write') else ''}".strip()
+                for s in (payload.get('shares') or [])
+                if s.get('name')
+            ])
+            service_props['NXC_ADMIN_USERS'] = _neo_text(payload.get('admin_users') or [])
+            service_props['NXC_LOGGEDIN_USERS'] = _neo_text(payload.get('loggedin_users') or [])
+        for key, value in info.items():
+            if value is None or value == "":
+                continue
+            service_props[_neo_prop_name('NXC', key)] = _neo_text(value)
+        rows.append({
+            'IP': ip,
+            'port': info.get('port'),
+            'service_props': service_props,
+        })
+    return rows
+
+
 def _push_netexec_to_neo4j(graph, org_name: str, discovery_source: str,
                             nxc_data: Dict):
     """Crea/actualiza nodos :CREDENCIAL y enriquece :HOST con metadatos NetExec."""
     # 1) Enriquecer hosts con propiedades nxc-específicas
     host_updates = []
+    service_updates = []
     for ip, payload in (nxc_data.get('hosts') or {}).items():
-        protocols = payload.get('protocols') or {}
-        smb = protocols.get('smb') or {}
-        ldap = protocols.get('ldap') or {}
-        rdp = protocols.get('rdp') or {}
-        host_updates.append({
-            'IP': ip,
-            'NXC_DOMAIN': payload.get('domain') or '',
-            'NXC_OS': payload.get('os') or '',
-            'NXC_SMB_SIGNING': str(smb.get('signing')) if smb else '',
-            'NXC_SMBV1': str(smb.get('smbv1')) if smb else '',
-            'NXC_SMB_DC': str(smb.get('dc')) if smb else '',
-            'NXC_RDP_NLA': str(rdp.get('nla')) if rdp else '',
-            'NXC_LDAP_SIGNING_REQUIRED': str(ldap.get('signing_required')) if ldap else '',
-            'NXC_SHARES': ', '.join(s.get('name', '') for s in (payload.get('shares') or [])),
-            'NXC_ADMIN_USERS': ', '.join(payload.get('admin_users') or []),
-            'NXC_LOOT_FILES': str(len(payload.get('loot_files') or [])),
-        })
+        host_updates.append({'IP': ip, **_netexec_host_props(payload)})
+        service_updates.extend(_netexec_service_rows(ip, payload))
     if host_updates:
         graph.run("""
             UNWIND $data AS row
             MATCH (h:HOST {ORGANIZACION: $org, IP: row.IP, DISCOVERY_SOURCE: $ds})
             SET h += row
         """, data=host_updates, org=org_name, ds=discovery_source)
+
+    if service_updates:
+        graph.run("""
+            UNWIND $data AS row
+            WITH row WHERE row.port IS NOT NULL
+            MATCH (h:HOST {ORGANIZACION: $org, IP: row.IP, DISCOVERY_SOURCE: $ds})-[:HAS_SERVICE]->(s:SERVICE)
+            WHERE toString(s.port) = toString(row.port)
+            SET s += row.service_props
+        """, data=service_updates, org=org_name, ds=discovery_source)
 
     # 2) Crear nodos :CREDENCIAL y relaciones
     cred_rows = []
@@ -613,6 +686,7 @@ def _push_netexec_to_neo4j(graph, org_name: str, discovery_source: str,
 
     return {
         'hosts_updated': len(host_updates),
+        'services_updated': len(service_updates),
         'credentials_pushed': len(cred_rows),
     }
 
@@ -684,6 +758,14 @@ def main():
     
     print(f"🚀 Procesando {len(all_scans_data)} escaneos con correlación inteligente...")
     process_to_neo4j_v2(graph, all_scans_data)
+    for scan in all_scans_data:
+        if (scan.get('scan_mode') or '') == 'netexec':
+            _push_netexec_to_neo4j(
+                graph,
+                scan['organization_name'].upper(),
+                f"{scan['scan_mode']}:{scan['id']}",
+                _load_netexec_data(str(db_path), scan['id']),
+            )
     print("✅ Exportación consolidada completada exitosamente")
 
 if __name__ == "__main__":

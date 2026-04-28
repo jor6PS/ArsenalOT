@@ -268,6 +268,32 @@
         let currentSortDirection = 'asc';
         const booleanTrueFilters = ['true', 'yes', 'sí', '1', 'si'];
         const booleanFalseFilters = ['false', 'no', '0'];
+        const nxcColumns = [
+            { key: 'nxc_os', label: 'NXC SO', tableLabel: 'NXC SO', defaultVisible: true, cellClass: 'result-cell-compact' },
+            { key: 'nxc_domain', label: 'NXC Dominio', tableLabel: 'NXC Dominio', defaultVisible: false, cellClass: 'result-cell-compact' },
+            { key: 'nxc_protocols', label: 'NXC Protocolos', tableLabel: 'NXC Protocolos', defaultVisible: false, cellClass: 'result-cell-compact' },
+            { key: 'nxc_smb_dc', label: 'NXC DC', tableLabel: 'DC', defaultVisible: true, cellClass: 'result-cell-center' },
+            { key: 'nxc_smb_smbv1', label: 'NXC SMBv1', tableLabel: 'SMBv1', defaultVisible: true, cellClass: 'result-cell-center' },
+            { key: 'nxc_smb_signing', label: 'NXC Signing', tableLabel: 'Signing', defaultVisible: true, cellClass: 'result-cell-center' },
+            { key: 'nxc_smb_spooler', label: 'NXC Spooler', tableLabel: 'Spooler', defaultVisible: true, cellClass: 'result-cell-center' },
+            { key: 'nxc_smb_zerologon', label: 'NXC Zerologon', tableLabel: 'Zerologon', defaultVisible: true, cellClass: 'result-cell-center' },
+            { key: 'nxc_smb_petitpotam', label: 'NXC PetitPotam', tableLabel: 'PetitPotam', defaultVisible: true, cellClass: 'result-cell-center' },
+            { key: 'nxc_shares', label: 'NXC Shares', tableLabel: 'Shares', defaultVisible: true, cellClass: 'result-cell-compact' },
+            { key: 'nxc_admin_users', label: 'NXC Admin', tableLabel: 'Admin', defaultVisible: true, cellClass: 'result-cell-compact' },
+            { key: 'nxc_loggedin_users', label: 'NXC Logged In', tableLabel: 'Logged In', defaultVisible: true, cellClass: 'result-cell-compact' },
+            { key: 'nxc_ldap_signing_required', label: 'NXC LDAP Signing', tableLabel: 'LDAP Signing', defaultVisible: false, cellClass: 'result-cell-center' },
+            { key: 'nxc_ldap_channel_binding', label: 'NXC LDAP Channel Binding', tableLabel: 'LDAP Channel Binding', defaultVisible: false, cellClass: 'result-cell-compact' },
+            { key: 'nxc_rdp_nla', label: 'NXC RDP NLA', tableLabel: 'RDP NLA', defaultVisible: false, cellClass: 'result-cell-center' },
+            { key: 'nxc_mssql_instances', label: 'NXC MSSQL Instances', tableLabel: 'MSSQL Instances', defaultVisible: false, cellClass: 'result-cell-compact' },
+            { key: 'nxc_ssh_banner', label: 'NXC SSH Banner', tableLabel: 'SSH Banner', defaultVisible: false, cellClass: 'result-cell-compact' },
+            { key: 'nxc_ftp_banner', label: 'NXC FTP Banner', tableLabel: 'FTP Banner', defaultVisible: false, cellClass: 'result-cell-compact' },
+            { key: 'nxc_winrm_port', label: 'NXC WinRM Port', tableLabel: 'WinRM Port', defaultVisible: false, cellClass: 'result-cell-center' },
+            { key: 'nxc_vnc_banner', label: 'NXC VNC Banner', tableLabel: 'VNC Banner', defaultVisible: false, cellClass: 'result-cell-compact' },
+            { key: 'nxc_nfs_banner', label: 'NXC NFS Banner', tableLabel: 'NFS Banner', defaultVisible: false, cellClass: 'result-cell-compact' },
+            { key: 'nxc_wmi_banner', label: 'NXC WMI Banner', tableLabel: 'WMI Banner', defaultVisible: false, cellClass: 'result-cell-compact' },
+            { key: 'nxc_loot_files', label: 'NXC Loot', tableLabel: 'Loot', defaultVisible: false, cellClass: 'result-cell-center' },
+            { key: 'nxc_protocol_details', label: 'NXC Detalle Protocolos', tableLabel: 'NXC Detalle', defaultVisible: false, cellClass: 'result-cell-compact' }
+        ];
         const resultColumns = [
             { key: 'ip_address', label: 'IP', defaultVisible: true },
             { key: 'hostname', label: 'Hostname', defaultVisible: true },
@@ -281,6 +307,7 @@
             { key: 'organization_name', label: 'Organización', defaultVisible: false },
             { key: 'location', label: 'Origen', defaultVisible: false },
             { key: 'source_ip', label: 'IP origen', tableLabel: 'IP Origen', csvLabel: 'IP Origen', defaultVisible: false },
+            ...nxcColumns,
             { key: 'discovery_method', label: 'Origen descubrimiento', tableLabel: 'Origen Desc.', csvLabel: 'Origen Descubrimiento', defaultVisible: false },
             { key: 'has_screenshot', label: 'Screenshot', defaultVisible: true, cellClass: 'result-cell-center' },
             { key: 'has_source_code', label: 'Web Source', defaultVisible: true, cellClass: 'result-cell-center' },
@@ -560,8 +587,86 @@
             return [...new Set((values || []).filter(Boolean))];
         }
 
+        function formatNxcValue(value) {
+            if (value === true) return 'Sí';
+            if (value === false) return 'No';
+            if (value === null || value === undefined || value === '') return '';
+            if (Array.isArray(value)) return value.map(formatNxcValue).filter(Boolean).join('; ');
+            if (typeof value === 'object') return Object.entries(value)
+                .filter(([, v]) => v !== null && v !== undefined && v !== '')
+                .map(([k, v]) => `${k}=${formatNxcValue(v)}`)
+                .join('; ');
+            return String(value);
+        }
+
+        function getNxcProtocol(row, protocol) {
+            return ((row.netexec || {}).protocols || {})[protocol] || {};
+        }
+
+        function getNxcShares(row) {
+            return ((row.netexec || {}).shares || []).map(s => {
+                const flags = [s.read ? 'R' : '', s.write ? 'W' : ''].filter(Boolean).join('');
+                return `${s.name || ''}${flags ? ` (${flags})` : ''}`.trim();
+            }).filter(Boolean).join('; ');
+        }
+
+        function getNxcProtocolDetails(row) {
+            const protocols = (row.netexec || {}).protocols || {};
+            return Object.entries(protocols).map(([proto, info]) => {
+                const details = Object.entries(info || {})
+                    .filter(([key, value]) => key !== 'port' && value !== null && value !== undefined && value !== '')
+                    .map(([key, value]) => `${key}=${formatNxcValue(value)}`)
+                    .join(', ');
+                const port = info && info.port ? `:${info.port}` : '';
+                return `${proto}${port}${details ? ` ${details}` : ''}`;
+            }).join('; ');
+        }
+
+        function getNxcColumnValue(row, key) {
+            if (!row.netexec) return '';
+            const data = row.netexec || {};
+            const smb = getNxcProtocol(row, 'smb');
+            const ldap = getNxcProtocol(row, 'ldap');
+            const rdp = getNxcProtocol(row, 'rdp');
+            const mssql = getNxcProtocol(row, 'mssql');
+            const ssh = getNxcProtocol(row, 'ssh');
+            const ftp = getNxcProtocol(row, 'ftp');
+            const winrm = getNxcProtocol(row, 'winrm');
+            const vnc = getNxcProtocol(row, 'vnc');
+            const nfs = getNxcProtocol(row, 'nfs');
+            const wmi = getNxcProtocol(row, 'wmi');
+            const values = {
+                nxc_os: data.os,
+                nxc_domain: data.domain,
+                nxc_protocols: Object.keys(data.protocols || {}).join('; '),
+                nxc_smb_dc: smb.dc,
+                nxc_smb_smbv1: smb.smbv1,
+                nxc_smb_signing: smb.signing,
+                nxc_smb_spooler: smb.spooler,
+                nxc_smb_zerologon: smb.zerologon,
+                nxc_smb_petitpotam: smb.petitpotam,
+                nxc_shares: getNxcShares(row),
+                nxc_admin_users: (data.admin_users || []).join('; '),
+                nxc_loggedin_users: (data.loggedin_users || []).join('; '),
+                nxc_ldap_signing_required: ldap.signing_required,
+                nxc_ldap_channel_binding: ldap.channel_binding,
+                nxc_rdp_nla: rdp.nla,
+                nxc_mssql_instances: mssql.instances,
+                nxc_ssh_banner: ssh.banner || ssh.server_banner,
+                nxc_ftp_banner: ftp.banner || ftp.server_banner,
+                nxc_winrm_port: winrm.port,
+                nxc_vnc_banner: vnc.banner || vnc.server_banner,
+                nxc_nfs_banner: nfs.banner || nfs.server_banner,
+                nxc_wmi_banner: wmi.banner || wmi.server_banner,
+                nxc_loot_files: (data.loot_files || []).length || '',
+                nxc_protocol_details: getNxcProtocolDetails(row)
+            };
+            return formatNxcValue(values[key]);
+        }
+
         function getRawColumnValue(row, key) {
             if (key === 'source_ip') return row.source_ip || row.myip;
+            if (key.startsWith('nxc_')) return getNxcColumnValue(row, key);
             return row[key];
         }
 
@@ -577,7 +682,9 @@
             const columnValue = document.getElementById('columnFilterValue').value.toLowerCase();
 
             return allResults.filter(row => {
-                if (searchTerm && !Object.values(row).some(val => val && val.toString().toLowerCase().includes(searchTerm))) {
+                if (searchTerm
+                    && !Object.values(row).some(val => val && val.toString().toLowerCase().includes(searchTerm))
+                    && !nxcColumns.some(col => getNxcColumnValue(row, col.key).toLowerCase().includes(searchTerm))) {
                     return false;
                 }
                 if (!columnFilter || !columnValue) {
@@ -679,6 +786,7 @@
         }
 
         function renderDiscoveryCell(row) {
+            return renderMethods(row.discovery_methods);
             let discoveryDisplay = renderMethods(row.discovery_methods);
             if (row.netexec) {
                 const nxcKey = ['nxc', row.organization_name, row.location, row.source_ip, row.ip_address].map(value => value || '').join('|');
@@ -690,6 +798,7 @@
         }
 
         function getResultCsvValue(row, key, derived = getRowDerivedValues(row)) {
+            if (key.startsWith('nxc_')) return getNxcColumnValue(row, key);
             const values = {
                 ip_address: row.ip_address,
                 hostname: row.hostname,
@@ -712,6 +821,11 @@
         }
 
         function renderResultCell(row, key, derived) {
+            if (key.startsWith('nxc_')) {
+                const value = getNxcColumnValue(row, key);
+                return value ? escapeHtml(value) : '-';
+            }
+
             const textValues = {
                 ip_address: row.ip_address || '-',
                 hostname: row.hostname || '-',
@@ -1354,13 +1468,18 @@
     <style>
         .btn-evidence {
             background: #3b82f6;
-            color: white;
+            color: #ffffff;
             border: none;
             padding: 0.25rem 0.5rem;
             border-radius: 4px;
             cursor: pointer;
             font-size: 1rem;
             transition: background 0.2s;
+        }
+
+        .btn-evidence small {
+            color: #ffffff;
+            font-size: 0.72em;
         }
 
         .btn-evidence:hover {
@@ -1605,23 +1724,31 @@
         }
 
         .interface-badge {
-            background: #1e293b;
+            background: var(--bg-surface);
             color: #60a5fa;
             padding: 0.1rem 0.4rem;
             border-radius: 4px;
             font-size: 0.75rem;
-            border: 1px solid #334155;
+            border: 1px solid var(--border-highlight);
+        }
+
+        [data-theme="light"] .interface-badge {
+            color: #1d4ed8;
         }
 
         .port-badge {
-            background: #0f172a;
+            background: var(--bg-surface);
             color: #34d399;
             padding: 0.1rem 0.45rem;
             border-radius: 4px;
             font-size: 0.75rem;
             font-family: 'Courier New', monospace;
-            border: 1px solid #1e3a2e;
+            border: 1px solid var(--border-highlight);
             white-space: nowrap;
+        }
+
+        [data-theme="light"] .port-badge {
+            color: #059669;
         }
 
         .port-badges {
