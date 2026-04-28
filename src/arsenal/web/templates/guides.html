@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Guias - ArsenalOT{% endblock %}
+
+{% block extra_css %}
+<style>
+.guides-page { display: grid; gap: 1rem; }
+.guides-hero { padding: 1.2rem; border: 1px solid rgba(148,163,184,.18); border-radius: 8px; background: rgba(15,23,42,.72); }
+.guides-hero h1 { margin: 0; color: var(--text-primary); font-size: 1.45rem; }
+.guides-hero p { margin: .45rem 0 0; color: var(--text-secondary); line-height: 1.55; max-width: 78ch; }
+.guide-picker { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 1rem; }
+.guide-choice { position: relative; min-height: 220px; display: grid; align-content: end; gap: .7rem; padding: 1.15rem; border: 1px solid rgba(148,163,184,.18); border-radius: 8px; overflow: hidden; background: #0f172a; color: inherit; text-align: left; cursor: pointer; }
+.guide-choice::before { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(14,165,233,.24), rgba(34,197,94,.1)); opacity: .95; }
+.guide-choice.devices::before { background: linear-gradient(135deg, rgba(99,102,241,.24), rgba(245,158,11,.14)); }
+.guide-choice::after { content: ""; position: absolute; inset: auto -10% -42% -10%; height: 70%; background: radial-gradient(circle at 50% 0%, rgba(255,255,255,.2), transparent 58%); }
+.guide-choice:hover { border-color: rgba(78,205,196,.46); }
+.guide-choice > * { position: relative; z-index: 1; }
+.choice-kicker { color: #bae6fd; font-size: .75rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.guide-choice.devices .choice-kicker { color: #fde68a; }
+.guide-choice h2 { margin: 0; color: #f8fafc; font-size: 1.35rem; }
+.guide-choice p { margin: 0; color: #dbeafe; line-height: 1.5; max-width: 52ch; }
+.choice-meta { display: flex; flex-wrap: wrap; gap: .45rem; }
+.choice-pill { border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: .24rem .55rem; color: #f8fafc; background: rgba(2,6,23,.22); font-size: .76rem; font-weight: 700; }
+.guides-shell { display: none; grid-template-columns: minmax(250px, 340px) 1fr; height: calc(100vh - 180px); min-height: 640px; border: 1px solid rgba(148,163,184,.18); border-radius: 8px; overflow: hidden; background: rgba(2,6,23,.42); }
+.guides-shell.active { display: grid; }
+.guides-nav { min-height: 0; overflow: auto; border-right: 1px solid rgba(148,163,184,.16); background: rgba(15,23,42,.72); }
+.guides-nav-head { position: sticky; top: 0; z-index: 1; padding: 1rem; border-bottom: 1px solid rgba(148,163,184,.14); background: rgba(15,23,42,.96); }
+.back-btn { margin-bottom: .75rem; border: 1px solid rgba(148,163,184,.22); border-radius: 7px; padding: .45rem .65rem; background: rgba(30,41,59,.82); color: var(--text-secondary); font: inherit; font-weight: 800; cursor: pointer; }
+.back-btn:hover { color: var(--text-primary); border-color: rgba(78,205,196,.4); }
+.guides-title { margin: 0; color: var(--text-primary); font-size: 1.12rem; }
+.guides-subtitle { margin-top: .35rem; color: var(--text-secondary); font-size: .82rem; line-height: 1.45; }
+.guide-node { display: flex; align-items: center; gap: .45rem; width: calc(100% - .6rem); margin: .12rem .3rem; padding: .42rem .55rem; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); text-align: left; font: inherit; font-size: .86rem; cursor: pointer; }
+.guide-node:hover { background: rgba(148,163,184,.1); color: var(--text-primary); }
+.guide-node.active { background: rgba(78,205,196,.14); color: #d9fffb; }
+.guide-node.dir { color: var(--text-primary); font-weight: 800; cursor: default; margin-top: .45rem; }
+.guide-node.dir:hover { background: transparent; }
+.guides-reader { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto 1fr; }
+.reader-top { display: flex; align-items: center; gap: .75rem; padding: .85rem 1rem; border-bottom: 1px solid rgba(148,163,184,.14); background: rgba(15,23,42,.62); }
+.reader-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: .84rem; }
+.reader-doc { min-height: 0; overflow: auto; padding: 1.4rem min(5vw, 3rem); color: var(--text-primary); line-height: 1.76; }
+.reader-doc h1 { margin: .15rem 0 1rem; padding-bottom: .55rem; border-bottom: 1px solid rgba(148,163,184,.22); font-size: 1.9rem; }
+.reader-doc h2 { margin: 1.35rem 0 .55rem; color: #67e8f9; font-size: 1.35rem; }
+.reader-doc h3 { margin: 1.05rem 0 .4rem; color: #86efac; font-size: 1.08rem; }
+.reader-doc p { margin: .65rem 0; }
+.reader-doc ul, .reader-doc ol { padding-left: 1.45rem; }
+.reader-doc li { margin: .28rem 0; }
+.reader-doc code { background: rgba(148,163,184,.14); border-radius: 5px; padding: .1rem .32rem; color: #f9a8d4; }
+.reader-doc pre { overflow: auto; padding: .95rem 1.1rem; border: 1px solid rgba(148,163,184,.16); border-radius: 8px; background: rgba(2,6,23,.68); }
+.reader-doc pre code { padding: 0; background: transparent; color: #e5e7eb; }
+.reader-doc table { width: 100%; border-collapse: collapse; margin: .9rem 0; }
+.reader-doc th, .reader-doc td { border: 1px solid rgba(148,163,184,.22); padding: .45rem .6rem; vertical-align: top; }
+.reader-doc blockquote { margin: .85rem 0; padding-left: 1rem; border-left: 3px solid #67e8f9; color: var(--text-secondary); }
+.guide-empty { display: grid; place-items: center; height: 100%; color: var(--text-secondary); text-align: center; padding: 2rem; }
+@media (max-width: 900px) { .guide-picker { grid-template-columns: 1fr; } .guides-shell.active { grid-template-columns: 1fr; height: auto; } .guides-nav { max-height: 330px; border-right: 0; border-bottom: 1px solid rgba(148,163,184,.16); } .reader-doc { min-height: 520px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="guides-page">
+  <section class="guides-hero" id="guidesHero">
+    <h1>Guias de auditoria</h1>
+    <p>Elige primero el tipo de auditoria. Despues se muestran solo las guias correspondientes, en modo lectura y separadas de plantillas y notas de cliente.</p>
+  </section>
+
+  <section class="guide-picker" id="guidePicker" aria-label="Tipos de guia">
+    <button class="guide-choice" type="button" onclick="selectGuideGroup('infra')">
+      <span class="choice-kicker">Infraestructura IT/OT</span>
+      <h2>Guia de pentest de infraestructura</h2>
+      <p>Metodologias, tecnicas y procedimientos para auditorias de red, Active Directory, acceso inicial y movimiento lateral.</p>
+      <span class="choice-meta">
+        <span class="choice-pill" id="infraCount">Guias</span>
+        <span class="choice-pill">Solo lectura</span>
+      </span>
+    </button>
+    <button class="guide-choice devices" type="button" onclick="selectGuideGroup('devices-62443')">
+      <span class="choice-kicker">Dispositivos OT</span>
+      <h2>Guia de dispositivos IEC 62443</h2>
+      <p>Referencias y guias para evaluacion de dispositivos industriales, requisitos IEC 62443 y controles asociados.</p>
+      <span class="choice-meta">
+        <span class="choice-pill" id="devicesCount">Guias</span>
+        <span class="choice-pill">Solo lectura</span>
+      </span>
+    </button>
+  </section>
+
+  <section class="guides-shell" id="guidesShell">
+    <aside class="guides-nav">
+      <div class="guides-nav-head">
+        <button class="back-btn" type="button" onclick="showPicker()">Volver a tipos</button>
+        <h2 class="guides-title" id="selectedGroupTitle">Guias</h2>
+        <div class="guides-subtitle" id="selectedGroupSubtitle">Selecciona una guia para leerla.</div>
+      </div>
+      <div id="guidesTree"></div>
+    </aside>
+    <main class="guides-reader">
+      <div class="reader-top">
+        <strong>Guia</strong>
+        <span class="reader-path" id="readerPath">Selecciona un documento</span>
+      </div>
+      <article class="reader-doc" id="readerDoc">
+        <div class="guide-empty">Selecciona una guia para leerla.</div>
+      </article>
+    </main>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/vendor/marked.min.js"></script>
+<script>
+let guidesCatalog = [];
+let activeGuide = null;
+let selectedGroup = null;
+
+const GROUP_META = {
+  infra: {
+    title: 'Guia de pentest de infraestructura',
+    subtitle: 'Guias tecnicas y procedimientos para auditoria de infraestructura IT/OT.',
+  },
+  'devices-62443': {
+    title: 'Guia de dispositivos IEC 62443',
+    subtitle: 'Guias y referencias para evaluacion de dispositivos industriales.',
+  },
+};
+
+document.addEventListener('DOMContentLoaded', loadGuides);
+
+async function loadGuides() {
+  const response = await fetch('/api/bitacora/guides/catalog/tree');
+  const data = await response.json();
+  guidesCatalog = data.tree || [];
+  document.getElementById('infraCount').textContent = `${countFiles(findGroup('infra'))} guias`;
+  document.getElementById('devicesCount').textContent = `${countFiles(findGroup('devices-62443'))} guias`;
+}
+
+function selectGuideGroup(groupKey) {
+  selectedGroup = groupKey;
+  activeGuide = null;
+  const group = findGroup(groupKey);
+  const meta = GROUP_META[groupKey] || { title: group?.name || 'Guias', subtitle: 'Selecciona una guia para leerla.' };
+
+  document.getElementById('guidePicker').style.display = 'none';
+  document.getElementById('guidesHero').style.display = 'none';
+  document.getElementById('guidesShell').classList.add('active');
+  document.getElementById('selectedGroupTitle').textContent = meta.title;
+  document.getElementById('selectedGroupSubtitle').textContent = meta.subtitle;
+  document.getElementById('readerPath').textContent = 'Selecciona un documento';
+  document.getElementById('readerDoc').innerHTML = '<div class="guide-empty">Selecciona una guia para leerla.</div>';
+
+  const container = document.getElementById('guidesTree');
+  container.innerHTML = '';
+  renderNodes(group?.children || [], container, 0);
+  const first = findFirstFile(group?.children || []);
+  if (first) openGuide(first.path);
+}
+
+function showPicker() {
+  selectedGroup = null;
+  activeGuide = null;
+  document.getElementById('guidesShell').classList.remove('active');
+  document.getElementById('guidePicker').style.display = '';
+  document.getElementById('guidesHero').style.display = '';
+}
+
+function findGroup(groupKey) {
+  return guidesCatalog.find(group => group.path === groupKey);
+}
+
+function countFiles(node) {
+  if (!node) return 0;
+  if (node.type === 'file') return 1;
+  return (node.children || []).reduce((total, child) => total + countFiles(child), 0);
+}
+
+function renderNodes(nodes, container, depth) {
+  for (const node of nodes) {
+    const button = document.createElement('button');
+    button.className = `guide-node ${node.type === 'dir' ? 'dir' : ''}`;
+    button.style.paddingLeft = `${0.55 + depth * 0.9}rem`;
+    button.textContent = `${node.type === 'dir' ? '>' : '-'} ${node.name.replace(/\.md$/i, '')}`;
+    button.title = node.path;
+    if (node.type === 'file') button.onclick = () => openGuide(node.path);
+    container.appendChild(button);
+    if (node.children) renderNodes(node.children, container, depth + 1);
+  }
+}
+
+function findFirstFile(nodes) {
+  for (const node of nodes) {
+    if (node.type === 'file') return node;
+    const child = findFirstFile(node.children || []);
+    if (child) return child;
+  }
+  return null;
+}
+
+async function openGuide(path) {
+  const response = await fetch(`/api/bitacora/guides/catalog/file?path=${encodeURIComponent(path)}`);
+  if (!response.ok) return;
+  const data = await response.json();
+  activeGuide = data.path;
+  document.getElementById('readerPath').textContent = data.path;
+  document.getElementById('readerDoc').innerHTML = marked.parse(data.content || '', { breaks: true, gfm: true });
+  document.querySelectorAll('.guide-node').forEach(node => {
+    node.classList.toggle('active', node.title === activeGuide);
+  });
+}
+</script>
+{% endblock %}

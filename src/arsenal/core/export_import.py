@@ -635,10 +635,24 @@ def _find_enrichment_id(cursor, scan_result_id: int, enrich: Dict) -> Optional[i
 
 
 def _add_bitacora_org_to_zip(zipf: zipfile.ZipFile, storage: ScanStorage, org_name: Optional[str]):
-    """Incluye la bitacora Obsidian de la organizacion en exports filtrados."""
+    """Incluye la bitacora Obsidian filtrada de una organizacion.
+
+    El ZIP conserva el contexto compartido del vault, pero sin incluir otras
+    organizaciones: bitacora/.obsidian, bitacora/imagenes y la organizacion
+    seleccionada bajo bitacora/Organizaciones/<ORG>.
+    """
     normalized = _normalize_org_name(org_name)
     if not normalized:
         return
+
+    vault_dir = storage.results_root / "bitacora"
+    for shared_item in (".obsidian", "imagenes"):
+        shared_path = vault_dir / shared_item
+        if shared_path.exists():
+            if shared_path.is_dir():
+                _add_directory_to_zip(zipf, shared_path, f"bitacora/{shared_item}")
+            elif shared_path.is_file():
+                zipf.write(shared_path, f"bitacora/{shared_item}")
 
     bitacora_dir = storage.results_root / "bitacora" / "Organizaciones" / normalized
     if bitacora_dir.exists():
@@ -672,6 +686,27 @@ def _get_export_org_names(export_data: Dict) -> List[str]:
 def _import_bitacora_org_files(storage: ScanStorage, temp_path: Path,
                                export_data: Dict, import_stats: Dict):
     """Restaura la bitacora Obsidian incluida en el ZIP, si existe."""
+    source_vault = temp_path / "bitacora"
+    dest_vault = storage.results_root / "bitacora"
+
+    for shared_item in (".obsidian", "imagenes"):
+        source_item = source_vault / shared_item
+        if not source_item.exists():
+            continue
+
+        dest_item = dest_vault / shared_item
+        dest_item.parent.mkdir(parents=True, exist_ok=True)
+        if source_item.is_dir():
+            if dest_item.exists():
+                _merge_directory(source_item, dest_item)
+            else:
+                shutil.copytree(source_item, dest_item)
+        elif source_item.is_file() and not dest_item.exists():
+            shutil.copy2(source_item, dest_item)
+        import_stats["bitacora_shared_files_imported"] = (
+            import_stats.get("bitacora_shared_files_imported", 0) + 1
+        )
+
     for org_name in _get_export_org_names(export_data):
         source_dir = temp_path / "bitacora" / "Organizaciones" / org_name
         if not source_dir.exists():

@@ -1496,6 +1496,15 @@ class ScanStorage:
         if not error_message:
             self._auto_bitacora_note(scan_id)
 
+    def _refresh_bitacora_visibility_for_org(self, organization: str):
+        """Actualiza bloques e imagenes de visibilidad cuando cambian redes."""
+        try:
+            from arsenal.core.bitacora_manager import BitacoraManager
+            mgr = BitacoraManager(self.results_root)
+            mgr.refresh_org_visibility_diagrams(organization, self.db_path)
+        except Exception:
+            pass
+
     def _auto_bitacora_note(self, scan_id: int):
         """Crea/actualiza silenciosamente la nota de bitácora del vector de acceso."""
         try:
@@ -1955,6 +1964,7 @@ class ScanStorage:
                     pass
             
             conn.commit()
+            self._refresh_bitacora_visibility_for_org(organization.upper())
             return network_id
         except Exception as e:
             conn.rollback()
@@ -2009,6 +2019,8 @@ class ScanStorage:
                             pass
             
             conn.commit()
+            if rows > 0 and 'organization' in locals():
+                self._refresh_bitacora_visibility_for_org(organization)
             return rows > 0
         finally:
             conn.close()
@@ -2018,6 +2030,9 @@ class ScanStorage:
         conn = sqlite3.connect(self.db_path, timeout=30.0)
         try:
             cursor = conn.cursor()
+            cursor.execute("SELECT organization_name FROM networks WHERE id = ?", (network_id,))
+            org_row = cursor.fetchone()
+            organization = org_row[0] if org_row else None
             cursor.execute("DELETE FROM networks WHERE id = ?", (network_id,))
             rows = cursor.rowcount
             if rows > 0:
@@ -2036,6 +2051,8 @@ class ScanStorage:
                         WHERE id = ?
                     """, (json.dumps(ids), row[0]))
             conn.commit()
+            if rows > 0 and organization:
+                self._refresh_bitacora_visibility_for_org(organization)
             return rows > 0
         finally:
             conn.close()

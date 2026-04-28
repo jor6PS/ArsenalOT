@@ -1,293 +1,49 @@
 {% extends "base.html" %}
 
-{% block title %}Bitácora — {{ org_name }} — ArsenalOT{% endblock %}
+{% block title %}Bitacora - {{ org_name }} - ArsenalOT{% endblock %}
 
 {% block extra_css %}
 <style>
-/* ── Layout ─────────────────────────────────────────────── */
-.bk-shell {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  grid-template-rows: auto 1fr;
-  height: calc(100vh - 130px);
-  gap: 0;
-  min-height: 500px;
-}
-.bk-header {
-  grid-column: 1 / -1;
-  padding: .85rem 1.25rem;
-  background: rgba(255,255,255,.03);
-  border: 1px solid rgba(255,255,255,.07);
-  border-radius: 12px 12px 0 0;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-.bk-sidebar {
-  border: 1px solid rgba(255,255,255,.07);
-  border-top: none;
-  border-right: none;
-  border-radius: 0 0 0 12px;
-  overflow-y: auto;
-  background: rgba(255,255,255,.02);
-  padding: .5rem 0;
-}
-.bk-main {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid rgba(255,255,255,.07);
-  border-top: none;
-  border-radius: 0 0 12px 0;
-  overflow: hidden;
-}
-
-/* ── Sidebar tree ───────────────────────────────────────── */
-.tree-node {
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-  padding: .3rem .75rem .3rem .5rem;
-  cursor: pointer;
-  font-size: .82rem;
-  color: var(--text-secondary);
-  border-radius: 6px;
-  margin: 1px 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: background .12s, color .12s;
-  user-select: none;
-}
-.tree-node:hover { background: rgba(255,255,255,.06); color: var(--text-main); }
-.tree-node.active { background: rgba(99,179,237,.14); color: #90cdf4; }
-.tree-node.is-dir { font-weight: 500; }
-.tree-node .tree-icon { flex-shrink: 0; font-size: .85rem; }
-.tree-children { padding-left: 1rem; }
-
-.tree-actions {
-  display: flex;
-  gap: .35rem;
-  padding: .5rem .75rem;
-  border-bottom: 1px solid rgba(255,255,255,.06);
-  margin-bottom: .25rem;
-}
-.tree-btn {
-  font-size: .72rem;
-  padding: .2rem .55rem;
-  border-radius: 5px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.04);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  transition: background .12s, color .12s;
-}
-.tree-btn:hover { background: rgba(255,255,255,.1); color: var(--text-main); }
-
-/* ── Editor toolbar ─────────────────────────────────────── */
-.editor-toolbar {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  padding: .55rem .9rem;
-  border-bottom: 1px solid rgba(255,255,255,.07);
-  background: rgba(255,255,255,.02);
-  flex-wrap: wrap;
-}
-.editor-toolbar-path {
-  font-size: .78rem;
-  color: var(--text-secondary);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.editor-btn {
-  font-size: .76rem;
-  padding: .22rem .6rem;
-  border-radius: 6px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.05);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  transition: background .12s, color .12s, border-color .12s;
-}
-.editor-btn:hover   { background: rgba(255,255,255,.1); color: var(--text-main); }
-.editor-btn.active  { background: rgba(99,179,237,.18); color: #90cdf4; border-color: rgba(99,179,237,.4); }
-.editor-btn.save-btn { background: rgba(72,187,120,.15); color: #68d391; border-color: rgba(72,187,120,.35); }
-.editor-btn.save-btn:hover { background: rgba(72,187,120,.28); }
-.editor-btn.save-btn:disabled { opacity: .45; cursor: not-allowed; }
-.editor-btn.danger-btn { background: rgba(252,129,74,.12); color: #fc8149; border-color: rgba(252,129,74,.3); }
-
-/* ── Editor/preview panels ──────────────────────────────── */
-.editor-body {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  overflow: hidden;
-  min-height: 0;
-}
-.editor-body.view-edit   { grid-template-columns: 1fr 0; }
-.editor-body.view-preview { grid-template-columns: 0 1fr; }
-
-.editor-pane {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-right: 1px solid rgba(255,255,255,.06);
-}
-.editor-pane:last-child { border-right: none; }
-
-.editor-pane textarea {
-  flex: 1;
-  background: #0d1117;
-  color: #e2e8f0;
-  border: none;
-  outline: none;
-  font-family: 'Courier New', 'Consolas', monospace;
-  font-size: .83rem;
-  line-height: 1.65;
-  padding: 1rem 1.2rem;
-  resize: none;
-  tab-size: 2;
-}
-.editor-pane textarea::selection { background: rgba(99,179,237,.3); }
-
-.preview-pane {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.2rem 1.5rem;
-  font-size: .88rem;
-  line-height: 1.7;
-  color: var(--text-main);
-  background: #0b0e14;
-}
-
-/* Preview markdown styles */
-.preview-pane h1 { font-size: 1.5rem; margin: 1rem 0 .5rem; border-bottom: 1px solid rgba(255,255,255,.1); padding-bottom: .35rem; }
-.preview-pane h2 { font-size: 1.2rem; margin: .9rem 0 .4rem; color: #90cdf4; }
-.preview-pane h3 { font-size: 1rem; margin: .75rem 0 .3rem; color: #68d391; }
-.preview-pane h4, .preview-pane h5 { font-size: .9rem; margin: .6rem 0 .25rem; }
-.preview-pane p  { margin: .5rem 0; }
-.preview-pane ul, .preview-pane ol { padding-left: 1.4rem; margin: .4rem 0; }
-.preview-pane li { margin: .2rem 0; }
-.preview-pane code {
-  background: rgba(255,255,255,.08);
-  padding: .1rem .35rem;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  font-size: .82rem;
-  color: #fbb6ce;
-}
-.preview-pane pre {
-  background: rgba(0,0,0,.4);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 8px;
-  padding: .85rem 1rem;
-  overflow-x: auto;
-  margin: .6rem 0;
-}
-.preview-pane pre code { background: none; padding: 0; color: #e2e8f0; }
-.preview-pane blockquote {
-  border-left: 3px solid #63b3ed;
-  padding-left: .9rem;
-  margin: .5rem 0;
-  color: var(--text-secondary);
-}
-.preview-pane table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
-.preview-pane th, .preview-pane td {
-  border: 1px solid rgba(255,255,255,.12);
-  padding: .35rem .65rem;
-  font-size: .82rem;
-}
-.preview-pane th { background: rgba(255,255,255,.06); font-weight: 600; }
-.preview-pane a { color: #63b3ed; }
-.preview-pane hr { border: none; border-top: 1px solid rgba(255,255,255,.1); margin: .75rem 0; }
-
-/* ── Conflict modal ─────────────────────────────────────── */
-.modal-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.72);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 999;
-  backdrop-filter: blur(3px);
-}
+.bk-page { display: grid; gap: 1rem; }
+.bk-top { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: 1rem; border: 1px solid rgba(148,163,184,.18); border-radius: 8px; background: rgba(15,23,42,.72); }
+.bk-title { margin: 0; color: var(--text-primary); font-size: 1.25rem; }
+.bk-subtitle { color: var(--text-secondary); font-size: .86rem; }
+.bk-select { min-width: min(420px, 100%); flex: 1; background: rgba(2,6,23,.72); color: var(--text-primary); border: 1px solid rgba(148,163,184,.24); border-radius: 7px; padding: .58rem .75rem; font: inherit; }
+.bk-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
+.bk-btn { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 36px; border: 1px solid rgba(148,163,184,.24); border-radius: 7px; background: rgba(30,41,59,.78); color: var(--text-secondary); padding: .45rem .75rem; font: inherit; font-weight: 700; cursor: pointer; }
+.bk-btn:hover { border-color: rgba(78,205,196,.45); color: var(--text-primary); }
+.bk-btn.active { background: rgba(78,205,196,.14); border-color: rgba(78,205,196,.45); color: #d9fffb; }
+.bk-btn.primary { background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.35); color: #bbf7d0; }
+.bk-btn.danger { background: rgba(248,113,113,.12); border-color: rgba(248,113,113,.3); color: #fecaca; }
+.bk-status { margin-left: auto; color: var(--text-secondary); font-size: .82rem; }
+.bk-workbench { height: calc(100vh - 265px); min-height: 560px; display: grid; grid-template-rows: auto 1fr; border: 1px solid rgba(148,163,184,.18); border-radius: 8px; overflow: hidden; background: rgba(2,6,23,.45); }
+.bk-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; padding: .65rem .85rem; border-bottom: 1px solid rgba(148,163,184,.14); background: rgba(15,23,42,.62); }
+.bk-path { flex: 1; min-width: 160px; color: var(--text-secondary); font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bk-body { min-height: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.bk-body.preview { grid-template-columns: 0 1fr; }
+.bk-body.edit { grid-template-columns: 1fr 0; }
+.bk-pane { min-width: 0; min-height: 0; overflow: hidden; }
+.bk-editor { width: 100%; height: 100%; box-sizing: border-box; resize: none; border: 0; outline: 0; padding: 1rem 1.15rem; background: #0b1020; color: #e5e7eb; font: .9rem/1.62 Consolas, "Courier New", monospace; tab-size: 2; }
+.bk-preview { height: 100%; overflow: auto; padding: 1.2rem 1.55rem; background: #0f172a; color: var(--text-primary); line-height: 1.72; }
+.bk-preview h1 { font-size: 1.65rem; margin: .2rem 0 .85rem; padding-bottom: .45rem; border-bottom: 1px solid rgba(148,163,184,.2); }
+.bk-preview h2 { font-size: 1.22rem; margin: 1.2rem 0 .45rem; color: #67e8f9; }
+.bk-preview h3 { font-size: 1.02rem; margin: .95rem 0 .35rem; color: #86efac; }
+.bk-preview p { margin: .55rem 0; }
+.bk-preview ul, .bk-preview ol { padding-left: 1.35rem; }
+.bk-preview code { background: rgba(148,163,184,.14); border-radius: 5px; padding: .1rem .32rem; color: #f9a8d4; }
+.bk-preview pre { overflow: auto; padding: .85rem 1rem; border: 1px solid rgba(148,163,184,.16); border-radius: 8px; background: rgba(2,6,23,.65); }
+.bk-preview pre code { padding: 0; background: transparent; color: #e5e7eb; }
+.bk-preview table { width: 100%; border-collapse: collapse; margin: .8rem 0; }
+.bk-preview th, .bk-preview td { border: 1px solid rgba(148,163,184,.2); padding: .4rem .55rem; vertical-align: top; }
+.bk-preview blockquote { margin: .75rem 0; padding-left: .9rem; border-left: 3px solid #67e8f9; color: var(--text-secondary); }
+.bk-empty { display: grid; place-items: center; height: 100%; padding: 2rem; text-align: center; color: var(--text-secondary); }
+.modal-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(2,6,23,.72); z-index: 1000; }
 .modal-overlay.hidden { display: none; }
-.modal-box {
-  background: #131720;
-  border: 1px solid rgba(252,129,74,.4);
-  border-radius: 14px;
-  padding: 1.5rem;
-  max-width: 900px;
-  width: 95vw;
-  max-height: 85vh;
-  overflow-y: auto;
-}
-.modal-title { font-size: 1.05rem; font-weight: 600; color: #fc8149; margin-bottom: .6rem; }
-.modal-desc  { font-size: .82rem; color: var(--text-secondary); margin-bottom: 1rem; }
-.conflict-panels {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: .75rem;
-  margin-bottom: 1rem;
-}
-.conflict-panel label { font-size: .75rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: .35rem; text-transform: uppercase; letter-spacing: .05em; }
-.conflict-panel textarea {
-  width: 100%; box-sizing: border-box;
-  height: 240px;
-  background: #0d1117; color: #e2e8f0;
-  border: 1px solid rgba(255,255,255,.1); border-radius: 8px;
-  font-family: 'Courier New', monospace; font-size: .78rem; line-height: 1.55;
-  padding: .65rem .8rem; resize: vertical; outline: none;
-}
-.modal-actions { display: flex; gap: .65rem; flex-wrap: wrap; }
-
-/* ── Empty / welcome state ──────────────────────────────── */
-.bk-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  gap: .75rem;
-  padding: 2rem;
-  text-align: center;
-}
-.bk-empty-icon { font-size: 3rem; opacity: .35; }
-
-/* ── Status indicator ───────────────────────────────────── */
-.save-status {
-  font-size: .73rem;
-  padding: .15rem .5rem;
-  border-radius: 4px;
-}
-.save-status.saved    { color: #68d391; }
-.save-status.unsaved  { color: #ecc94b; }
-.save-status.saving   { color: #90cdf4; }
-.save-status.conflict { color: #fc8149; }
-.save-status.error    { color: #fc8149; }
-
-/* ── Vault path info ────────────────────────────────────── */
-.vault-path-bar {
-  font-size: .75rem;
-  color: var(--text-secondary);
-  background: rgba(255,255,255,.03);
-  border: 1px solid rgba(255,255,255,.06);
-  border-radius: 7px;
-  padding: .35rem .75rem;
-  font-family: 'Courier New', monospace;
-  cursor: pointer;
-  transition: background .12s;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.vault-path-bar:hover { background: rgba(255,255,255,.07); }
+.modal-box { width: min(95vw, 720px); max-height: 88vh; overflow: auto; padding: 1.2rem; border: 1px solid rgba(148,163,184,.24); border-radius: 8px; background: #111827; box-shadow: 0 24px 80px rgba(0,0,0,.35); }
+.modal-title { color: var(--text-primary); font-weight: 800; margin-bottom: .45rem; }
+.modal-desc { color: var(--text-secondary); font-size: .88rem; line-height: 1.55; margin-bottom: 1rem; }
+.modal-actions { display: flex; gap: .55rem; flex-wrap: wrap; }
+@media (max-width: 900px) { .bk-workbench { height: auto; min-height: 720px; } .bk-body { grid-template-columns: 1fr; grid-template-rows: 360px 1fr; } .bk-body.preview, .bk-body.edit { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
 
@@ -295,587 +51,216 @@
 {% set active_phase = 'bitacora' %}
 {% include "org_tabs.html" %}
 
-<!-- Conflict resolution modal -->
-<div class="modal-overlay hidden" id="conflictModal">
-  <div class="modal-box">
-    <div class="modal-title">⚠ Conflicto de edición detectado</div>
-    <div class="modal-desc">
-      El archivo fue modificado externamente (por Obsidian u otro proceso) mientras lo tenías abierto en la web.
-      Elige cómo resolver el conflicto:
+<div class="bk-page">
+  <section class="bk-top">
+    <div>
+      <h1 class="bk-title">Bitacora - {{ org_name }}</h1>
+      <div class="bk-subtitle">Vista editable de la bitacora de la auditoria. Guias y plantillas quedan fuera de esta pantalla.</div>
     </div>
-    <div class="conflict-panels">
-      <div class="conflict-panel">
-        <label>Tu versión (web)</label>
-        <textarea id="conflictMine" readonly></textarea>
-      </div>
-      <div class="conflict-panel">
-        <label>Versión en disco (Obsidian)</label>
-        <textarea id="conflictDisk" readonly></textarea>
-      </div>
+    <select id="sourceSelect" class="bk-select" aria-label="Origen"></select>
+    <div class="bk-actions">
+      <button class="bk-btn" id="generalBtn" onclick="openFixed('general')">General</button>
+      <button class="bk-btn" id="vulnerabilitiesBtn" onclick="openFixed('vulnerabilities')">Vulnerabilidades</button>
+      <button class="bk-btn" id="credentialsBtn" onclick="openFixed('credentials')">Credenciales</button>
+      <button class="bk-btn" onclick="openNewVectorModal()">Nuevo origen</button>
+      <button class="bk-btn primary" id="fillBtn" onclick="fillFromScans()">Rellenar</button>
     </div>
-    <div class="modal-actions">
-      <button class="editor-btn save-btn" onclick="resolveConflict('mine')">Conservar mi versión</button>
-      <button class="editor-btn" style="color:#90cdf4;border-color:rgba(99,179,237,.3);" onclick="resolveConflict('disk')">Usar versión de disco</button>
-      <button class="editor-btn" onclick="resolveConflict('cancel')">Cancelar (seguir editando)</button>
+  </section>
+
+  <section class="bk-workbench">
+    <div class="bk-toolbar">
+      <span class="bk-path" id="currentPath">Sin nota seleccionada</span>
+      <span class="bk-status" id="saveStatus">Listo</span>
+      <button class="bk-btn active" id="splitBtn" onclick="setView('split')">Split</button>
+      <button class="bk-btn" id="previewBtn" onclick="setView('preview')">Previsualizar</button>
+      <button class="bk-btn" id="editBtn" onclick="setView('edit')">Editar</button>
+      <button class="bk-btn primary" id="saveBtn" onclick="saveFile()">Guardar</button>
     </div>
-  </div>
+    <div class="bk-body" id="editorBody">
+      <div class="bk-pane"><textarea id="editorTextarea" class="bk-editor" spellcheck="false" disabled></textarea></div>
+      <div class="bk-pane"><article id="previewPane" class="bk-preview"><div class="bk-empty">Selecciona un origen o una nota general.</div></article></div>
+    </div>
+  </section>
 </div>
 
-<!-- New file / folder modal -->
-<div class="modal-overlay hidden" id="newItemModal">
-  <div class="modal-box" style="max-width:460px;">
-    <div class="modal-title" id="newItemTitle">Nuevo archivo</div>
-    <div class="modal-desc" id="newItemDesc">Introduce el nombre (puede incluir subcarpetas: carpeta/archivo.md)</div>
-    <input type="text" id="newItemName" placeholder="nombre.md"
-      style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
-             border-radius:8px;padding:.5rem .85rem;color:var(--text-main);font-size:.88rem;
-             font-family:'Inter',sans-serif;outline:none;margin-bottom:1rem;"
-      onkeydown="if(event.key==='Enter')confirmNewItem()">
-    <div class="modal-actions">
-      <button class="editor-btn save-btn" onclick="confirmNewItem()">Crear</button>
-      <button class="editor-btn" onclick="closeNewItemModal()">Cancelar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Rename modal -->
-<div class="modal-overlay hidden" id="renameModal">
-  <div class="modal-box" style="max-width:460px;">
-    <div class="modal-title">Renombrar</div>
-    <input type="text" id="renameInput"
-      style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
-             border-radius:8px;padding:.5rem .85rem;color:var(--text-main);font-size:.88rem;
-             font-family:'Inter',sans-serif;outline:none;margin-bottom:1rem;"
-      onkeydown="if(event.key==='Enter')confirmRename()">
-    <div class="modal-actions">
-      <button class="editor-btn save-btn" onclick="confirmRename()">Renombrar</button>
-      <button class="editor-btn" onclick="document.getElementById('renameModal').classList.add('hidden')">Cancelar</button>
-    </div>
-  </div>
-</div>
-
-<!-- New vector modal -->
 <div class="modal-overlay hidden" id="newVectorModal">
   <div class="modal-box" style="max-width:480px;">
-    <div class="modal-title">🗡 Nuevo Vector de Acceso</div>
-    <div class="modal-desc">
-      Se creará una nota desde la plantilla <strong>CHECKLIST-PENTEST.md</strong>
-      en <code>PENTEST IT OT/Bitacoras/</code> con el formato
-      <code>FECHA - VE - Nombre.md</code>
-    </div>
-    <input type="text" id="newVectorName" placeholder="Ej. VPN Corp, WiFi Invitados, RDP Expuesto…"
-      style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
-             border-radius:8px;padding:.5rem .85rem;color:var(--text-main);font-size:.88rem;
-             font-family:'Inter',sans-serif;outline:none;margin-bottom:1rem;"
+    <div class="modal-title">Nuevo origen</div>
+    <div class="modal-desc">Se creara una nota desde la plantilla CHECKLIST-PENTEST.md en la carpeta de bitacoras.</div>
+    <input type="text" id="newVectorName" placeholder="Ej. VPN Corp, Red planta, WiFi invitados"
+      style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:.5rem .85rem;color:var(--text-main);font-size:.88rem;font-family:'Inter',sans-serif;outline:none;margin-bottom:1rem;"
       onkeydown="if(event.key==='Enter')confirmNewVector()">
     <div class="modal-actions">
-      <button class="editor-btn save-btn" onclick="confirmNewVector()">Crear</button>
-      <button class="editor-btn" onclick="closeNewVectorModal()">Cancelar</button>
-    </div>
-  </div>
-</div>
-
-<div style="margin-top:1.5rem;">
-  <!-- Header bar -->
-  <div class="bk-header" style="border-radius:12px 12px 0 0; border:1px solid rgba(255,255,255,.07);">
-    <span style="font-size:1.4rem;">📓</span>
-    <div>
-      <span style="font-weight:600;font-size:.95rem;color:var(--text-main);">Bitácora — {{ org_name }}</span>
-      <span style="font-size:.75rem;color:var(--text-secondary);margin-left:.75rem;">Sincronizada con Obsidian</span>
-    </div>
-    <div id="vaultPathBar" class="vault-path-bar" title="Clic para copiar ruta" onclick="copyVaultPath()">
-      Cargando ruta del vault…
-    </div>
-    <button class="editor-btn" onclick="refreshTree()" title="Recargar árbol de archivos">↺ Actualizar</button>
-    <button id="fillBtn" onclick="fillFromScans()"
-            title="Genera notas, copia capturas y código fuente de todos los escaneos"
-            style="margin-left:auto;background:linear-gradient(135deg,#48bb78,#38a169);border:none;border-radius:8px;color:#fff;padding:.45rem 1.1rem;font-size:.85rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:.4rem;transition:opacity .15s;white-space:nowrap;">
-      ⚡ Rellenar bitácora
-    </button>
-  </div>
-
-  <div class="bk-shell">
-    <!-- Sidebar -->
-    <div class="bk-sidebar">
-      <div class="tree-actions">
-        <button class="tree-btn" onclick="openNewItemModal(false)">+ Archivo</button>
-        <button class="tree-btn" onclick="openNewItemModal(true)">+ Carpeta</button>
-        <button class="tree-btn" onclick="openNewVectorModal()" title="Crear nueva nota de vector de acceso desde plantilla" style="color:#f9a8d4;border-color:rgba(249,168,212,.25);">🗡 Nuevo Vector</button>
-      </div>
-      <div id="fileTree">
-        <div style="padding:.75rem 1rem;font-size:.8rem;color:var(--text-secondary);">Cargando…</div>
-      </div>
-    </div>
-
-    <!-- Main editor area -->
-    <div class="bk-main">
-      <!-- Toolbar -->
-      <div class="editor-toolbar" id="editorToolbar" style="display:none;">
-        <span class="editor-toolbar-path" id="currentPath"></span>
-        <span class="save-status saved" id="saveStatus">Guardado</span>
-        <button class="editor-btn active" id="btnEdit" onclick="setView('split')">Split</button>
-        <button class="editor-btn" id="btnPreview" onclick="setView('preview')">Vista previa</button>
-        <button class="editor-btn" id="btnEditOnly" onclick="setView('edit')">Solo editor</button>
-        <button class="editor-btn danger-btn" onclick="deleteCurrentFile()" title="Eliminar archivo">🗑</button>
-        <button class="editor-btn" onclick="renameCurrentFile()" title="Renombrar">✏</button>
-        <button class="editor-btn save-btn" id="saveBtn" onclick="saveFile()">💾 Guardar</button>
-      </div>
-
-      <!-- Editor + preview body -->
-      <div class="editor-body" id="editorBody">
-        <div class="bk-empty" id="emptyState">
-          <div class="bk-empty-icon">📓</div>
-          <div style="font-size:.92rem;color:var(--text-main);">Selecciona un archivo para editarlo</div>
-          <div style="font-size:.8rem;">O crea uno nuevo con el botón <strong>+ Archivo</strong></div>
-        </div>
-      </div>
+      <button class="bk-btn primary" onclick="confirmNewVector()">Crear</button>
+      <button class="bk-btn" onclick="closeNewVectorModal()">Cancelar</button>
     </div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<!-- Marked.js para renderizado Markdown -->
 <script src="/static/vendor/marked.min.js"></script>
 <script>
 const ORG = {{ org_name | tojson }};
-
-let currentFile   = null;   // path relativo del archivo abierto
-let currentMtime  = null;   // mtime cuando se cargó (para conflict detection)
-let currentView   = 'split';
-let isDirty       = false;
+const AUDIT_TYPE = new URLSearchParams(location.search).get('audit_type') || 'infra';
+let manifest = null;
+let currentFile = null;
+let currentMtime = null;
+let currentView = 'split';
+let isDirty = false;
 let autoSaveTimer = null;
-let conflictPendingContent = null;
-let conflictPendingMtime   = null;
-let newItemIsFolder = false;
-let renameOldPath   = null;
 
-// ── Boot ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadInfo();
-  await refreshTree();
-
-  // Ctrl+S → guardar
-  document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-      e.preventDefault();
-      if (currentFile) saveFile();
+  await loadManifest();
+  document.getElementById('sourceSelect').addEventListener('change', event => {
+    if (event.target.value) openFile(event.target.value);
+  });
+  document.getElementById('editorTextarea').addEventListener('input', () => {
+    isDirty = true;
+    setStatus('Sin guardar');
+    renderPreview();
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => saveFile(true), 3000);
+  });
+  document.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+      event.preventDefault();
+      saveFile();
     }
   });
 });
 
-// ── Vault info ───────────────────────────────────────────────
-async function loadInfo() {
-  try {
-    const r = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/info`);
-    const d = await r.json();
-    document.getElementById('vaultPathBar').textContent = d.vault_path;
-    document.getElementById('vaultPathBar').title = `Ruta del vault Obsidian: ${d.vault_path}\nClic para copiar`;
-  } catch(e) {}
+async function loadManifest(preferredPath = null) {
+  const response = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/manifest?audit_type=${encodeURIComponent(AUDIT_TYPE)}`);
+  manifest = await response.json();
+  renderSources(preferredPath);
+  if (preferredPath) return openFile(preferredPath);
+  if (manifest.sources.length) return openFile(manifest.sources[0].path);
+  const general = manifest.fixed_notes.find(note => note.key === 'general');
+  if (general) return openFile(general.path);
 }
 
-function copyVaultPath() {
-  const t = document.getElementById('vaultPathBar').textContent;
-  navigator.clipboard.writeText(t).then(() => {
-    const el = document.getElementById('vaultPathBar');
-    const orig = el.textContent;
-    el.textContent = '✔ Copiado';
-    setTimeout(() => el.textContent = orig, 1500);
-  });
-}
-
-// ── File tree ────────────────────────────────────────────────
-async function refreshTree() {
-  const container = document.getElementById('fileTree');
-  try {
-    const r = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/tree`);
-    const d = await r.json();
-    container.innerHTML = '';
-    renderTree(d.tree, container, 0);
-  } catch(e) {
-    container.innerHTML = `<div style="padding:.75rem 1rem;font-size:.78rem;color:#fc8149;">Error cargando árbol: ${e.message}</div>`;
+function renderSources(selectedPath) {
+  const select = document.getElementById('sourceSelect');
+  select.innerHTML = '';
+  if (!manifest.sources.length) {
+    const opt = new Option('No hay origenes creados', '');
+    select.appendChild(opt);
+    return;
+  }
+  for (const source of manifest.sources) {
+    const opt = new Option(source.label, source.path);
+    opt.selected = source.path === selectedPath;
+    select.appendChild(opt);
   }
 }
 
-function renderTree(nodes, container, depth) {
-  for (const node of nodes) {
-    const el = document.createElement('div');
-    el.className = 'tree-node' + (node.type === 'dir' ? ' is-dir' : '');
-    el.style.paddingLeft = `${0.5 + depth * 0.85}rem`;
-    if (currentFile === node.path) el.classList.add('active');
-
-    const icon = node.type === 'dir'
-      ? (node.children?.length ? '📂' : '📁')
-      : getFileIcon(node.name);
-
-    el.innerHTML = `<span class="tree-icon">${icon}</span><span>${esc(node.name)}</span>`;
-    el.title = node.path;
-
-    if (node.type === 'file') {
-      el.onclick = () => openFile(node.path);
-    } else {
-      // toggle collapse
-      el.onclick = () => {
-        const childDiv = el.nextElementSibling;
-        if (childDiv && childDiv.classList.contains('tree-children')) {
-          childDiv.style.display = childDiv.style.display === 'none' ? '' : 'none';
-          el.querySelector('.tree-icon').textContent = childDiv.style.display === 'none' ? '📁' : '📂';
-        }
-      };
-    }
-
-    container.appendChild(el);
-
-    if (node.type === 'dir' && node.children) {
-      const childDiv = document.createElement('div');
-      childDiv.className = 'tree-children';
-      renderTree(node.children, childDiv, depth + 1);
-      container.appendChild(childDiv);
-    }
-  }
+function openFixed(key) {
+  const note = manifest.fixed_notes.find(item => item.key === key);
+  if (note) openFile(note.path);
 }
 
-function getFileIcon(name) {
-  if (name.endsWith('.md'))   return '📝';
-  if (name.endsWith('.py'))   return '🐍';
-  if (name.endsWith('.json')) return '{}';
-  if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.svg')) return '🖼';
-  return '📄';
-}
-
-// ── Open / load file ─────────────────────────────────────────
 async function openFile(path) {
-  // Warn if unsaved changes
-  if (isDirty && currentFile && !confirm('Tienes cambios sin guardar. ¿Descartar?')) return;
-
-  try {
-    const r = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/file?path=${encodeURIComponent(path)}`);
-    if (!r.ok) { alert('Error abriendo archivo'); return; }
-    const d = await r.json();
-
-    currentFile  = path;
-    currentMtime = d.mtime;
-    isDirty      = false;
-
-    buildEditor(d.content);
-    setDirty(false);
-
-    // Highlight in tree
-    document.querySelectorAll('.tree-node').forEach(el => {
-      el.classList.toggle('active', el.title === path);
-    });
-  } catch(e) {
-    alert('Error: ' + e.message);
+  if (isDirty && currentFile && !confirm('Tienes cambios sin guardar. Descartar cambios?')) return;
+  const response = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/file?path=${encodeURIComponent(path)}`);
+  if (!response.ok) {
+    setStatus('Error abriendo nota');
+    return;
   }
-}
-
-function buildEditor(content) {
-  const body = document.getElementById('editorBody');
-  const toolbar = document.getElementById('editorToolbar');
-  const emptyState = document.getElementById('emptyState');
-
-  // Remove previous editor elements if any
-  body.querySelectorAll('.editor-pane, .preview-pane').forEach(el => el.remove());
-  if (emptyState) emptyState.style.display = 'none';
-
-  // Editor pane
-  const editorPane = document.createElement('div');
-  editorPane.className = 'editor-pane';
-  editorPane.id = 'editorPane';
-  const ta = document.createElement('textarea');
-  ta.id = 'editorTextarea';
-  ta.value = content;
-  ta.spellcheck = false;
-  ta.addEventListener('input', () => {
-    setDirty(true);
-    scheduleAutoSave();
-    renderPreview();
-  });
-  ta.addEventListener('keydown', handleTabKey);
-  editorPane.appendChild(ta);
-  body.appendChild(editorPane);
-
-  // Preview pane
-  const prevPane = document.createElement('div');
-  prevPane.className = 'preview-pane';
-  prevPane.id = 'previewPane';
-  body.appendChild(prevPane);
-
-  document.getElementById('currentPath').textContent = currentFile;
-  toolbar.style.display = 'flex';
-  setView(currentView);
+  const data = await response.json();
+  currentFile = data.path;
+  currentMtime = data.mtime;
+  isDirty = false;
+  document.getElementById('editorTextarea').disabled = false;
+  document.getElementById('editorTextarea').value = data.content;
+  document.getElementById('currentPath').textContent = data.path;
+  setStatus('Guardado');
+  syncActiveControls(data.path);
   renderPreview();
 }
 
-function handleTabKey(e) {
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    const ta = e.target;
-    const start = ta.selectionStart, end = ta.selectionEnd;
-    ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
-    ta.selectionStart = ta.selectionEnd = start + 2;
-    setDirty(true);
+function syncActiveControls(path) {
+  const select = document.getElementById('sourceSelect');
+  select.value = manifest.sources.some(source => source.path === path) ? path : '';
+  for (const note of manifest.fixed_notes) {
+    const btn = document.getElementById(`${note.key}Btn`);
+    if (btn) btn.classList.toggle('active', note.path === path);
   }
 }
 
-// ── Render preview ───────────────────────────────────────────
-function renderPreview() {
-  const ta = document.getElementById('editorTextarea');
-  const pp = document.getElementById('previewPane');
-  if (!ta || !pp) return;
-  try {
-    pp.innerHTML = marked.parse(ta.value, { breaks: true, gfm: true });
-  } catch(e) {
-    pp.innerHTML = `<pre style="color:#fc8149">${esc(e.message)}</pre>`;
-  }
-}
-
-// ── View modes ───────────────────────────────────────────────
-function setView(mode) {
-  currentView = mode;
-  const body = document.getElementById('editorBody');
-  const ep = document.getElementById('editorPane');
-  const pp = document.getElementById('previewPane');
-  if (!ep || !pp) return;
-
-  body.className = 'editor-body';
-  if (mode === 'edit')    body.classList.add('view-edit');
-  if (mode === 'preview') body.classList.add('view-preview');
-
-  document.getElementById('btnEdit').classList.toggle('active', mode === 'split');
-  document.getElementById('btnPreview').classList.toggle('active', mode === 'preview');
-  document.getElementById('btnEditOnly').classList.toggle('active', mode === 'edit');
-
-  if (mode === 'preview') renderPreview();
-}
-
-// ── Save ─────────────────────────────────────────────────────
-function scheduleAutoSave() {
-  clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => { if (isDirty) saveFile(true); }, 3000);
-}
-
-async function saveFile(isAutoSave = false) {
+async function saveFile(isAuto = false) {
   if (!currentFile) return;
-  const ta = document.getElementById('editorTextarea');
-  if (!ta) return;
-
-  const btn = document.getElementById('saveBtn');
-  btn.disabled = true;
-  setStatus('saving', isAutoSave ? 'Guardando…' : 'Guardando…');
-
+  const textarea = document.getElementById('editorTextarea');
+  document.getElementById('saveBtn').disabled = true;
+  setStatus(isAuto ? 'Autoguardando...' : 'Guardando...');
   try {
-    const r = await fetch(
-      `/api/bitacora/${encodeURIComponent(ORG)}/file?path=${encodeURIComponent(currentFile)}`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: ta.value, client_mtime: currentMtime }),
+    const response = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/file?path=${encodeURIComponent(currentFile)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: textarea.value, client_mtime: currentMtime }),
+    });
+    const data = await response.json();
+    if (response.status === 409 && data.conflict) {
+      if (confirm('La nota cambio en disco. Cargar la version de disco?')) {
+        textarea.value = data.disk_content;
+        currentMtime = data.disk_mtime;
+        isDirty = false;
+        renderPreview();
+        setStatus('Version de disco cargada');
+      } else {
+        currentMtime = data.disk_mtime;
+        isDirty = true;
+        setStatus('Conflicto pendiente');
       }
-    );
-    const d = await r.json();
-
-    if (r.status === 409 && d.conflict) {
-      // Conflict!
-      showConflictModal(ta.value, d.disk_content, d.disk_mtime);
-      setStatus('conflict', '⚠ Conflicto detectado');
-    } else if (r.ok && d.ok) {
-      currentMtime = d.mtime;
-      setDirty(false);
-      setStatus('saved', 'Guardado');
-    } else {
-      setStatus('error', 'Error al guardar');
+      return;
     }
-  } catch(e) {
-    setStatus('error', 'Error: ' + e.message);
+    if (!response.ok || !data.ok) throw new Error(data.detail || 'No se pudo guardar');
+    currentMtime = data.mtime;
+    isDirty = false;
+    setStatus('Guardado');
+  } catch (error) {
+    setStatus(`Error: ${error.message}`);
   } finally {
-    btn.disabled = false;
+    document.getElementById('saveBtn').disabled = false;
   }
 }
 
-function setDirty(dirty) {
-  isDirty = dirty;
-  if (!dirty) setStatus('saved', 'Guardado');
-  else setStatus('unsaved', 'Sin guardar');
+function setView(view) {
+  currentView = view;
+  const body = document.getElementById('editorBody');
+  body.className = `bk-body ${view === 'split' ? '' : view}`;
+  document.getElementById('splitBtn').classList.toggle('active', view === 'split');
+  document.getElementById('previewBtn').classList.toggle('active', view === 'preview');
+  document.getElementById('editBtn').classList.toggle('active', view === 'edit');
+  if (view === 'preview') renderPreview();
 }
 
-function setStatus(cls, text) {
-  const el = document.getElementById('saveStatus');
-  el.className = `save-status ${cls}`;
-  el.textContent = text;
+function renderPreview() {
+  const text = document.getElementById('editorTextarea').value || '';
+  document.getElementById('previewPane').innerHTML = marked.parse(text, { breaks: true, gfm: true });
 }
 
-// ── Conflict resolution ──────────────────────────────────────
-function showConflictModal(myContent, diskContent, diskMtime) {
-  conflictPendingContent = diskContent;
-  conflictPendingMtime   = diskMtime;
-  document.getElementById('conflictMine').value = myContent;
-  document.getElementById('conflictDisk').value = diskContent;
-  document.getElementById('conflictModal').classList.remove('hidden');
-}
-
-async function resolveConflict(choice) {
-  document.getElementById('conflictModal').classList.add('hidden');
-  const ta = document.getElementById('editorTextarea');
-  if (!ta) return;
-
-  if (choice === 'cancel') {
-    // Leave editor as is, user keeps editing
-    return;
-  }
-
-  if (choice === 'disk') {
-    // Load disk version into editor, update mtime
-    ta.value = conflictPendingContent;
-    currentMtime = conflictPendingMtime;
-    setDirty(false);
-    setStatus('saved', 'Versión de disco cargada');
-    renderPreview();
-    return;
-  }
-
-  // choice === 'mine': force-save our version with the disk mtime so the check passes
-  currentMtime = conflictPendingMtime;
-  await saveFile();
-}
-
-// ── Delete ───────────────────────────────────────────────────
-async function deleteCurrentFile() {
-  if (!currentFile) return;
-  if (!confirm(`¿Eliminar "${currentFile}"? Esta acción no se puede deshacer.`)) return;
-  try {
-    const r = await fetch(
-      `/api/bitacora/${encodeURIComponent(ORG)}/file?path=${encodeURIComponent(currentFile)}`,
-      { method: 'DELETE' }
-    );
-    if (r.ok) {
-      currentFile = null; currentMtime = null; isDirty = false;
-      document.getElementById('editorBody').innerHTML = `<div class="bk-empty" id="emptyState"><div class="bk-empty-icon">📓</div><div>Archivo eliminado</div></div>`;
-      document.getElementById('editorToolbar').style.display = 'none';
-      refreshTree();
-    } else {
-      const d = await r.json();
-      alert('Error: ' + (d.detail || 'No se pudo eliminar'));
-    }
-  } catch(e) { alert('Error: ' + e.message); }
-}
-
-// ── Rename ───────────────────────────────────────────────────
-function renameCurrentFile() {
-  if (!currentFile) return;
-  renameOldPath = currentFile;
-  document.getElementById('renameInput').value = currentFile;
-  document.getElementById('renameModal').classList.remove('hidden');
-  document.getElementById('renameInput').focus();
-  document.getElementById('renameInput').select();
-}
-
-async function confirmRename() {
-  const newPath = document.getElementById('renameInput').value.trim();
-  document.getElementById('renameModal').classList.add('hidden');
-  if (!newPath || newPath === renameOldPath) return;
-  try {
-    const r = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/rename`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ old_path: renameOldPath, new_path: newPath }),
-    });
-    const d = await r.json();
-    if (r.ok) {
-      if (currentFile === renameOldPath) {
-        currentFile = newPath;
-        document.getElementById('currentPath').textContent = newPath;
-      }
-      refreshTree();
-    } else {
-      alert('Error: ' + (d.detail || 'No se pudo renombrar'));
-    }
-  } catch(e) { alert('Error: ' + e.message); }
-}
-
-// ── New file / folder ────────────────────────────────────────
-function openNewItemModal(isFolder) {
-  newItemIsFolder = isFolder;
-  document.getElementById('newItemTitle').textContent = isFolder ? 'Nueva carpeta' : 'Nuevo archivo';
-  document.getElementById('newItemDesc').textContent  = isFolder
-    ? 'Nombre de la carpeta (puede incluir subcarpetas: a/b/c)'
-    : 'Nombre del archivo (p. ej. notas.md, PENTEST IT OT/Bitacoras/recon.md)';
-  document.getElementById('newItemName').value = isFolder ? '' : '.md';
-  document.getElementById('newItemModal').classList.remove('hidden');
-  document.getElementById('newItemName').focus();
-  if (!isFolder) {
-    const inp = document.getElementById('newItemName');
-    inp.setSelectionRange(0, 0);
-  }
-}
-
-function closeNewItemModal() {
-  document.getElementById('newItemModal').classList.add('hidden');
-}
-
-async function confirmNewItem() {
-  const name = document.getElementById('newItemName').value.trim();
-  closeNewItemModal();
-  if (!name) return;
-
-  try {
-    const r = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: name, content: '', is_folder: newItemIsFolder }),
-    });
-    const d = await r.json();
-    if (r.ok) {
-      await refreshTree();
-      if (!newItemIsFolder) openFile(name);
-    } else {
-      alert('Error: ' + (d.detail || 'No se pudo crear'));
-    }
-  } catch(e) { alert('Error: ' + e.message); }
-}
-
-// ── Rellenar desde escaneos ───────────────────────────────────
 async function fillFromScans() {
   const btn = document.getElementById('fillBtn');
   btn.disabled = true;
-  const originalText = btn.textContent;
-  btn.textContent = '⏳ Procesando...';
+  setStatus('Rellenando bitacora...');
   try {
-    const r = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/fill-from-scans`, { method: 'POST' });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.detail || r.statusText);
-    let msg = `Notas: ${d.created} creadas · ${d.skipped} existentes`;
-    if (d.evidence_copied > 0) msg += ` · 📸 ${d.evidence_copied} evidencias copiadas`;
-    if (d.errors && d.errors.length) msg += ` · ⚠️ ${d.errors.length} errores`;
-    showFillToast(msg, (d.created > 0 || d.evidence_copied > 0) ? '#68d391' : '#90cdf4');
-    await refreshTree();
-  } catch(e) {
-    showFillToast('Error: ' + e.message, '#fc8149');
+    const response = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/fill-from-scans`, { method: 'POST' });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Error rellenando');
+    setStatus(`Notas: ${data.created} nuevas, ${data.skipped} existentes`);
+    await loadManifest(currentFile);
+  } catch (error) {
+    setStatus(`Error: ${error.message}`);
   } finally {
     btn.disabled = false;
-    btn.textContent = originalText;
   }
 }
 
-function showFillToast(msg, color) {
-  const t = document.createElement('div');
-  t.textContent = msg;
-  Object.assign(t.style, {
-    position: 'fixed', bottom: '1.5rem', right: '1.5rem', zIndex: 9999,
-    background: '#1a2535', color: color, border: `1px solid ${color}`,
-    borderRadius: '.5rem', padding: '.6rem 1.1rem', fontSize: '.85rem',
-    boxShadow: '0 4px 16px rgba(0,0,0,.4)', transition: 'opacity .4s',
-  });
-  document.body.appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 3500);
-}
-
-// ── Nuevo Vector de Acceso ───────────────────────────────────
 function openNewVectorModal() {
-  const inp = document.getElementById('newVectorName');
-  inp.value = '';
+  document.getElementById('newVectorName').value = '';
   document.getElementById('newVectorModal').classList.remove('hidden');
-  setTimeout(() => inp.focus(), 60);
+  setTimeout(() => document.getElementById('newVectorName').focus(), 40);
 }
 
 function closeNewVectorModal() {
@@ -886,27 +271,22 @@ async function confirmNewVector() {
   const name = document.getElementById('newVectorName').value.trim();
   if (!name) return;
   closeNewVectorModal();
-
   try {
-    const r = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/new-vector`, {
+    const response = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/new-vector`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.detail || r.statusText);
-    showFillToast(`✔ Vector creado: ${d.title}`, '#68d391');
-    await refreshTree();
-    // Abrir el archivo recién creado en el editor
-    await openFile(d.path);
-  } catch(e) {
-    showFillToast('Error: ' + e.message, '#fc8149');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'No se pudo crear el origen');
+    await loadManifest(data.path);
+  } catch (error) {
+    setStatus(`Error: ${error.message}`);
   }
 }
 
-// ── Utilities ────────────────────────────────────────────────
-function esc(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function setStatus(text) {
+  document.getElementById('saveStatus').textContent = text;
 }
 </script>
 {% endblock %}

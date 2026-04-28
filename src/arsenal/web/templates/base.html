@@ -56,6 +56,10 @@
                     <span class="sidebar-item-icon">{{ icons.icon('audit', 'svg-icon') }}</span>
                     <span class="sidebar-item-label">Auditor&iacute;as</span>
                 </a>
+                <a href="/guias" class="sidebar-item{% if path.startswith('/guias') %} sidebar-item--active{% endif %}" title="Gu&iacute;as">
+                    <span class="sidebar-item-icon">{{ icons.icon('book', 'svg-icon') }}</span>
+                    <span class="sidebar-item-label">Gu&iacute;as</span>
+                </a>
             </div>
 
             <!-- Herramientas externas -->
@@ -185,6 +189,10 @@
                         <a href="/pentest/{{ org_url }}/recon/visibility-diagram" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/visibility-diagram' %} sidebar-item--active{% endif %}" title="Diagrama de visibilidad">
                             <span class="sidebar-item-icon">{{ icons.icon('network', 'svg-icon') }}</span>
                             <span class="sidebar-item-label">Visibilidad</span>
+                        </a>
+                        <a href="/pentest/{{ org_url }}/recon/attack-path" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/attack-path' %} sidebar-item--active{% endif %}" title="Attack Path">
+                            <span class="sidebar-item-icon">{{ icons.icon('network', 'svg-icon') }}</span>
+                            <span class="sidebar-item-label">Attack Path</span>
                         </a>
                     </div>
                 </div>

@@ -1176,6 +1176,349 @@ async def get_visibility_diagram(organization: str):
         raise HTTPException(status_code=500, detail=f"Error generando diagrama de visibilidad: {e}")
 
 
+def _asset_hostname_lookup(org: str) -> dict:
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute("""
+            SELECT DISTINCT h.ip_address, COALESCE(h.hostname, '') AS hostname
+            FROM hosts h
+            JOIN scan_results sr ON sr.host_id = h.id
+            JOIN scans s ON s.id = sr.scan_id
+            WHERE UPPER(s.organization_name) = UPPER(?)
+              AND COALESCE(s.scan_mode, 'active') != 'passive'
+              AND COALESCE(s.status, '') = 'completed'
+              AND COALESCE(TRIM(h.ip_address), '') != ''
+        """, (org,)).fetchall()
+        return {row["ip_address"]: row["hostname"] for row in rows if row["ip_address"]}
+    finally:
+        conn.close()
+
+
+def _attack_path_asset_options(diagram: dict, org: str) -> list:
+    hostnames = _asset_hostname_lookup(org)
+    asset_ips = set(hostnames.keys())
+    for relation in diagram.get("relations", []):
+        asset_ips.update(ip for ip in relation.get("target_ips", []) if ip)
+    for origin in diagram.get("origins", []):
+        if origin.get("ip"):
+            asset_ips.add(origin["ip"])
+    for critical in diagram.get("critical_hosts", []):
+        if critical.get("ip"):
+            asset_ips.add(critical["ip"])
+
+    critical_by_ip = {
+        critical["ip"]: critical
+        for critical in diagram.get("critical_hosts", [])
+        if critical.get("ip")
+    }
+    options = []
+    for ip in sorted(asset_ips, key=_diagram_ip_sort_key):
+        critical = critical_by_ip.get(ip)
+        label_parts = [ip]
+        if hostnames.get(ip):
+            label_parts.append(hostnames[ip])
+        if critical:
+            label_parts.append(f"crítico: {critical.get('device_name') or 'activo crítico'}")
+        options.append({
+            "ip": ip,
+            "label": " · ".join(label_parts),
+            "hostname": hostnames.get(ip) or None,
+            "is_critical": bool(critical),
+            "critical_name": critical.get("device_name") if critical else None,
+        })
+    return options
+
+
+def _network_for_asset_ip(target_ip: str, networks: list) -> Optional[dict]:
+    try:
+        ip_obj = ipaddress.ip_address(str(target_ip or "").strip())
+    except ValueError:
+        return None
+
+    matches = []
+    for network in networks:
+        try:
+            parsed = ipaddress.ip_network(str(network.get("range") or ""), strict=False)
+        except ValueError:
+            continue
+        if parsed.version == ip_obj.version and ip_obj in parsed:
+            matches.append((parsed.prefixlen, network))
+    if not matches:
+        return None
+    matches.sort(key=lambda item: item[0], reverse=True)
+    return matches[0][1]
+
+
+def _origin_graph_for_attack_path(diagram: dict, target_ip: str, target_network: dict) -> dict:
+    origins = {origin["id"]: origin for origin in diagram.get("origins", [])}
+    origin_by_ip = {
+        origin["ip"]: origin
+        for origin in origins.values()
+        if origin.get("ip")
+    }
+    target_network_id = target_network.get("id") if target_network else None
+    direct_relations = {}
+    origin_edges = {}
+
+    for relation in diagram.get("relations", []):
+        source_id = relation.get("source_origin_id")
+        target_ips = set(relation.get("target_ips") or [])
+        if not source_id or source_id not in origins:
+            continue
+
+        if target_ip in target_ips or (
+            relation.get("target_network_id") == target_network_id and target_ip in target_ips
+        ):
+            direct_relations.setdefault(source_id, relation)
+
+        for visible_ip in target_ips:
+            target_origin = origin_by_ip.get(visible_ip)
+            if not target_origin:
+                continue
+            target_origin_id = target_origin["id"]
+            if target_origin_id == source_id:
+                continue
+            origin_edges.setdefault(source_id, {})[target_origin_id] = relation
+
+    incoming = {}
+    for source_id, targets in origin_edges.items():
+        for target_origin_id, relation in targets.items():
+            incoming.setdefault(target_origin_id, []).append((source_id, relation))
+
+    hop_count = {}
+    next_hop = {}
+    next_relation = {}
+    queue = []
+    for origin_id in sorted(direct_relations.keys()):
+        hop_count[origin_id] = 1
+        next_hop[origin_id] = "__target__"
+        next_relation[origin_id] = direct_relations[origin_id]
+        queue.append(origin_id)
+
+    cursor = 0
+    while cursor < len(queue):
+        current_id = queue[cursor]
+        cursor += 1
+        for source_id, relation in incoming.get(current_id, []):
+            if source_id in hop_count:
+                continue
+            hop_count[source_id] = hop_count[current_id] + 1
+            next_hop[source_id] = current_id
+            next_relation[source_id] = relation
+            queue.append(source_id)
+
+    max_hops = max(hop_count.values()) if hop_count else 0
+    origin_payload = []
+    for origin in origins.values():
+        origin_id = origin["id"]
+        hops = hop_count.get(origin_id)
+        source_network_ids = origin.get("source_network_ids") or []
+        source_network = None
+        if source_network_ids:
+            source_network = next(
+                (network for network in diagram.get("networks", [])
+                 if network.get("id") == source_network_ids[0]),
+                None,
+            )
+        origin_payload.append({
+            "id": origin_id,
+            "ip": origin.get("ip"),
+            "locations": origin.get("locations") or [],
+            "source_network_labels": origin.get("source_network_labels") or [],
+            "source_network": source_network,
+            "reachable": hops is not None,
+            "hop_count": hops,
+            "column": 0 if hops is None else max_hops - hops + 1,
+            "next_hop_origin_id": None if next_hop.get(origin_id) == "__target__" else next_hop.get(origin_id),
+        })
+
+    edges = []
+    for origin in origin_payload:
+        if not origin["reachable"]:
+            continue
+        relation = next_relation.get(origin["id"]) or {}
+        if origin["next_hop_origin_id"]:
+            edges.append({
+                "source_origin_id": origin["id"],
+                "target_origin_id": origin["next_hop_origin_id"],
+                "style": "dashed",
+                "kind": "pivot",
+                "visible_host_count": relation.get("visible_host_count", 0),
+                "layer_keys": relation.get("layer_keys") or [],
+            })
+        else:
+            edges.append({
+                "source_origin_id": origin["id"],
+                "target_network_id": target_network_id,
+                "style": "solid",
+                "kind": "direct",
+                "visible_host_count": relation.get("visible_host_count", 0),
+                "layer_keys": relation.get("layer_keys") or [],
+            })
+
+    columns = [{
+        "index": 0,
+        "label": "Sin camino",
+        "description": "Orígenes sin ruta conocida hacia el objetivo",
+        "origin_ids": sorted(
+            [origin["id"] for origin in origin_payload if not origin["reachable"]],
+            key=lambda origin_id: _diagram_ip_sort_key(origins[origin_id].get("ip")),
+        ),
+    }]
+    for hops in range(max_hops, 0, -1):
+        column_index = max_hops - hops + 1
+        columns.append({
+            "index": column_index,
+            "label": f"{hops} salto{'s' if hops != 1 else ''}",
+            "description": "Ruta indirecta" if hops > 1 else "Visibilidad directa",
+            "origin_ids": sorted(
+                [origin["id"] for origin in origin_payload if origin["hop_count"] == hops],
+                key=lambda origin_id: _diagram_ip_sort_key(origins[origin_id].get("ip")),
+            ),
+        })
+
+    return {
+        "origins": sorted(
+            origin_payload,
+            key=lambda item: (
+                item["column"],
+                _diagram_ip_sort_key(item.get("ip")),
+            ),
+        ),
+        "edges": edges,
+        "columns": columns,
+        "max_hops": max_hops,
+        "reachable_count": len([origin for origin in origin_payload if origin["reachable"]]),
+        "direct_count": len([origin for origin in origin_payload if origin["hop_count"] == 1]),
+        "indirect_count": len([origin for origin in origin_payload if (origin["hop_count"] or 0) > 1]),
+        "unreachable_count": len([origin for origin in origin_payload if not origin["reachable"]]),
+    }
+
+
+@router.get("/api/attack-path")
+async def get_attack_path(organization: str, target_ip: Optional[str] = None):
+    """Devuelve el grafo de caminos de ataque hacia un asset objetivo."""
+    try:
+        org = organization.upper()
+        diagram = await get_visibility_diagram(org)
+        asset_options = _attack_path_asset_options(diagram, org)
+        selected_ip = str(target_ip or "").strip()
+        if not selected_ip:
+            return {
+                "organization": org,
+                "asset_options": asset_options,
+                "target": None,
+                "target_network": None,
+                "columns": [],
+                "origins": [],
+                "edges": [],
+                "stats": {
+                    "origin_count": len(diagram.get("origins", [])),
+                    "reachable_count": 0,
+                    "direct_count": 0,
+                    "indirect_count": 0,
+                    "unreachable_count": len(diagram.get("origins", [])),
+                },
+            }
+
+        try:
+            ipaddress.ip_address(selected_ip)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="La IP objetivo no es válida")
+
+        target_network = _network_for_asset_ip(selected_ip, diagram.get("networks", []))
+        selected_option = next((option for option in asset_options if option["ip"] == selected_ip), None)
+        if not target_network:
+            return {
+                "organization": org,
+                "asset_options": asset_options,
+                "target": {
+                    "ip": selected_ip,
+                    "label": selected_option["label"] if selected_option else selected_ip,
+                    "found": selected_option is not None,
+                },
+                "target_network": None,
+                "columns": [],
+                "origins": [],
+                "edges": [],
+                "stats": {
+                    "origin_count": len(diagram.get("origins", [])),
+                    "reachable_count": 0,
+                    "direct_count": 0,
+                    "indirect_count": 0,
+                    "unreachable_count": len(diagram.get("origins", [])),
+                },
+                "message": "No se ha encontrado una red asociada a la IP objetivo.",
+            }
+
+        graph = _origin_graph_for_attack_path(diagram, selected_ip, target_network)
+        return {
+            "organization": org,
+            "asset_options": asset_options,
+            "target": {
+                "ip": selected_ip,
+                "label": selected_option["label"] if selected_option else selected_ip,
+                "found": selected_option is not None,
+            },
+            "target_network": target_network,
+            "columns": graph["columns"],
+            "origins": graph["origins"],
+            "edges": graph["edges"],
+            "stats": {
+                "origin_count": len(graph["origins"]),
+                "reachable_count": graph["reachable_count"],
+                "direct_count": graph["direct_count"],
+                "indirect_count": graph["indirect_count"],
+                "unreachable_count": graph["unreachable_count"],
+                "max_hops": graph["max_hops"],
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando attack path: {e}")
+
+
+@router.get("/api/attack-path/candidates")
+async def get_attack_path_candidates(organization: str, min_hops: int = 2, limit: int = 50):
+    """Devuelve assets que generan attack paths con al menos min_hops saltos."""
+    try:
+        org = organization.upper()
+        min_hops = max(2, int(min_hops or 2))
+        limit = max(1, min(200, int(limit or 50)))
+        base = await get_attack_path(org)
+        candidates = []
+        for asset in base.get("asset_options", []):
+            data = await get_attack_path(org, asset["ip"])
+            stats = data.get("stats") or {}
+            if (stats.get("max_hops") or 0) >= min_hops:
+                candidates.append({
+                    "ip": asset["ip"],
+                    "label": asset.get("label") or asset["ip"],
+                    "target_network": data.get("target_network"),
+                    "stats": stats,
+                })
+            if len(candidates) >= limit:
+                break
+
+        candidates.sort(
+            key=lambda item: (
+                -(item["stats"].get("max_hops") or 0),
+                -(item["stats"].get("indirect_count") or 0),
+                _diagram_ip_sort_key(item["ip"]),
+            )
+        )
+        return {
+            "organization": org,
+            "min_hops": min_hops,
+            "count": len(candidates),
+            "candidates": candidates,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error buscando attack paths: {e}")
+
+
 @router.get("/api/recon-dashboard/export")
 async def export_recon_dashboard(organization: str):
     """Exporta el Dashboard de reconocimiento en JSON editable por el cliente."""

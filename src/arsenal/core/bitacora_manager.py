@@ -43,8 +43,15 @@ VISIBILIDAD_END   = '<!-- /ARSENAL:VISIBILIDAD -->'
 EVIDENCIAS_START = '<!-- ARSENAL:EVIDENCIAS -->'
 EVIDENCIAS_END   = '<!-- /ARSENAL:EVIDENCIAS -->'
 
+# Marcadores del bloque de imagen de diagrama de visibilidad
+VIS_DIAGRAM_START = '<!-- ARSENAL:VISIBILIDAD-DIAGRAMA -->'
+VIS_DIAGRAM_END   = '<!-- /ARSENAL:VISIBILIDAD-DIAGRAMA -->'
+
 # Subcarpeta dentro de Bitacoras donde se copian las evidencias
 EVIDENCIAS_SUBDIR = 'Evidencias'
+
+# Subcarpeta dentro de Bitacoras donde se generan diagramas
+DIAGRAMAS_SUBDIR = 'Diagramas'
 
 
 def _safe_path(base: Path, user_path: str) -> Path:
@@ -208,7 +215,91 @@ class BitacoraManager:
         org_dir = self.get_org_dir(org_name)
         return self._build_tree(org_dir, org_dir)
 
-    def _build_tree(self, base: Path, root: Path) -> List[Dict]:
+    def get_guides_tree(self) -> List[Dict]:
+        """Devuelve solo las guias del template maestro, sin plantillas ni bitacoras."""
+        roots = [
+            ("infra", "Pentest infraestructura", TEMPLATE_DIR / "PENTEST IT OT" / "Guías"),
+            ("devices-62443", "Dispositivos IEC 62443", TEMPLATE_DIR / "EV. DISPOSITIVOS" / "62443" / "Guías"),
+        ]
+        tree = []
+        for key, title, root in roots:
+            if root.exists():
+                tree.append({
+                    "name": title,
+                    "path": key,
+                    "type": "dir",
+                    "children": self._build_tree(root, root, key),
+                })
+        return tree
+
+    def read_guide_file(self, guide_path: str) -> Tuple[str, float]:
+        """Lee una guia del template maestro de forma segura."""
+        guide_roots = {
+            "infra": TEMPLATE_DIR / "PENTEST IT OT" / "Guías",
+            "devices-62443": TEMPLATE_DIR / "EV. DISPOSITIVOS" / "62443" / "Guías",
+        }
+        parts = guide_path.replace("\\", "/").split("/", 1)
+        if len(parts) != 2 or parts[0] not in guide_roots:
+            raise FileNotFoundError(f"Guia no encontrada: {guide_path}")
+        fpath = _safe_path(guide_roots[parts[0]], parts[1])
+        if not fpath.exists() or not fpath.is_file():
+            raise FileNotFoundError(f"Guia no encontrada: {guide_path}")
+        return fpath.read_text(encoding="utf-8", errors="replace"), fpath.stat().st_mtime
+
+    def get_bitacora_manifest(self, org_name: str, audit_type: str = "infra") -> Dict:
+        """
+        Devuelve la vista de bitacora editable para ArsenalOT, separada de guias
+        y plantillas. No modifica la estructura del vault, solo filtra la vista.
+        """
+        root_rel = self._bitacora_root_rel(audit_type)
+        org_dir = self.get_org_dir(org_name)
+        root = org_dir / root_rel
+        root.mkdir(parents=True, exist_ok=True)
+        _open_permissions(root)
+
+        notes_dir = root / "NOTAS"
+        notes_dir.mkdir(parents=True, exist_ok=True)
+        _open_permissions(notes_dir)
+
+        fixed_notes = [
+            ("general", "General", "GENERAL.md", "# General\n\n"),
+            ("vulnerabilities", "Vulnerabilidades", "VULNERABILIDADES.md", "# Vulnerabilidades\n\n"),
+            ("credentials", "Credenciales", "CREDENCIALES.md", "## IT\n\n## OT\n"),
+        ]
+        fixed = []
+        for key, label, filename, initial_content in fixed_notes:
+            note = notes_dir / filename
+            if not note.exists():
+                note.write_text(initial_content, encoding="utf-8")
+                _open_permissions(note)
+            fixed.append({
+                "key": key,
+                "label": label,
+                "path": (Path(root_rel) / "NOTAS" / filename).as_posix(),
+            })
+
+        sources = []
+        for note in sorted(root.glob("*.md"), key=lambda p: p.name.lower()):
+            sources.append({
+                "label": note.stem,
+                "path": (Path(root_rel) / note.name).as_posix(),
+                "mtime": note.stat().st_mtime,
+            })
+
+        return {
+            "audit_type": audit_type if audit_type in {"infra", "device"} else "infra",
+            "root": Path(root_rel).as_posix(),
+            "sources": sources,
+            "fixed_notes": fixed,
+        }
+
+    @staticmethod
+    def _bitacora_root_rel(audit_type: str = "infra") -> str:
+        if audit_type == "device":
+            return "EV. DISPOSITIVOS/62443/Bitacoras"
+        return "PENTEST IT OT/Bitacoras"
+
+    def _build_tree(self, base: Path, root: Path, path_prefix: str = "") -> List[Dict]:
         nodes = []
         try:
             entries = sorted(base.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
@@ -220,14 +311,15 @@ class BitacoraManager:
             if entry.name.startswith(".") or entry.name == "__pycache__":
                 continue
             rel = entry.relative_to(root).as_posix()
+            rel_with_prefix = f"{path_prefix}/{rel}" if path_prefix else rel
             if entry.is_dir():
-                children = self._build_tree(entry, root)
-                nodes.append({"name": entry.name, "path": rel, "type": "dir", "children": children})
+                children = self._build_tree(entry, root, path_prefix)
+                nodes.append({"name": entry.name, "path": rel_with_prefix, "type": "dir", "children": children})
             else:
                 stat = entry.stat()
                 nodes.append({
                     "name": entry.name,
-                    "path": rel,
+                    "path": rel_with_prefix,
                     "type": "file",
                     "mtime": stat.st_mtime,
                     "size": stat.st_size,
@@ -699,6 +791,604 @@ class BitacoraManager:
                 return content.replace(anchor, f'\n\n{block}\n{anchor}', 1)
         return content.rstrip() + f'\n\n{block}\n'
 
+    @staticmethod
+    def _metadata_placeholder(value: str) -> bool:
+        cleaned = re.sub(r'[`*_]', '', str(value or '')).strip().strip('|').strip()
+        return cleaned in {'', '...', '-', '—', 'N/A', 'n/a', 'None', 'none'}
+
+    @staticmethod
+    def _metadata_value(values) -> Optional[str]:
+        if values is None:
+            return None
+        if isinstance(values, (list, tuple, set)):
+            cleaned = []
+            for value in values:
+                text = str(value or '').strip()
+                if text and text not in cleaned:
+                    cleaned.append(text)
+            if not cleaned:
+                return None
+            return ', '.join(cleaned)
+        text = str(values or '').strip()
+        return text or None
+
+    def _collect_location_note_metadata(self, org_name: str, location: str,
+                                        db_path,
+                                        myip: Optional[str] = None) -> Dict[str, str]:
+        """Obtiene metadatos conocidos para rellenar la cabecera de una nota."""
+        import sqlite3 as _sq
+
+        ip_filter = (myip or '').strip() or None
+        conn = _sq.connect(str(db_path), timeout=10.0)
+        conn.row_factory = _sq.Row
+        try:
+            query = """SELECT target_range, interface, myip, started_at, created_by
+                       FROM scans
+                       WHERE UPPER(organization_name) = UPPER(?)
+                         AND UPPER(location) = UPPER(?)
+                         AND COALESCE(scan_mode, 'active') != 'passive'"""
+            params = [org_name, location]
+            if ip_filter is not None:
+                query += " AND myip = ?"
+                params.append(ip_filter)
+            else:
+                query += " AND (myip IS NULL OR myip = '')"
+            query += " ORDER BY started_at ASC"
+            rows = conn.execute(query, params).fetchall()
+        finally:
+            conn.close()
+
+        if not rows:
+            return {}
+
+        target_ranges = [row['target_range'] for row in rows if row['target_range']]
+        interfaces = [row['interface'] for row in rows if row['interface']]
+        attacker_ips = [row['myip'] for row in rows if row['myip']]
+        testers = [row['created_by'] for row in rows if row['created_by']]
+        first_date = str(rows[0]['started_at'] or '')[:10]
+        cliente_label = (f"{location} ({self._ip_label(myip)})"
+                         if (myip or '').strip() else location)
+
+        metadata = {
+            "Cliente / Objetivo": cliente_label,
+            "Fecha de Inicio": first_date,
+            "Tester(s)": self._metadata_value(testers),
+            "Interfaz de Ataque": self._metadata_value(interfaces),
+            "IP Atacante": self._metadata_value(attacker_ips or ([myip] if myip else [])),
+            "Rango Objetivo": self._metadata_value(target_ranges),
+        }
+        return {key: value for key, value in metadata.items() if value}
+
+    def _update_metadata_table(self, content: str, metadata: Dict[str, str]) -> str:
+        """Rellena filas conocidas de la tabla de metadatos sin pisar valores manuales."""
+        if not metadata:
+            return content
+
+        aliases = {
+            "Cliente / Objetivo": ["Cliente / Objetivo"],
+            "Fecha de Inicio": ["Fecha de Inicio"],
+            "Tester(s)": ["Tester(s)", "Testers", "Tester"],
+            "Interfaz de Ataque": ["Interfaz de Ataque"],
+            "IP Atacante": ["IP Atacante"],
+            "Rango Objetivo": ["Rango Objetivo", "Rango(s) Objetivo", "Objetivo"],
+        }
+        updated = content
+        for canonical, labels in aliases.items():
+            value = metadata.get(canonical)
+            if not value:
+                continue
+            for label in labels:
+                pattern = re.compile(
+                    rf"(^\|\s*\*\*{re.escape(label)}\*\*\s*\|\s*)(.*?)\s*(\|\s*$)",
+                    re.MULTILINE,
+                )
+
+                def repl(match):
+                    current = match.group(2)
+                    if not self._metadata_placeholder(current):
+                        return match.group(0)
+                    return f"{match.group(1)}`{value}` {match.group(3)}"
+
+                updated, count = pattern.subn(repl, updated, count=1)
+                if count:
+                    break
+        return updated
+
+    def update_location_metadata(self, org_name: str, location: str, db_path,
+                                 myip: Optional[str] = None) -> bool:
+        """Actualiza la tabla superior de metadatos de una nota de origen."""
+        note_path = self._find_location_note_path(org_name, location, myip)
+        if note_path is None:
+            return False
+        metadata = self._collect_location_note_metadata(org_name, location, db_path, myip)
+        if not metadata:
+            return False
+        content = note_path.read_text(encoding='utf-8')
+        new_content = self._update_metadata_table(content, metadata)
+        if new_content == content:
+            return False
+        note_path.write_text(new_content, encoding='utf-8')
+        _open_permissions(note_path)
+        return True
+
+    def _diagrams_dir(self, org_name: str) -> Path:
+        """Carpeta destino para diagramas generados dentro de la bitacora."""
+        dpath = (self.get_org_dir(org_name)
+                 / "PENTEST IT OT" / "Bitacoras" / DIAGRAMAS_SUBDIR)
+        dpath.mkdir(parents=True, exist_ok=True)
+        _open_permissions(dpath)
+        return dpath
+
+    @staticmethod
+    def _slug_filename(value: str) -> str:
+        cleaned = re.sub(r'[^A-Za-z0-9._-]+', '_', value or '').strip('._-')
+        return cleaned[:120] or 'origen'
+
+    def _collect_location_visibility_data(self, org_name: str, location: str,
+                                          db_path,
+                                          myip: Optional[str] = None) -> Optional[Dict]:
+        """Recoge los datos agregados de visibilidad usados por la imagen."""
+        import sqlite3 as _sq
+        import ipaddress as _ipa
+
+        ip_filter = (myip or '').strip() or None
+        conn = _sq.connect(str(db_path), timeout=10.0)
+        conn.row_factory = _sq.Row
+        try:
+            base_q = """SELECT id, target_range, started_at
+                       FROM scans
+                       WHERE UPPER(organization_name) = UPPER(?)
+                         AND UPPER(location) = UPPER(?)
+                         AND status = 'completed'
+                         AND COALESCE(scan_mode, 'active') != 'passive'"""
+            params = [org_name, location]
+            if ip_filter is not None:
+                base_q += " AND myip = ?"
+                params.append(ip_filter)
+            else:
+                base_q += " AND (myip IS NULL OR myip = '')"
+            base_q += " ORDER BY started_at"
+            scans = conn.execute(base_q, params).fetchall()
+            if not scans:
+                return None
+
+            net_rows = conn.execute(
+                """SELECT system_name, network_name, network_range, purdue_level
+                   FROM networks
+                   WHERE UPPER(organization_name) = UPPER(?)
+                   ORDER BY system_name, network_name""",
+                (org_name,)
+            ).fetchall()
+            known_nets = []
+            for n in net_rows:
+                try:
+                    known_nets.append({
+                        'obj': _ipa.ip_network(n['network_range'], strict=False),
+                        'name': n['network_name'] or '-',
+                        'system': n['system_name'] or 'Sin sistema',
+                        'purdue': n['purdue_level'] if n['purdue_level'] is not None else '-',
+                        'range': n['network_range'],
+                    })
+                except ValueError:
+                    pass
+
+            critical_by_ip = {}
+            for dev in conn.execute(
+                """SELECT system_name, name, ips, reason
+                   FROM critical_devices
+                   WHERE UPPER(organization_name) = UPPER(?)""",
+                (org_name,)
+            ).fetchall():
+                for ip_text in str(dev['ips'] or '').split(','):
+                    ip_text = ip_text.strip()
+                    if ip_text:
+                        critical_by_ip.setdefault(ip_text, []).append({
+                            'name': dev['name'] or '-',
+                            'system': dev['system_name'] or '-',
+                            'reason': dev['reason'] or '-',
+                        })
+
+            all_hosts: Dict[str, Dict] = {}
+            host_techniques: Dict[str, set] = {}
+            for scan in scans:
+                for h in conn.execute(
+                    """SELECT h.ip_address, h.hostname, h.mac_address, h.vendor,
+                              sr.discovery_method, sr.port
+                         FROM scan_results sr
+                         JOIN hosts h ON h.id = sr.host_id
+                        WHERE sr.scan_id = ?""",
+                    (scan['id'],)
+                ).fetchall():
+                    ip = h['ip_address']
+                    all_hosts.setdefault(ip, {
+                        'hostname': h['hostname'],
+                        'mac_address': h['mac_address'],
+                        'vendor': h['vendor'],
+                    })
+                    tech = self._method_to_technique(
+                        h['discovery_method'],
+                        bool(h['mac_address']),
+                        has_port=h['port'] is not None,
+                    )
+                    if tech:
+                        host_techniques.setdefault(ip, set()).add(tech)
+        finally:
+            conn.close()
+
+        def match_known_network(ip_str: str) -> Optional[Dict]:
+            try:
+                host_ip = _ipa.ip_address(ip_str)
+            except ValueError:
+                return None
+            matches = [n for n in known_nets if host_ip in n['obj']]
+            if not matches:
+                return None
+            return max(matches, key=lambda n: n['obj'].prefixlen)
+
+        source_network = None
+        if ip_filter:
+            source_match = match_known_network(ip_filter)
+            if source_match:
+                source_network = {
+                    'range': source_match['range'],
+                    'name': source_match['name'],
+                    'system': source_match['system'],
+                    'purdue': source_match['purdue'],
+                    'known': True,
+                    'hosts': [ip_filter],
+                    'techniques': set(),
+                    'critical': [],
+                }
+            else:
+                parts = ip_filter.rsplit('.', 1)
+                source_network = {
+                    'range': f"{parts[0]}.0/24" if len(parts) == 2 else '0.0.0.0/0',
+                    'name': 'Red origen no registrada',
+                    'system': 'Unknown',
+                    'purdue': '-',
+                    'known': False,
+                    'hosts': [ip_filter],
+                    'techniques': set(),
+                    'critical': [],
+                }
+
+        networks: Dict[str, Dict] = {}
+        for ip_str in sorted(all_hosts.keys()):
+            try:
+                host_ip = _ipa.ip_address(ip_str)
+            except ValueError:
+                continue
+            matched = match_known_network(ip_str)
+            if matched:
+                key = matched['range']
+                item = networks.setdefault(key, {
+                    'range': matched['range'],
+                    'name': matched['name'],
+                    'system': matched['system'],
+                    'purdue': matched['purdue'],
+                    'known': True,
+                    'hosts': [],
+                    'techniques': set(),
+                    'critical': [],
+                })
+            else:
+                parts = ip_str.rsplit('.', 1)
+                key = f"{parts[0]}.0/24" if len(parts) == 2 else '0.0.0.0/0'
+                item = networks.setdefault(key, {
+                    'range': key,
+                    'name': 'Red no registrada',
+                    'system': 'Sin sistema',
+                    'purdue': '-',
+                    'known': False,
+                    'hosts': [],
+                    'techniques': set(),
+                    'critical': [],
+                })
+            item['hosts'].append(ip_str)
+            item['techniques'].update(host_techniques.get(ip_str, set()))
+            item['critical'].extend(critical_by_ip.get(ip_str, []))
+
+        network_list = list(networks.values())
+        network_list.sort(key=lambda n: (n['system'].lower(), not n['known'], n['range']))
+        return {
+            'org_name': org_name,
+            'location': location,
+            'myip': ip_filter or 'sin IP',
+            'scan_count': len(scans),
+            'first_date': str(scans[0]['started_at'] or '')[:10],
+            'last_date': str(scans[-1]['started_at'] or '')[:10],
+            'host_count': len(all_hosts),
+            'source_network': source_network,
+            'networks': network_list,
+        }
+
+    def _draw_text_wrapped(self, draw, text: str, xy: Tuple[int, int],
+                           font, fill, max_width: int, line_spacing: int = 4,
+                           max_lines: Optional[int] = None) -> int:
+        words = str(text or '').split()
+        lines = []
+        current = ''
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if draw.textbbox((0, 0), candidate, font=font)[2] <= max_width:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        if max_lines and len(lines) > max_lines:
+            lines = lines[:max_lines]
+            while lines[-1] and draw.textbbox((0, 0), lines[-1] + '...', font=font)[2] > max_width:
+                lines[-1] = lines[-1][:-1]
+            lines[-1] = lines[-1] + '...'
+        x, y = xy
+        for line in lines:
+            draw.text((x, y), line, font=font, fill=fill)
+            bbox = draw.textbbox((x, y), line, font=font)
+            y += (bbox[3] - bbox[1]) + line_spacing
+        return y
+
+    def _render_visibility_diagram_png(self, data: Dict, output_path: Path) -> None:
+        """Genera un PNG claro siguiendo el formato visual del diagrama de resultados."""
+        from PIL import Image, ImageDraw, ImageFont
+
+        def font(size: int, bold: bool = False):
+            candidates = (
+                ["arialbd.ttf", "Arial Bold.ttf", "DejaVuSans-Bold.ttf"] if bold
+                else ["arial.ttf", "Arial.ttf", "DejaVuSans.ttf"]
+            )
+            for candidate in candidates:
+                try:
+                    return ImageFont.truetype(candidate, size)
+                except OSError:
+                    continue
+            return ImageFont.load_default()
+
+        title_font = font(28, True)
+        system_font = font(16, True)
+        card_title_font = font(15, True)
+        body_font = font(13)
+        small_font = font(11)
+        networks = data.get('networks') or []
+        source_network = data.get('source_network') or {
+            'name': data['location'],
+            'range': data['myip'],
+            'system': 'Origen',
+            'known': False,
+            'hosts': [data['myip']],
+            'critical': [],
+        }
+
+        source_system = source_network.get('system') or 'Unknown'
+        grouped_targets: Dict[str, List[Dict]] = {}
+        for net in networks:
+            grouped_targets.setdefault(net.get('system') or 'Unknown', []).append(net)
+
+        card_w = 238
+        card_h = 84
+        card_gap = 14
+        sys_pad_x = 18
+        sys_pad_top = 36
+        sys_pad_bottom = 18
+        sys_gap_x = 64
+        top = 142
+        left = 42
+        source_box_w = 286
+        source_box_h = sys_pad_top + card_h + sys_pad_bottom
+
+        target_systems = sorted(grouped_targets.items(), key=lambda item: (item[0].lower() == 'unknown', item[0].lower()))
+        target_box_sizes = []
+        for system_name, system_networks in target_systems:
+            rows = max(1, len(system_networks))
+            height = sys_pad_top + rows * card_h + (rows - 1) * card_gap + sys_pad_bottom
+            target_box_sizes.append((system_name, system_networks, 302, height))
+
+        width = max(1180, left + source_box_w + sys_gap_x + sum(w + sys_gap_x for _, _, w, _ in target_box_sizes) + 40)
+        height = max(640, top + max([source_box_h] + [h for _, _, _, h in target_box_sizes] + [130]) + 72)
+
+        image = Image.new('RGB', (width, height), '#edf1f7')
+        draw = ImageDraw.Draw(image)
+        draw.rounded_rectangle((20, 18, width - 20, 104), radius=18, fill='#f0f4ff', outline='#d7e1f4', width=1)
+        draw.text((42, 34), f"Diagrama de visibilidad - {data['location']}", font=title_font, fill='#0f172a')
+        subtitle = f"Organizacion: {data['org_name']} · Filtro origen: {data['myip']} · Escaneos: {data['scan_count']} · Hosts visibles: {data['host_count']}"
+        draw.text((44, 78), subtitle, font=body_font, fill='#475569')
+
+        def system_rect(x: int, y: int, w: int, h: int, label: str, role: str = ''):
+            outline = '#dc2626' if role == 'source' else ('#16a34a' if role == 'target' else '#5a84ce')
+            draw.rounded_rectangle((x, y, x + w, y + h), radius=18, fill=None, outline=outline, width=2)
+            draw.rounded_rectangle((x + 14, y - 12, x + 14 + min(220, max(78, len(label) * 9)), y + 14), radius=8, fill='#f0f4ff')
+            draw.text((x + 22, y - 8), label, font=system_font, fill='#1a2035')
+
+        def network_card(x: int, y: int, net: Dict, role: str = '', count_text: str = '') -> Tuple[int, int, int, int]:
+            if role == 'source':
+                fill, outline = '#fff1f2', '#dc2626'
+            elif role == 'target':
+                fill, outline = '#f0fdf4', '#16a34a'
+            else:
+                fill, outline = '#f5f8ff', '#5a84ce'
+            box = (x, y, x + card_w, y + card_h)
+            draw.rounded_rectangle(box, radius=15, fill=fill, outline=outline, width=2)
+            draw.ellipse((x - 7, y + card_h // 2 - 6, x + 5, y + card_h // 2 + 6), fill=fill, outline=outline, width=2)
+            draw.ellipse((x + card_w - 5, y + card_h // 2 - 6, x + card_w + 7, y + card_h // 2 + 6), fill=fill, outline=outline, width=2)
+            title = net.get('name') or net.get('range') or '-'
+            self._draw_text_wrapped(draw, title, (x + 14, y + 11), card_title_font, '#0f172a', card_w - 82, max_lines=2)
+            if count_text:
+                badge_w = max(44, min(74, len(count_text) * 8 + 18))
+                draw.rounded_rectangle((x + card_w - badge_w - 12, y + 10, x + card_w - 12, y + 30), radius=10, fill='#ede9fe', outline='#a78bfa')
+                draw.text((x + card_w - badge_w - 2, y + 14), count_text, font=small_font, fill='#5b21b6')
+            draw.text((x + 14, y + 47), str(net.get('range') or '-'), font=small_font, fill='#475569')
+            badge = 'Origen' if role == 'source' else ('Desde ' + str(data['myip']) if role == 'target' else '')
+            if badge:
+                badge_fill = '#fee2e2' if role == 'source' else '#dcfce7'
+                badge_text = '#991b1b' if role == 'source' else '#15803d'
+                draw.rounded_rectangle((x + 14, y + 62, x + card_w - 14, y + 78), radius=8, fill=badge_fill)
+                self._draw_text_wrapped(draw, badge, (x + 22, y + 64), small_font, badge_text, card_w - 44, max_lines=1)
+            if net.get('critical'):
+                draw.text((x + card_w - 28, y + 58), "★", font=card_title_font, fill='#7c3aed')
+            return box
+
+        source_x = left
+        source_y = top + max(0, (height - top - 90 - source_box_h) // 2)
+        source_card = (
+            source_x + sys_pad_x,
+            source_y + sys_pad_top,
+            source_x + sys_pad_x + card_w,
+            source_y + sys_pad_top + card_h,
+        )
+        target_layouts = []
+        target_x = source_x + source_box_w + sys_gap_x
+        for system_name, system_networks, box_w, box_h in target_box_sizes:
+            target_y = top + max(0, (height - top - 90 - box_h) // 2)
+            cards = []
+            for idx, net in enumerate(system_networks):
+                card_y = target_y + sys_pad_top + idx * (card_h + card_gap)
+                cards.append({
+                    'network': net,
+                    'box': (
+                        target_x + sys_pad_x,
+                        card_y,
+                        target_x + sys_pad_x + card_w,
+                        card_y + card_h,
+                    ),
+                })
+            target_layouts.append({
+                'system_name': system_name,
+                'x': target_x,
+                'y': target_y,
+                'width': box_w,
+                'height': box_h,
+                'cards': cards,
+            })
+            target_x += box_w + sys_gap_x
+
+        def draw_visibility_route(source_box, target_box, lane_index: int):
+            source_anchor = (source_box[2] + 7, source_box[1] + (source_box[3] - source_box[1]) // 2)
+            target_anchor = (target_box[0] - 7, target_box[1] + (target_box[3] - target_box[1]) // 2)
+            system_tops = [source_y] + [layout['y'] for layout in target_layouts]
+            lane_y = max(112, min(system_tops or [top]) - 22 - ((lane_index % 3) * 8))
+            source_gutter_x = source_box[2] + 26
+            target_gutter_x = target_box[0] - 26
+            points = [
+                source_anchor,
+                (source_gutter_x, source_anchor[1]),
+                (source_gutter_x, lane_y),
+                (target_gutter_x, lane_y),
+                (target_gutter_x, target_anchor[1]),
+                target_anchor,
+            ]
+            draw.line(points, fill='#67a7c9', width=3, joint='curve')
+            draw.ellipse(
+                (target_anchor[0] - 4, target_anchor[1] - 4,
+                 target_anchor[0] + 4, target_anchor[1] + 4),
+                fill='#67a7c9',
+            )
+
+        if not target_systems:
+            system_rect(source_x, source_y, source_box_w, source_box_h, source_system, 'source')
+            network_card(source_card[0], source_card[1], source_network, 'source')
+            empty_box = (source_x + source_box_w + sys_gap_x, top + 70, width - 70, top + 190)
+            draw.rounded_rectangle(empty_box, radius=16, fill='#ffffff', outline='#cbd5e1', width=2)
+            draw.text((empty_box[0] + 24, empty_box[1] + 46), "Sin destinos con visibilidad registrada para este origen.", font=system_font, fill='#334155')
+        else:
+            route_index = 0
+            for layout in target_layouts:
+                for card in layout['cards']:
+                    draw_visibility_route(source_card, card['box'], route_index)
+                    route_index += 1
+
+            system_rect(source_x, source_y, source_box_w, source_box_h, source_system, 'source')
+            network_card(source_card[0], source_card[1], source_network, 'source')
+            for layout in target_layouts:
+                system_rect(layout['x'], layout['y'], layout['width'], layout['height'], layout['system_name'], 'target')
+                for card in layout['cards']:
+                    net = card['network']
+                    count_text = f"{len(net.get('hosts') or [])}/{max(1, len(net.get('hosts') or []))}"
+                    network_card(card['box'][0], card['box'][1], net, 'target', count_text)
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        image.save(output_path, 'PNG', optimize=True)
+        _open_permissions(output_path)
+
+    def _build_visibility_diagram_block(self, rel_image_path: str, data: Dict) -> str:
+        period = data['first_date'] if data['first_date'] == data['last_date'] else f"{data['first_date']} -> {data['last_date']}"
+        return '\n'.join([
+            VIS_DIAGRAM_START,
+            '#### Diagrama de Visibilidad - ArsenalOT',
+            '',
+            f"![Diagrama de visibilidad del origen {data['location']}]({rel_image_path})",
+            '',
+            f"_Imagen en modo claro actualizada desde ArsenalOT. Periodo: {period}._",
+            VIS_DIAGRAM_END,
+        ])
+
+    def _inject_or_replace_visibility_diagram(self, content: str, block: str) -> str:
+        if VIS_DIAGRAM_START in content and VIS_DIAGRAM_END in content:
+            s = content.index(VIS_DIAGRAM_START)
+            e = content.index(VIS_DIAGRAM_END) + len(VIS_DIAGRAM_END)
+            return content[:s] + block + content[e:]
+        if VISIBILIDAD_START in content:
+            return content.replace(VISIBILIDAD_START, f"{block}\n\n{VISIBILIDAD_START}", 1)
+        return content.rstrip() + f'\n\n{block}\n'
+
+    def update_location_visibility_diagram(self, org_name: str, location: str,
+                                           db_path,
+                                           myip: Optional[str] = None) -> bool:
+        """Genera/actualiza la imagen clara del diagrama en la nota del origen."""
+        note_path = self._find_location_note_path(org_name, location, myip)
+        if note_path is None:
+            return False
+        data = self._collect_location_visibility_data(org_name, location, db_path, myip)
+        if not data:
+            return False
+        label = self._ip_label(myip)
+        image_name = f"visibilidad_{self._slug_filename(location)}_{self._slug_filename(label)}.png"
+        image_path = self._diagrams_dir(org_name) / image_name
+        self._render_visibility_diagram_png(data, image_path)
+        rel_image_path = f"{DIAGRAMAS_SUBDIR}/{image_name}"
+        block = self._build_visibility_diagram_block(rel_image_path, data)
+        content = note_path.read_text(encoding='utf-8')
+        new_content = self._inject_or_replace_visibility_diagram(content, block)
+        if new_content != content:
+            note_path.write_text(new_content, encoding='utf-8')
+            _open_permissions(note_path)
+        return True
+
+    def refresh_org_visibility_diagrams(self, org_name: str, db_path) -> Dict:
+        """Actualiza diagramas y bloques de visibilidad de todos los origenes existentes."""
+        import sqlite3 as _sq
+
+        conn = _sq.connect(str(db_path), timeout=10.0)
+        conn.row_factory = _sq.Row
+        try:
+            rows = conn.execute(
+                """SELECT location,
+                          CASE WHEN myip IS NULL OR myip = '' THEN NULL ELSE myip END AS myip,
+                          MIN(started_at) AS first_scan
+                   FROM scans
+                   WHERE UPPER(organization_name) = UPPER(?)
+                     AND status = 'completed'
+                     AND COALESCE(scan_mode, 'active') != 'passive'
+                   GROUP BY location, CASE WHEN myip IS NULL OR myip = '' THEN NULL ELSE myip END
+                   ORDER BY location, myip""",
+                (org_name,)
+            ).fetchall()
+        finally:
+            conn.close()
+
+        updated = 0
+        for row in rows:
+            location = row['location']
+            myip = row['myip']
+            first_date = str(row['first_scan'] or '')[:10]
+            self.create_location_note(org_name, location, first_date, myip)
+            if self.update_location_visibility(org_name, location, db_path, myip):
+                updated += 1
+            elif self.update_location_visibility_diagram(org_name, location, db_path, myip):
+                updated += 1
+        return {"diagramas_actualizados": updated, "origenes": len(rows)}
+
     def _build_location_visibility_block(self, org_name: str,
                                           location: str, db_path,
                                           myip: Optional[str] = None) -> str:
@@ -1004,6 +1694,7 @@ class BitacoraManager:
         note_path = self._find_location_note_path(org_name, location, myip)
         if note_path is None:
             return False
+        self.update_location_metadata(org_name, location, db_path, myip)
         block = self._build_location_visibility_block(org_name, location,
                                                        db_path, myip)
         if not block:
@@ -1013,6 +1704,7 @@ class BitacoraManager:
         if new_content != content:
             note_path.write_text(new_content, encoding='utf-8')
             _open_permissions(note_path)
+        self.update_location_visibility_diagram(org_name, location, db_path, myip)
         return True
 
     # ─────────────────────────────────────────────────────────

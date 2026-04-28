@@ -14,6 +14,11 @@ async def pentest_orgs_page(request: Request):
     """Página para seleccionar o crear organizaciones."""
     return templates.TemplateResponse(request, "pentest_orgs.html")
 
+@router.get("/guias", response_class=HTMLResponse)
+async def guides_page(request: Request):
+    """Pagina de guias de auditoria en solo lectura."""
+    return templates.TemplateResponse(request, "guides.html")
+
 @router.get("/pentest/{org_name}", response_class=HTMLResponse)
 async def pentest_phases_page(request: Request, org_name: str):
     """Página para seleccionar la fase de ataque de una organización."""
@@ -48,6 +53,11 @@ async def recon_findings_page(request: Request, org_name: str):
 async def recon_visibility_diagram_page(request: Request, org_name: str):
     """Diagrama de visibilidad entre orígenes, sistemas y redes."""
     return templates.TemplateResponse(request, "visibility_diagram.html", {"org_name": org_name})
+
+@router.get("/pentest/{org_name}/recon/attack-path", response_class=HTMLResponse)
+async def recon_attack_path_page(request: Request, org_name: str):
+    """Diagrama de caminos de ataque hacia un asset objetivo."""
+    return templates.TemplateResponse(request, "attack_path.html", {"org_name": org_name})
 
 @router.get("/pentest/{org_name}/exploitation", response_class=HTMLResponse)
 async def exploitation_page(request: Request, org_name: str):

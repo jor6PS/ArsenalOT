@@ -66,6 +66,44 @@ async def get_tree(org_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{org_name}/manifest")
+async def get_bitacora_manifest(
+    org_name: str,
+    audit_type: str = Query("infra", description="infra o device"),
+):
+    """Vista filtrada de bitacora editable para una organizacion."""
+    try:
+        mgr = _get_manager()
+        return mgr.get_bitacora_manifest(org_name, audit_type)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/guides/catalog/tree")
+async def get_guides_tree():
+    """Arbol de guias del template maestro, en solo lectura."""
+    try:
+        mgr = _get_manager()
+        return {"tree": mgr.get_guides_tree()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/guides/catalog/file")
+async def read_guide_file(path: str = Query(..., description="Ruta relativa de la guia")):
+    """Lee una guia del template maestro."""
+    try:
+        mgr = _get_manager()
+        content, mtime = mgr.read_guide_file(path)
+        return {"content": content, "mtime": mtime, "path": path}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{org_name}/file")
 async def read_file(org_name: str, path: str = Query(..., description="Ruta relativa al dir de la org")):
     """Lee un archivo de la bitácora."""
