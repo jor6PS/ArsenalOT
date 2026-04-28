@@ -2091,11 +2091,11 @@
     const totalColumnWidth = columns.reduce((sum, column) => (
       sum + Math.max(0, ...column.map((system) => sizeById.get(system.id).width))
     ), 0);
-    const compactGap = columns.length > 6 ? 36 : columns.length > 4 ? 46 : 58;
+    const compactGap = columns.length > 6 ? 30 : columns.length > 4 ? 38 : 48;
     const idealGap = columns.length > 1
       ? Math.floor((viewportWidth - (horizontalMargin * 2) - totalColumnWidth) / Math.max(1, columns.length - 1))
       : 0;
-    const minColumnGap = Math.max(32, compactGap);
+    const minColumnGap = Math.max(28, compactGap);
     const distributedGap = columns.length > 1
       ? Math.max(minColumnGap, idealGap)
       : 0;
@@ -2105,7 +2105,7 @@
     );
     const requiredHeights = columns.map((column) => {
       const totalBoxHeight = column.reduce((sum, system) => sum + sizeById.get(system.id).height, 0);
-      return totalBoxHeight + (Math.max(0, column.length - 1) * 44) + (verticalMargin * 2);
+      return totalBoxHeight + (Math.max(0, column.length - 1) * 36) + (verticalMargin * 2);
     });
     const baseHeight = Math.max(viewportHeight, ...requiredHeights);
 
@@ -2123,7 +2123,7 @@
       const totalBoxHeight = column.reduce((sum, system) => sum + sizeById.get(system.id).height, 0);
       const availableHeight = Math.max(0, baseHeight - (verticalMargin * 2));
       const gap = column.length > 1
-        ? Math.max(42, Math.floor((availableHeight - totalBoxHeight) / (column.length - 1)))
+        ? Math.max(34, Math.floor((availableHeight - totalBoxHeight) / (column.length - 1)))
         : 0;
       const contentHeight = totalBoxHeight + (gap * Math.max(0, column.length - 1));
       let top = verticalMargin + Math.max(0, Math.round((availableHeight - contentHeight) / 2));
@@ -3972,7 +3972,7 @@
     `;
   }
 
-  async function exportVisibilityPng() {
+  async function exportVisibilityPngLegacy() {
     const btn = document.getElementById('exportVisibilityPngBtn');
     const diagram = document.getElementById('visibilityDiagram');
     const linksSvg = document.getElementById('visibilityLinks');
@@ -4081,6 +4081,281 @@
       alert('No se pudo exportar el PNG. Prueba en Chrome/Edge con el diagrama completamente cargado.');
     } finally {
       URL.revokeObjectURL(url);
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function exportVisibilityPng() {
+    const btn = document.getElementById('exportVisibilityPngBtn');
+    const diagram = document.getElementById('visibilityDiagram');
+    const linksSvg = document.getElementById('visibilityLinks');
+    if (!diagram || !linksSvg) return;
+
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const bounds = diagram.getBoundingClientRect();
+    const width = Math.max(diagram.scrollWidth, Math.ceil(bounds.width));
+    const height = Math.max(diagram.scrollHeight, Math.ceil(bounds.height));
+    const legendHeight = 54;
+    const exportHeight = height + legendHeight;
+    const fontFamily = 'Arial, sans-serif';
+
+    if (btn) btn.disabled = true;
+
+    try {
+      const canvas = document.createElement('canvas');
+      const scale = 2;
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(exportHeight * scale);
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('No se pudo inicializar el canvas');
+      context.scale(scale, scale);
+
+      const palette = {
+        bgTop: isLight ? '#f0f4ff' : '#020617',
+        bgBottom: isLight ? '#e6ecfc' : '#080f1c',
+        text: isLight ? '#1f2937' : '#e5edf8',
+        muted: isLight ? '#4b5563' : '#9fb2c8',
+        systemBorder: isLight ? 'rgba(51,65,85,0.34)' : 'rgba(148,163,184,0.22)',
+        systemHeaderBg: isLight ? '#eef3ff' : '#08101d',
+        networkBg: isLight ? '#ffffff' : '#101827',
+        networkPhysicalBg: isLight ? '#e0ecff' : '#13223a',
+        networkBorder: isLight ? 'rgba(51,65,85,0.22)' : 'rgba(148,163,184,0.18)',
+        link: isLight ? 'rgba(37,99,235,0.56)' : 'rgba(103,232,249,0.48)',
+      };
+
+      const drawRoundRect = (x, y, rectWidth, rectHeight, radius) => {
+        const safeRadius = Math.max(0, Math.min(radius, rectWidth / 2, rectHeight / 2));
+        context.beginPath();
+        context.moveTo(x + safeRadius, y);
+        context.lineTo(x + rectWidth - safeRadius, y);
+        context.quadraticCurveTo(x + rectWidth, y, x + rectWidth, y + safeRadius);
+        context.lineTo(x + rectWidth, y + rectHeight - safeRadius);
+        context.quadraticCurveTo(x + rectWidth, y + rectHeight, x + rectWidth - safeRadius, y + rectHeight);
+        context.lineTo(x + safeRadius, y + rectHeight);
+        context.quadraticCurveTo(x, y + rectHeight, x, y + rectHeight - safeRadius);
+        context.lineTo(x, y + safeRadius);
+        context.quadraticCurveTo(x, y, x + safeRadius, y);
+        context.closePath();
+      };
+
+      const fitText = (text, maxWidth) => {
+        const value = String(text || '').replace(/\s+/g, ' ').trim();
+        if (!value) return '';
+        if (context.measureText(value).width <= maxWidth) return value;
+        let output = value;
+        while (output.length > 1 && context.measureText(`${output}...`).width > maxWidth) {
+          output = output.slice(0, -1);
+        }
+        return `${output}...`;
+      };
+
+      const drawPill = (x, y, label, colors) => {
+        context.font = `700 12px ${fontFamily}`;
+        const text = fitText(label, 190);
+        const pillWidth = Math.max(58, Math.min(208, context.measureText(text).width + 32));
+        drawRoundRect(x, y, pillWidth, 28, 14);
+        context.fillStyle = colors.bg;
+        context.fill();
+        context.strokeStyle = colors.border;
+        context.lineWidth = 1;
+        context.stroke();
+        context.beginPath();
+        context.arc(x + 15, y + 14, 4, 0, Math.PI * 2);
+        context.fillStyle = colors.dot;
+        context.fill();
+        context.fillStyle = colors.text;
+        context.fillText(text, x + 26, y + 18);
+        return pillWidth;
+      };
+
+      const background = context.createLinearGradient(0, 0, 0, exportHeight);
+      background.addColorStop(0, palette.bgTop);
+      background.addColorStop(1, palette.bgBottom);
+      context.fillStyle = background;
+      context.fillRect(0, 0, width, exportHeight);
+
+      const legendItems = [
+        {
+          text: (document.getElementById('originFilterToggle')?.innerText || 'Origenes').replace(/\s+/g, ' ').trim(),
+          bg: isLight ? 'rgba(254,226,226,0.92)' : 'rgba(127,29,29,0.24)',
+          border: 'rgba(239,68,68,0.52)',
+          dot: 'rgba(239,68,68,0.92)',
+          color: isLight ? '#991b1b' : '#fecaca',
+        },
+        {
+          text: (document.getElementById('destinationFilterToggle')?.innerText || 'Destinos').replace(/\s+/g, ' ').trim(),
+          bg: isLight ? 'rgba(220,252,231,0.92)' : 'rgba(20,83,45,0.22)',
+          border: 'rgba(34,197,94,0.5)',
+          dot: 'rgba(34,197,94,0.92)',
+          color: isLight ? '#166534' : '#bbf7d0',
+        },
+        {
+          text: (document.getElementById('criticalFilterToggle')?.innerText || 'Criticos').replace(/\s+/g, ' ').trim(),
+          bg: isLight ? 'rgba(237,233,254,0.92)' : 'rgba(76,29,149,0.24)',
+          border: 'rgba(167,139,250,0.52)',
+          dot: 'rgba(167,139,250,0.92)',
+          color: isLight ? '#5b21b6' : '#ddd6fe',
+        },
+        {
+          text: `Capas ${layerExportLabel().replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()}`,
+          bg: isLight ? 'rgba(219,234,254,0.92)' : 'rgba(30,64,175,0.26)',
+          border: 'rgba(59,130,246,0.52)',
+          dot: 'rgba(59,130,246,0.94)',
+          color: isLight ? '#1d4ed8' : '#bfdbfe',
+        },
+        {
+          text: `Purdue ${purdueModeEnabled ? 'ON' : 'OFF'}`,
+          bg: isLight ? 'rgba(219,234,254,0.92)' : 'rgba(30,64,175,0.26)',
+          border: 'rgba(59,130,246,0.52)',
+          dot: 'rgba(59,130,246,0.94)',
+          color: isLight ? '#1d4ed8' : '#bfdbfe',
+        },
+      ];
+
+      let legendX = 14;
+      legendItems.forEach((item) => {
+        legendX += drawPill(legendX, 13, item.text, {
+          bg: item.bg,
+          border: item.border,
+          dot: item.dot,
+          text: item.color,
+        }) + 8;
+      });
+
+      const rectFor = (element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          left: rect.left - bounds.left + diagram.scrollLeft,
+          top: rect.top - bounds.top + diagram.scrollTop,
+          width: rect.width,
+          height: rect.height,
+        };
+      };
+
+      context.save();
+      context.translate(0, legendHeight);
+
+      context.strokeStyle = palette.link;
+      context.lineWidth = 1.9;
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
+      linksSvg.querySelectorAll('path').forEach((path) => {
+        const d = path.getAttribute('d');
+        if (!d || typeof Path2D === 'undefined') return;
+        context.stroke(new Path2D(d));
+      });
+
+      diagram.querySelectorAll('.visibility-system').forEach((system) => {
+        const rect = rectFor(system);
+        drawRoundRect(rect.left, rect.top, rect.width, rect.height, 18);
+        context.fillStyle = system.classList.contains('visibility-system--purdue')
+          ? (isLight ? 'rgba(219,234,254,0.28)' : 'rgba(15,23,42,0.22)')
+          : (isLight ? 'rgba(255,255,255,0.32)' : 'rgba(15,23,42,0.22)');
+        context.fill();
+        context.setLineDash([7, 6]);
+        context.strokeStyle = system.classList.contains('visibility-system--source')
+          ? 'rgba(239,68,68,0.5)'
+          : system.classList.contains('visibility-system--target')
+            ? 'rgba(34,197,94,0.48)'
+            : palette.systemBorder;
+        context.lineWidth = 2;
+        context.stroke();
+        context.setLineDash([]);
+
+        const heading = system.querySelector('.visibility-system-header h3')?.innerText || '';
+        context.font = `800 13px ${fontFamily}`;
+        const headingText = fitText(heading, Math.max(40, rect.width - 32));
+        const headingWidth = context.measureText(headingText).width + 14;
+        context.fillStyle = palette.systemHeaderBg;
+        context.fillRect(rect.left + 12, rect.top - 12, headingWidth, 18);
+        context.fillStyle = palette.text;
+        context.fillText(headingText, rect.left + 19, rect.top + 2);
+      });
+
+      diagram.querySelectorAll('.visibility-network').forEach((network) => {
+        const rect = rectFor(network);
+        const isSource = network.classList.contains('visibility-network--source');
+        const isTarget = network.classList.contains('visibility-network--target');
+        const isPhysical = network.classList.contains('visibility-network--origin-physical');
+
+        drawRoundRect(rect.left, rect.top, rect.width, rect.height, 15);
+        context.fillStyle = isPhysical ? palette.networkPhysicalBg : palette.networkBg;
+        context.fill();
+        context.strokeStyle = isSource
+          ? 'rgba(239,68,68,0.92)'
+          : isTarget
+            ? 'rgba(34,197,94,0.9)'
+            : palette.networkBorder;
+        context.lineWidth = 1.5;
+        context.stroke();
+
+        ['left', 'right'].forEach((side) => {
+          context.beginPath();
+          context.arc(side === 'left' ? rect.left - 1 : rect.left + rect.width + 1, rect.top + (rect.height / 2), 5, 0, Math.PI * 2);
+          context.fillStyle = isLight ? '#ffffff' : '#040a14';
+          context.fill();
+          context.strokeStyle = isSource ? 'rgba(239,68,68,0.92)' : isTarget ? 'rgba(34,197,94,0.9)' : 'rgba(148,163,184,0.78)';
+          context.lineWidth = 2;
+          context.stroke();
+        });
+
+        const title = network.querySelector('.visibility-network-title')?.innerText || '';
+        const range = network.querySelector('.visibility-network-range')?.innerText || '';
+        context.font = `800 12px ${fontFamily}`;
+        context.fillStyle = palette.text;
+        context.fillText(fitText(title, rect.width - 24), rect.left + 11, rect.top + 20);
+        context.font = `600 10px ${fontFamily}`;
+        context.fillStyle = palette.muted;
+        context.fillText(fitText(range, rect.width - 24), rect.left + 11, rect.top + 37);
+
+        const visibleBadges = [...network.querySelectorAll('.visibility-network-origin, .visibility-network-critical')]
+          .filter((badge) => !badge.hidden && getComputedStyle(badge).display !== 'none');
+        let badgeY = rect.top + 47;
+        visibleBadges.slice(0, 2).forEach((badge) => {
+          const badgeText = fitText(badge.innerText, rect.width - 28);
+          if (!badgeText) return;
+          context.font = `700 9px ${fontFamily}`;
+          const badgeWidth = Math.min(rect.width - 22, Math.max(54, context.measureText(badgeText).width + 16));
+          const critical = badge.classList.contains('visibility-network-critical');
+
+          drawRoundRect(rect.left + 11, badgeY, badgeWidth, 18, 9);
+          context.fillStyle = critical
+            ? (isLight ? 'rgba(237,233,254,0.92)' : 'rgba(167,139,250,0.13)')
+            : isSource
+              ? (isLight ? 'rgba(254,226,226,0.92)' : 'rgba(239,68,68,0.14)')
+              : isTarget
+                ? (isLight ? 'rgba(220,252,231,0.92)' : 'rgba(34,197,94,0.14)')
+                : (isLight ? 'rgba(226,232,240,0.9)' : 'rgba(148,163,184,0.1)');
+          context.fill();
+          context.fillStyle = critical
+            ? (isLight ? '#5b21b6' : '#ddd6fe')
+            : isSource
+              ? (isLight ? '#991b1b' : '#fecaca')
+              : isTarget
+                ? (isLight ? '#166534' : '#bbf7d0')
+                : palette.muted;
+          context.fillText(badgeText, rect.left + 19, badgeY + 12);
+          badgeY += 21;
+        });
+      });
+
+      context.restore();
+
+      const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!pngBlob) throw new Error('No se pudo generar la imagen PNG');
+
+      const downloadUrl = URL.createObjectURL(pngBlob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `diagrama_visibilidad_${ORG_NAME.toLowerCase()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 30000);
+    } catch (err) {
+      console.error('Export PNG error:', err);
+      alert('No se pudo exportar el PNG. Prueba en Chrome/Edge con el diagrama completamente cargado.');
+    } finally {
       if (btn) btn.disabled = false;
     }
   }

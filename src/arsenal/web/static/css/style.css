@@ -2275,7 +2275,7 @@ tr:last-child td {
     color: var(--text-secondary);
 }
 
-/* ── Access Vectors (diagrama de visibilidad) ─────────────────── */
+/* ── Diagrama de visibilidad ─────────────────── */
 [data-theme="light"] .visibility-toolbar {
     background: rgba(255, 255, 255, 0.88);
     border-color: rgba(90, 132, 206, 0.18);
