@@ -656,6 +656,20 @@
     padding: 0;
   }
 
+  .visibility-system--purdue .visibility-system-content,
+  .visibility-system--purdue-unknown .visibility-system-content {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.56rem;
+  }
+
+  .visibility-system--purdue .visibility-network,
+  .visibility-system--purdue-unknown .visibility-network {
+    width: 210px;
+    flex-shrink: 0;
+  }
+
   .visibility-network {
     position: relative;
     border: 1.5px solid rgba(110, 138, 176, 0.7);
@@ -2190,36 +2204,39 @@
     });
   }
 
-  function estimatePurdueGroupSize(group, availableWidth = 258) {
+  function estimatePurdueGroupSize(group, availableWidth) {
     const count = Math.max(1, group.networks.length);
-    const width = group.is_unknown ? Math.min(availableWidth, 920) : availableWidth;
+    const cardWidth = 210;
+    const cardGap = 9; // 0.56rem ≈ 9px
+    const cardsPerRow = Math.max(1, Math.floor((availableWidth - 24) / (cardWidth + cardGap)));
+    const rows = Math.ceil(count / cardsPerRow);
     return {
-      width,
-      height: Math.round(66 + (count * 72) + (Math.max(0, count - 1) * 12)),
+      width: availableWidth,
+      height: Math.round(52 + (rows * 80) + (Math.max(0, rows - 1) * cardGap) + 16),
     };
   }
 
   function buildPurdueLayout(groups) {
     const shell = document.getElementById('diagramShell');
     const shellWidth = shell?.clientWidth || Math.max(720, (window.innerWidth || 0) - 64);
-    const shellHeight = shell?.clientHeight || Math.round((window.innerHeight || 920) * 0.72);
     const viewportWidth = Math.max(720, shellWidth);
-    const viewportHeight = Math.max(760, shellHeight);
-    const marginX = viewportWidth >= 1280 ? 48 : 34;
-    const marginY = viewportHeight >= 900 ? 54 : 42;
-    const gap = groups.length > 5 ? 30 : 38;
-    const availableWidth = Math.max(258, viewportWidth - (marginX * 2));
+    const marginX = 48;
+    const marginY = 54;
+    // Gap must be > 2×(exit depth 28) + 2×(routing padding 18) = 92px for routing to work
+    const gap = 110;
+    const availableWidth = Math.min(Math.max(600, viewportWidth - (marginX * 2)), 1100);
     const sizes = new Map(groups.map((group) => [group.id, estimatePurdueGroupSize(group, availableWidth)]));
-    const width = Math.max(viewportWidth, availableWidth + (marginX * 2));
     const totalHeight = groups.reduce((sum, group) => sum + sizes.get(group.id).height, 0) + (Math.max(0, groups.length - 1) * gap);
-    const height = Math.max(viewportHeight, totalHeight + (marginY * 2));
+    const width = Math.max(viewportWidth, availableWidth + (marginX * 2));
+    const height = Math.max(760, totalHeight + (marginY * 2));
+    const left = Math.round((width - availableWidth) / 2);
     const positions = new Map();
     let top = marginY;
 
     groups.forEach((group) => {
       const size = sizes.get(group.id);
       positions.set(group.id, {
-        left: marginX,
+        left,
         top,
         width: size.width,
         height: size.height,
@@ -2963,9 +2980,9 @@
     });
 
     sourceLaneGroups.forEach((group) => {
-      // In Purdue mode (top/bottom routing), sort by X position; otherwise by Y
+      // In Purdue mode (vertical layout, top/bottom routing) sort by X to spread lanes horizontally
       if (purdueModeEnabled) {
-        group.sort((left, right) => left.targetRect.midX - right.targetRect.midX || left.sourceRect.midX - right.sourceRect.midX);
+        group.sort((left, right) => left.sourceRect.midX - right.sourceRect.midX || left.targetRect.midX - right.targetRect.midX);
       } else {
         group.sort((left, right) => left.targetRect.midY - right.targetRect.midY || left.sourceRect.midY - right.sourceRect.midY);
       }
@@ -2976,7 +2993,7 @@
 
     targetLaneGroups.forEach((group) => {
       if (purdueModeEnabled) {
-        group.sort((left, right) => left.sourceRect.midX - right.sourceRect.midX || left.targetRect.midX - right.targetRect.midX);
+        group.sort((left, right) => left.targetRect.midX - right.targetRect.midX || left.sourceRect.midX - right.sourceRect.midX);
       } else {
         group.sort((left, right) => left.sourceRect.midY - right.sourceRect.midY || left.targetRect.midY - right.targetRect.midY);
       }
