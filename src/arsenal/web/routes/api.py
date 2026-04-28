@@ -754,8 +754,8 @@ def _diagram_discovery_method_to_layer_key(discovery_method: str, has_mac: bool 
     return None
 
 
-@router.get("/api/access-vector-diagram")
-async def get_access_vector_diagram(organization: str):
+@router.get("/api/visibility-diagram")
+async def get_visibility_diagram(organization: str):
     """Devuelve un diagrama de visibilidad basado en resultados reales de escaneo."""
     try:
         org = organization.upper()
