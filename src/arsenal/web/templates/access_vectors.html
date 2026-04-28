@@ -395,8 +395,17 @@
 
   .visibility-filter-actions {
     display: flex;
-    gap: 0.45rem;
+    gap: 0.3rem;
     flex-wrap: wrap;
+  }
+
+  .visibility-filter-actions .btn,
+  .visibility-layer-strip > .btn {
+    min-height: 28px;
+    padding: 0.28rem 0.48rem;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    line-height: 1.1;
   }
 
   .visibility-selection-summary {
@@ -556,11 +565,7 @@
     margin-top: 0.72rem;
     overflow: auto;
     border-radius: 12px;
-    background:
-      linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
-      linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(8, 15, 28, 0.98));
-    background-size: 32px 32px;
+    background: linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(8, 15, 28, 0.98));
   }
 
   .visibility-diagram {
@@ -797,6 +802,10 @@
     color: #bbf7d0;
   }
 
+  .visibility-network-origin[hidden] {
+    display: none;
+  }
+
   .visibility-network-origin--source-focus {
     background: rgba(239, 68, 68, 0.18) !important;
     color: #fee2e2 !important;
@@ -923,9 +932,9 @@
   /* ── Purdue IT/OT separator ───────────────────────────────────── */
   .visibility-purdue-it-ot-separator {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    border-left: 2px dashed rgba(148, 163, 184, 0.38);
+    left: 0;
+    right: 0;
+    border-top: 2px dashed rgba(148, 163, 184, 0.38);
     z-index: 2;
     pointer-events: none;
   }
@@ -1121,12 +1130,36 @@
     color: #1a2035;
   }
   [data-theme="light"] .visibility-system--source {
-    border-color: rgba(239, 68, 68, 0.44);
-    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.1);
+    border-color: rgba(220, 38, 38, 0.58);
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.12);
   }
   [data-theme="light"] .visibility-system--target {
-    border-color: rgba(34, 197, 94, 0.42);
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.1);
+    border-color: rgba(22, 163, 74, 0.58);
+    box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.12);
+  }
+  [data-theme="light"] .visibility-network--source {
+    background:
+      linear-gradient(180deg, rgba(254, 226, 226, 0.96), rgba(255, 241, 242, 0.98));
+    border-color: rgba(220, 38, 38, 0.82);
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.18), 0 0 18px rgba(220, 38, 38, 0.1);
+  }
+  [data-theme="light"] .visibility-network--target {
+    background:
+      linear-gradient(180deg, rgba(220, 252, 231, 0.96), rgba(240, 253, 244, 0.98));
+    border-color: rgba(22, 163, 74, 0.82);
+    box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.18), 0 0 18px rgba(22, 163, 74, 0.1);
+  }
+  [data-theme="light"] .visibility-network--source::before,
+  [data-theme="light"] .visibility-network--source::after {
+    border-color: rgba(220, 38, 38, 0.9);
+    background: #fff1f2;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+  }
+  [data-theme="light"] .visibility-network--target::before,
+  [data-theme="light"] .visibility-network--target::after {
+    border-color: rgba(22, 163, 74, 0.9);
+    background: #f0fdf4;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.14);
   }
   /* Purdue system in light mode */
   [data-theme="light"] .visibility-system--purdue {
@@ -1139,11 +1172,7 @@
   }
   /* Diagram shell in light mode */
   [data-theme="light"] .visibility-diagram-shell {
-    background:
-      linear-gradient(rgba(90, 132, 206, 0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(90, 132, 206, 0.04) 1px, transparent 1px),
-      linear-gradient(180deg, rgba(237, 237, 235, 0.98), rgba(240, 244, 255, 0.98));
-    background-size: 32px 32px;
+    background: linear-gradient(180deg, rgba(237, 237, 235, 0.98), rgba(240, 244, 255, 0.98));
   }
   /* Physical origin dashed outline in light mode */
   [data-theme="light"] .visibility-network--origin-physical {
@@ -1156,7 +1185,7 @@
   }
   /* IT/OT separator in light mode */
   [data-theme="light"] .visibility-purdue-it-ot-separator {
-    border-left-color: rgba(90, 132, 206, 0.52);
+    border-top-color: rgba(90, 132, 206, 0.52);
   }
   [data-theme="light"] .visibility-purdue-it-ot-label {
     background: rgba(240, 244, 255, 0.96);
@@ -1514,7 +1543,7 @@
   }
 
   function isCriticalFilterActive(data = currentDiagramData) {
-    return criticalOptions(data).length > 0;
+    return isFilterRestricted(selectedCriticalIds, criticalOptions(data).length);
   }
 
   function isLayerFilterActive(data = currentDiagramData) {
@@ -2161,10 +2190,11 @@
     });
   }
 
-  function estimatePurdueGroupSize(group) {
+  function estimatePurdueGroupSize(group, availableWidth = 258) {
     const count = Math.max(1, group.networks.length);
+    const width = group.is_unknown ? Math.min(availableWidth, 920) : availableWidth;
     return {
-      width: group.is_unknown ? 238 : 258,
+      width,
       height: Math.round(66 + (count * 72) + (Math.max(0, count - 1) * 12)),
     };
   }
@@ -2175,29 +2205,26 @@
     const shellHeight = shell?.clientHeight || Math.round((window.innerHeight || 920) * 0.72);
     const viewportWidth = Math.max(720, shellWidth);
     const viewportHeight = Math.max(760, shellHeight);
-    const sizes = new Map(groups.map((group) => [group.id, estimatePurdueGroupSize(group)]));
     const marginX = viewportWidth >= 1280 ? 48 : 34;
-    // Extra top/bottom margin for top/bottom routing paths
-    const marginY = viewportHeight >= 900 ? 90 : 72;
-    const gap = groups.length > 5 ? 34 : 48;
-    const totalWidth = groups.reduce((sum, group) => sum + sizes.get(group.id).width, 0) + (Math.max(0, groups.length - 1) * gap);
-    const width = Math.max(viewportWidth, totalWidth + (marginX * 2));
-    const height = Math.max(
-      viewportHeight,
-      Math.max(0, ...groups.map((group) => sizes.get(group.id).height)) + (marginY * 2),
-    );
+    const marginY = viewportHeight >= 900 ? 54 : 42;
+    const gap = groups.length > 5 ? 30 : 38;
+    const availableWidth = Math.max(258, viewportWidth - (marginX * 2));
+    const sizes = new Map(groups.map((group) => [group.id, estimatePurdueGroupSize(group, availableWidth)]));
+    const width = Math.max(viewportWidth, availableWidth + (marginX * 2));
+    const totalHeight = groups.reduce((sum, group) => sum + sizes.get(group.id).height, 0) + (Math.max(0, groups.length - 1) * gap);
+    const height = Math.max(viewportHeight, totalHeight + (marginY * 2));
     const positions = new Map();
-    let left = marginX + Math.max(0, Math.round((width - (marginX * 2) - totalWidth) / 2));
+    let top = marginY;
 
     groups.forEach((group) => {
       const size = sizes.get(group.id);
       positions.set(group.id, {
-        left,
-        top: marginY + Math.max(0, Math.round((height - (marginY * 2) - size.height) / 2)),
+        left: marginX,
+        top,
         width: size.width,
         height: size.height,
       });
-      left += size.width + gap;
+      top += size.height + gap;
     });
 
     return { width, height, positions };
@@ -2239,8 +2266,7 @@
           <div
             class="visibility-network-origin"
             data-network-origin
-            title="${escapeHtml(originIps.join(' · '))}"
-            ${originPreview ? '' : 'hidden'}
+            hidden
           >
             <span class="visibility-network-origin-label" data-network-origin-label>Origen</span>
             <span class="visibility-network-origin-values" data-network-origin-values>${escapeHtml(originPreview)}</span>
@@ -2318,7 +2344,7 @@
         <section
           class="visibility-system ${group.is_unknown ? 'visibility-system--purdue-unknown' : 'visibility-system--purdue'}"
           data-system-id="${escapeHtml(group.id)}"
-          style="left:${layout.left}px; top:${layout.top}px; width:${layout.width}px;"
+          style="left:${layout.left}px; top:${layout.top}px; width:${layout.width}px; min-height:${layout.height}px;"
         >
           <div class="visibility-system-header">
             <h3>${escapeHtml(group.name)}</h3>
@@ -2330,22 +2356,21 @@
       `;
     }).join('');
 
-    // Build IT/OT separator between level 3 (OT) and level 4 (IT)
+    // Build IT/OT separator between level 4 (IT) and level 3 (OT)
     const itGroups = groups.filter((g) => !g.is_unknown && g.level >= 4);
     const otGroups = groups.filter((g) => !g.is_unknown && g.level <= 3);
     let separatorHtml = '';
     if (itGroups.length && otGroups.length) {
-      // Find rightmost IT group and leftmost OT group boundaries
       const itPositions = itGroups.map((g) => currentLayout.positions.get(g.id));
       const otPositions = otGroups.map((g) => currentLayout.positions.get(g.id));
-      const itRightX = Math.max(...itPositions.map((p) => p.left + p.width));
-      const otLeftX = Math.min(...otPositions.map((p) => p.left));
-      const sepX = Math.round((itRightX + otLeftX) / 2);
-      const labelY = Math.round(currentLayout.height / 2);
+      const itBottomY = Math.max(...itPositions.map((p) => p.top + p.height));
+      const otTopY = Math.min(...otPositions.map((p) => p.top));
+      const sepY = Math.round((itBottomY + otTopY) / 2);
+      const labelX = Math.round(currentLayout.width / 2);
       separatorHtml = `
-        <div class="visibility-purdue-it-ot-separator" style="left:${sepX}px;"></div>
-        <div class="visibility-purdue-it-ot-label" style="left:${Math.max(8, sepX - 96)}px; top:${labelY - 64}px;">IT</div>
-        <div class="visibility-purdue-it-ot-label" style="left:${Math.min(currentLayout.width - 40, sepX + 8)}px; top:${labelY - 64}px;">OT</div>
+        <div class="visibility-purdue-it-ot-separator" style="top:${sepY}px;"></div>
+        <div class="visibility-purdue-it-ot-label" style="left:${Math.max(8, labelX - 96)}px; top:${sepY - 34}px;">IT</div>
+        <div class="visibility-purdue-it-ot-label" style="left:${Math.min(currentLayout.width - 48, labelX + 8)}px; top:${sepY + 8}px;">OT</div>
       `;
     }
 
@@ -2580,12 +2605,12 @@
 
   function chooseSystemSides(sourceSystemRect, targetSystemRect) {
     if (purdueModeEnabled) {
-      // In Purdue mode (horizontal layout) route connections through top/bottom
-      // to avoid overlapping the network card columns
       if (sourceSystemRect.id === targetSystemRect.id) {
-        return { sourceSide: 'bottom', targetSide: 'bottom' };
+        return { sourceSide: 'right', targetSide: 'right' };
       }
-      return { sourceSide: 'top', targetSide: 'top' };
+      return targetSystemRect.midY >= sourceSystemRect.midY
+        ? { sourceSide: 'bottom', targetSide: 'top' }
+        : { sourceSide: 'top', targetSide: 'bottom' };
     }
 
     if (sourceSystemRect.id === targetSystemRect.id) {
@@ -3167,11 +3192,6 @@
     const originValues = element.querySelector('[data-network-origin-values]');
     const originContextTag = element.querySelector('[data-network-origin-context]');
 
-    const defaultOriginIps = sortIpValues(
-      (network?.origin_ids || [])
-        .map((originId) => originsById.get(originId)?.ip)
-        .filter(Boolean),
-    );
     const sourceOriginIps = sortIpValues(networkContext?.sourceOriginIps || []);
     const targetOriginIps = sortIpValues(networkContext?.targetOriginIps || []);
     const physicalOrigins = [...(networkContext?.selectedPhysicalOrigins || [])]
@@ -3179,7 +3199,7 @@
       .sort((left, right) => String(left).localeCompare(String(right)));
 
     let badgeMode = 'default';
-    let displayIps = defaultOriginIps;
+    let displayIps = [];
     if (sourceOriginIps.length) {
       badgeMode = 'source';
       displayIps = sourceOriginIps;
@@ -3188,9 +3208,7 @@
       displayIps = targetOriginIps;
     }
 
-    // When a focused selection is active and this network is not part of it,
-    // hide the origin badge to avoid showing irrelevant origin IPs.
-    const shouldHideBadge = hasFocusedSelection && badgeMode === 'default';
+    const shouldHideBadge = badgeMode === 'default' || !hasFocusedSelection;
 
     if (originBadge && originLabel && originValues) {
       originBadge.classList.toggle('visibility-network-origin--source-focus', badgeMode === 'source');
@@ -3307,8 +3325,8 @@
     document.querySelectorAll('[data-network-id]').forEach((element) => {
       const networkId = element.dataset.networkId;
       element.classList.toggle('visibility-network--active', activeNetworkIds.has(networkId));
-      element.classList.toggle('visibility-network--source', sourceNetworkIds.has(networkId));
-      element.classList.toggle('visibility-network--target', targetNetworkIds.has(networkId));
+      element.classList.toggle('visibility-network--source', hasFocusedSelection && sourceNetworkIds.has(networkId));
+      element.classList.toggle('visibility-network--target', hasFocusedSelection && targetNetworkIds.has(networkId));
       applyNetworkOriginBadge(
         element,
         networksById.get(networkId),
@@ -3347,8 +3365,8 @@
       const isActive = Array.from(element.querySelectorAll('[data-network-id]'))
         .some((networkElement) => activeNetworkIds.has(networkElement.dataset.networkId));
       element.classList.toggle('visibility-system--active', isActive);
-      element.classList.toggle('visibility-system--source', sourceSystemIds.has(systemId));
-      element.classList.toggle('visibility-system--target', targetSystemIds.has(systemId));
+      element.classList.toggle('visibility-system--source', hasFocusedSelection && sourceSystemIds.has(systemId));
+      element.classList.toggle('visibility-system--target', hasFocusedSelection && targetSystemIds.has(systemId));
     });
 
     requestAnimationFrame(refreshLinkPositions);
@@ -3456,17 +3474,10 @@
       const allLayerIds = new Set(layerOptions(currentDiagramData).map((layer) => layer.id));
 
       if (!hasInitializedCriticalSelection && !hasInitializedOriginSelection && !hasInitializedDestinationSelection) {
-        if (allCriticalIds.size) {
-          selectedCriticalIds = new Set(allCriticalIds);
-          selectedOriginIds = new Set();
-          selectedDestinationIds = new Set();
-          currentFilterMode = 'critical';
-        } else {
-          selectedCriticalIds = new Set();
-          selectedOriginIds = new Set(allOriginIds);
-          selectedDestinationIds = new Set(allDestinationIds);
-          currentFilterMode = 'origin';
-        }
+        selectedCriticalIds = new Set(allCriticalIds);
+        selectedOriginIds = new Set(allOriginIds);
+        selectedDestinationIds = new Set(allDestinationIds);
+        currentFilterMode = 'origin';
         hasInitializedCriticalSelection = true;
         hasInitializedOriginSelection = true;
         hasInitializedDestinationSelection = true;
@@ -3848,6 +3859,10 @@
         color: #bbf7d0;
       }
 
+      .visibility-network-origin[hidden] {
+        display: none;
+      }
+
       .visibility-network-origin--source-focus {
         background: rgba(239, 68, 68, 0.18) !important;
         color: #fee2e2 !important;
@@ -3967,7 +3982,6 @@
 
     const bgTop = isLight ? 'rgb(240,244,255)' : 'rgb(2,6,23)';
     const bgBot = isLight ? 'rgb(230,236,252)' : 'rgb(8,15,28)';
-    const gridStroke = isLight ? 'rgba(90,132,206,0.07)' : 'rgba(148,163,184,0.05)';
     const linkStroke = 'rgba(103,232,249,0.46)';
 
     const svgMarkup = `
@@ -3977,9 +3991,6 @@
             <stop offset="0%" stop-color="${bgTop}" stop-opacity="1" />
             <stop offset="100%" stop-color="${bgBot}" stop-opacity="1" />
           </linearGradient>
-          <pattern id="exportVisibilityGrid" width="32" height="32" patternUnits="userSpaceOnUse">
-            <path d="M 32 0 L 0 0 0 32" fill="none" stroke="${gridStroke}" stroke-width="1" />
-          </pattern>
         </defs>
         <style>
           .export-lines path {
@@ -3992,7 +4003,6 @@
           }
         </style>
         <rect width="${width}" height="${exportHeight}" fill="url(#exportVisibilityBg)" />
-        <rect width="${width}" height="${exportHeight}" fill="url(#exportVisibilityGrid)" />
         <foreignObject x="0" y="0" width="${width}" height="${exportHeight}">
           <div xmlns="http://www.w3.org/1999/xhtml" class="export-root" style="display:flex;flex-direction:column;width:${width}px;height:${exportHeight}px;overflow:hidden;">
             <style>${exportDiagramStyles(fontFamily, legendHeight, isLight)}</style>
