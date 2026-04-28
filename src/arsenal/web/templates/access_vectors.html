@@ -13,8 +13,8 @@
     --visibility-source-soft: rgba(239, 68, 68, 0.16);
     --visibility-target: #22c55e;
     --visibility-target-soft: rgba(34, 197, 94, 0.16);
-    --visibility-critical: #f97316;
-    --visibility-critical-soft: rgba(249, 115, 22, 0.18);
+    --visibility-critical: #a78bfa;
+    --visibility-critical-soft: rgba(167, 139, 250, 0.18);
     --visibility-link: rgba(103, 232, 249, 0.46);
     --visibility-panel: rgba(4, 10, 20, 0.96);
     --visibility-panel-strong: rgba(9, 17, 31, 0.88);
@@ -192,20 +192,20 @@
   }
 
   .visibility-filter-toggle--critical {
-    border-color: rgba(249, 115, 22, 0.28);
-    box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.05);
+    border-color: rgba(167, 139, 250, 0.28);
+    box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.05);
   }
 
   .visibility-filter-toggle--critical::before {
-    background: rgba(249, 115, 22, 0.92);
-    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
+    background: rgba(167, 139, 250, 0.92);
+    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
   }
 
   .visibility-filter-menu--open .visibility-filter-toggle--critical,
   .visibility-filter-toggle--critical:hover {
-    border-color: rgba(249, 115, 22, 0.52);
-    color: #fdba74;
-    background: rgba(154, 52, 18, 0.2);
+    border-color: rgba(167, 139, 250, 0.52);
+    color: #ddd6fe;
+    background: rgba(76, 29, 149, 0.2);
   }
 
   .visibility-filter-toggle--layer {
@@ -244,10 +244,10 @@
   }
 
   .visibility-filter-toggle--critical.visibility-mode-btn--active {
-    border-color: rgba(249, 115, 22, 0.58);
-    background: rgba(154, 52, 18, 0.24);
-    color: #fdba74;
-    box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.16), 0 0 16px rgba(249, 115, 22, 0.1);
+    border-color: rgba(167, 139, 250, 0.58);
+    background: rgba(76, 29, 149, 0.24);
+    color: #ddd6fe;
+    box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.16), 0 0 16px rgba(167, 139, 250, 0.1);
   }
 
   .visibility-filter-toggle--layer.visibility-mode-btn--active {
@@ -310,29 +310,31 @@
     gap: 0.42rem;
     min-height: 34px;
     padding: 0.5rem 0.72rem;
-    border: 1px solid rgba(234, 179, 8, 0.34);
+    border: 1px solid rgba(90, 132, 206, 0.38);
     border-radius: 999px;
-    background: rgba(113, 63, 18, 0.16);
-    color: #fde68a;
+    background: rgba(30, 58, 138, 0.16);
+    color: #93c5fd;
     font-size: 0.82rem;
     font-weight: 800;
     cursor: pointer;
+    transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
   }
 
   .visibility-purdue-toggle::before {
     content: "EXP";
     font-size: 0.58rem;
     letter-spacing: 0.04em;
-    color: #020617;
-    background: #facc15;
+    color: #eff6ff;
+    background: rgba(59, 130, 246, 0.86);
     border-radius: 999px;
     padding: 0.08rem 0.28rem;
   }
 
   .visibility-purdue-toggle--active {
-    border-color: rgba(250, 204, 21, 0.72);
-    background: rgba(113, 63, 18, 0.36);
-    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.18), 0 0 18px rgba(250, 204, 21, 0.1);
+    border-color: rgba(90, 132, 206, 0.72);
+    background: rgba(30, 58, 138, 0.32);
+    color: #bfdbfe;
+    box-shadow: 0 0 0 1px rgba(90, 132, 206, 0.18), 0 0 18px rgba(90, 132, 206, 0.12);
   }
 
   .visibility-filter-menu--open .visibility-filter-dropdown {
@@ -475,8 +477,8 @@
   }
 
   .visibility-filter-item--selected-critical {
-    border-color: rgba(249, 115, 22, 0.38);
-    background: rgba(154, 52, 18, 0.2);
+    border-color: rgba(167, 139, 250, 0.38);
+    background: rgba(76, 29, 149, 0.2);
   }
 
   .visibility-filter-item--selected-layer {
@@ -595,7 +597,7 @@
     position: absolute;
     border: 2px dashed rgba(148, 163, 184, 0.24);
     border-radius: 18px;
-    background: rgba(15, 23, 42, 0.22);
+    background: transparent;
     padding: 2.15rem 1.14rem 0.9rem;
     overflow: visible;
     transition: border-color 0.16s ease, box-shadow 0.16s ease;
@@ -617,15 +619,13 @@
 
   .visibility-system--purdue {
     border-style: solid;
-    border-color: rgba(250, 204, 21, 0.28);
-    background:
-      linear-gradient(180deg, rgba(113, 63, 18, 0.13), rgba(15, 23, 42, 0.22));
+    border-color: rgba(90, 132, 206, 0.36);
+    background: rgba(15, 23, 42, 0.22);
   }
 
   .visibility-system--purdue-unknown {
     border-color: rgba(148, 163, 184, 0.28);
-    background:
-      linear-gradient(180deg, rgba(51, 65, 85, 0.16), rgba(15, 23, 42, 0.22));
+    background: rgba(15, 23, 42, 0.18);
   }
 
   .visibility-system-header {
@@ -681,6 +681,8 @@
       linear-gradient(180deg, rgba(37, 99, 235, 0.28), rgba(19, 34, 58, 0.94)),
       linear-gradient(180deg, rgba(17, 27, 46, 0.96), rgba(12, 20, 35, 0.96));
     box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.16), 0 0 0 1px rgba(96, 165, 250, 0.12);
+    outline: 2px dashed rgba(96, 165, 250, 0.52);
+    outline-offset: 4px;
   }
 
   .visibility-network::before,
@@ -741,10 +743,10 @@
     flex: 0 0 auto;
     min-width: 3rem;
     padding: 0.14rem 0.42rem;
-    border: 1px solid rgba(251, 146, 60, 0.38);
+    border: 1px solid rgba(167, 139, 250, 0.38);
     border-radius: 999px;
-    background: rgba(154, 52, 18, 0.22);
-    color: #fdba74;
+    background: rgba(76, 29, 149, 0.22);
+    color: #ddd6fe;
     font-size: 0.64rem;
     font-weight: 800;
     line-height: 1.1;
@@ -811,9 +813,8 @@
   .visibility-network-origin-context {
     position: absolute;
     top: -0.82rem;
-    right: 0.82rem;
+    left: 0.82rem;
     z-index: 8;
-    max-width: calc(100% - 1.6rem);
     padding: 0.14rem 0.46rem;
     border: 1px solid rgba(96, 165, 250, 0.42);
     border-radius: 999px;
@@ -823,8 +824,6 @@
     font-weight: 800;
     letter-spacing: 0.02em;
     box-shadow: 0 8px 20px rgba(2, 6, 23, 0.34);
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -835,14 +834,15 @@
   .visibility-network-critical {
     display: inline-flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.34rem;
     width: fit-content;
     max-width: 100%;
     margin-top: 0.08rem;
     padding: 0.16rem 0.42rem;
     border-radius: 999px;
-    background: rgba(249, 115, 22, 0.14);
-    color: #fdba74;
+    background: rgba(167, 139, 250, 0.14);
+    color: #ddd6fe;
     font-size: 0.64rem;
     font-weight: 700;
     overflow-wrap: anywhere;
@@ -853,6 +853,7 @@
     letter-spacing: 0.04em;
     font-size: 0.56rem;
     opacity: 0.92;
+    white-space: nowrap;
   }
 
   .visibility-network-critical-values {
@@ -860,9 +861,10 @@
   }
 
   .visibility-network-critical-star {
-    color: #fb923c;
+    color: #c4b5fd;
     font-size: 0.72rem;
     line-height: 1;
+    flex-shrink: 0;
   }
 
   .visibility-network-origin-label {
@@ -886,22 +888,22 @@
     justify-content: center;
     width: 18px;
     height: 18px;
-    border: 1.5px solid rgba(251, 146, 60, 0.88);
+    border: 1.5px solid rgba(167, 139, 250, 0.88);
     border-radius: 999px;
     background: rgba(9, 16, 28, 0.98);
-    color: #fdba74;
+    color: #ddd6fe;
     font-size: 0.62rem;
     font-weight: 900;
     line-height: 1;
     text-decoration: none;
     transform: translateY(-50%);
-    box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.12);
+    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
     transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
   }
 
   .visibility-network-result-link:hover {
-    border-color: rgba(253, 186, 116, 0.98);
-    box-shadow: 0 0 0 4px rgba(251, 146, 60, 0.16);
+    border-color: rgba(196, 181, 253, 0.98);
+    box-shadow: 0 0 0 4px rgba(167, 139, 250, 0.16);
     transform: translateY(-50%) scale(1.05);
   }
 
@@ -916,6 +918,35 @@
     color: var(--text-secondary);
     text-align: center;
     background: rgba(15, 23, 42, 0.52);
+  }
+
+  /* ── Purdue IT/OT separator ───────────────────────────────────── */
+  .visibility-purdue-it-ot-separator {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-left: 2px dashed rgba(148, 163, 184, 0.38);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .visibility-purdue-it-ot-label {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.22rem 0.56rem;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 999px;
+    background: rgba(9, 17, 31, 0.92);
+    color: rgba(148, 163, 184, 0.88);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 4;
   }
 
   @media (max-width: 900px) {
@@ -940,6 +971,198 @@
       right: auto;
     }
   }
+
+  /* ── Light mode ─────────────────────────────────────────────── */
+  [data-theme="light"] .visibility-page {
+    --visibility-panel: rgba(245, 247, 252, 0.98);
+    --visibility-panel-strong: rgba(235, 239, 250, 0.95);
+    --visibility-surface: rgba(255, 255, 255, 0.88);
+    --visibility-network: rgba(240, 244, 255, 0.96);
+    --visibility-border: rgba(90, 132, 206, 0.18);
+  }
+  [data-theme="light"] .visibility-toolbar {
+    background: linear-gradient(135deg, rgba(240, 244, 255, 0.96), rgba(230, 236, 252, 0.94));
+    border-color: rgba(90, 132, 206, 0.18);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+  }
+  [data-theme="light"] .visibility-diagram-header {
+    background: linear-gradient(180deg, rgba(238, 242, 255, 0.99), rgba(230, 236, 252, 0.97));
+    border-bottom-color: rgba(90, 132, 206, 0.14);
+  }
+  [data-theme="light"] .visibility-filterbar-shell {
+    background: linear-gradient(180deg, rgba(240, 244, 255, 0.98), rgba(232, 238, 252, 0.96));
+    border-color: rgba(90, 132, 206, 0.16);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  }
+  [data-theme="light"] .visibility-filter-toggle {
+    background: rgba(255, 255, 255, 0.86);
+    border-color: rgba(90, 132, 206, 0.22);
+    color: var(--text-secondary);
+  }
+  [data-theme="light"] .visibility-filter-toggle:hover,
+  [data-theme="light"] .visibility-filter-menu--open .visibility-filter-toggle {
+    background: rgba(255, 255, 255, 0.98);
+    color: var(--text-primary);
+  }
+  [data-theme="light"] .visibility-layer-option {
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(59, 130, 246, 0.24);
+    color: var(--text-secondary);
+  }
+  [data-theme="light"] .visibility-layer-option--selected {
+    background: rgba(219, 234, 254, 0.7);
+    color: #1e40af;
+  }
+  [data-theme="light"] .visibility-filter-dropdown {
+    background: rgba(248, 250, 255, 0.99);
+    border-color: rgba(90, 132, 206, 0.18);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.1);
+  }
+  [data-theme="light"] .visibility-filter-toolbar {
+    background: rgba(240, 244, 255, 0.98);
+    border-bottom-color: rgba(90, 132, 206, 0.12);
+  }
+  [data-theme="light"] .visibility-search {
+    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(90, 132, 206, 0.2);
+    color: var(--text-primary);
+  }
+  [data-theme="light"] .visibility-selection-summary {
+    background: rgba(240, 244, 255, 0.9);
+    border-bottom-color: rgba(90, 132, 206, 0.1);
+  }
+  [data-theme="light"] .visibility-filter-group {
+    background: rgba(255, 255, 255, 0.65);
+    border-color: rgba(90, 132, 206, 0.12);
+  }
+  [data-theme="light"] .visibility-purdue-toggle {
+    background: rgba(219, 234, 254, 0.5);
+    border-color: rgba(90, 132, 206, 0.36);
+    color: #1d4ed8;
+  }
+  [data-theme="light"] .visibility-purdue-toggle::before {
+    color: #ffffff;
+    background: rgba(37, 99, 235, 0.86);
+  }
+  [data-theme="light"] .visibility-purdue-toggle--active {
+    background: rgba(219, 234, 254, 0.82);
+    border-color: rgba(37, 99, 235, 0.56);
+    color: #1e40af;
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.18), 0 0 12px rgba(37, 99, 235, 0.08);
+  }
+  /* Network cards in light mode */
+  [data-theme="light"] .visibility-network {
+    background: linear-gradient(180deg, rgba(245, 248, 255, 0.98), rgba(235, 242, 255, 0.98));
+    border-color: rgba(90, 132, 206, 0.45);
+    color: #1a2035;
+  }
+  [data-theme="light"] .visibility-network-title {
+    color: #0f172a;
+  }
+  [data-theme="light"] .visibility-network-range {
+    color: #475569;
+  }
+  /* Origin badge in light mode — readable dark blue on light bg */
+  [data-theme="light"] .visibility-network-origin {
+    background: rgba(59, 130, 246, 0.1);
+    color: #1d4ed8;
+  }
+  [data-theme="light"] .visibility-network--source .visibility-network-origin {
+    background: rgba(239, 68, 68, 0.1);
+    color: #b91c1c;
+  }
+  [data-theme="light"] .visibility-network--target .visibility-network-origin {
+    background: rgba(34, 197, 94, 0.1);
+    color: #15803d;
+  }
+  [data-theme="light"] .visibility-network-origin--source-focus {
+    background: rgba(239, 68, 68, 0.14) !important;
+    color: #991b1b !important;
+  }
+  [data-theme="light"] .visibility-network-origin--target-context {
+    background: rgba(148, 163, 184, 0.12) !important;
+    color: rgba(30, 64, 175, 0.65) !important;
+  }
+  [data-theme="light"] .visibility-network-origin-context {
+    background: rgba(240, 248, 255, 0.98);
+    border-color: rgba(59, 130, 246, 0.42);
+    color: #1d4ed8;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  /* Critical badge in light mode */
+  [data-theme="light"] .visibility-network-critical {
+    background: rgba(139, 92, 246, 0.1);
+    color: #5b21b6;
+  }
+  [data-theme="light"] .visibility-network-critical-star {
+    color: #7c3aed;
+  }
+  /* Target count badge in light mode */
+  [data-theme="light"] .visibility-network-target-count {
+    background: rgba(139, 92, 246, 0.12);
+    color: #5b21b6;
+    border-color: rgba(139, 92, 246, 0.36);
+  }
+  /* Result link in light mode */
+  [data-theme="light"] .visibility-network-result-link {
+    background: rgba(245, 248, 255, 0.98);
+    border-color: rgba(124, 58, 237, 0.72);
+    color: #5b21b6;
+  }
+  /* System containers in light mode */
+  [data-theme="light"] .visibility-system {
+    background: transparent;
+    border-color: rgba(90, 132, 206, 0.28);
+  }
+  [data-theme="light"] .visibility-system-header {
+    background: rgba(240, 244, 255, 0.98);
+  }
+  [data-theme="light"] .visibility-system-header h3 {
+    color: #1a2035;
+  }
+  [data-theme="light"] .visibility-system--source {
+    border-color: rgba(239, 68, 68, 0.44);
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.1);
+  }
+  [data-theme="light"] .visibility-system--target {
+    border-color: rgba(34, 197, 94, 0.42);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.1);
+  }
+  /* Purdue system in light mode */
+  [data-theme="light"] .visibility-system--purdue {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(90, 132, 206, 0.4);
+  }
+  [data-theme="light"] .visibility-system--purdue-unknown {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(148, 163, 184, 0.36);
+  }
+  /* Diagram shell in light mode */
+  [data-theme="light"] .visibility-diagram-shell {
+    background:
+      linear-gradient(rgba(90, 132, 206, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(90, 132, 206, 0.04) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(237, 237, 235, 0.98), rgba(240, 244, 255, 0.98));
+    background-size: 32px 32px;
+  }
+  /* Physical origin dashed outline in light mode */
+  [data-theme="light"] .visibility-network--origin-physical {
+    background:
+      linear-gradient(180deg, rgba(37, 99, 235, 0.12), rgba(219, 234, 254, 0.6)),
+      linear-gradient(180deg, rgba(245, 248, 255, 0.98), rgba(235, 242, 255, 0.98));
+    box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.2), 0 0 0 1px rgba(37, 99, 235, 0.14);
+    outline: 2px dashed rgba(37, 99, 235, 0.48);
+    outline-offset: 4px;
+  }
+  /* IT/OT separator in light mode */
+  [data-theme="light"] .visibility-purdue-it-ot-separator {
+    border-left-color: rgba(90, 132, 206, 0.52);
+  }
+  [data-theme="light"] .visibility-purdue-it-ot-label {
+    background: rgba(240, 244, 255, 0.96);
+    border-color: rgba(90, 132, 206, 0.32);
+    color: #1d4ed8;
+  }
 </style>
 
 <div class="visibility-page">
@@ -950,6 +1173,7 @@
     </div>
     <div class="visibility-actions">
       <button class="btn btn-secondary" type="button" id="refreshVisibilityBtn">Actualizar</button>
+      <button class="btn btn-secondary" type="button" id="exportVisibilityDrawioBtn">Exportar Draw.io</button>
       <button class="btn btn-primary" type="button" id="exportVisibilityPngBtn">Exportar PNG</button>
     </div>
   </div>
@@ -1953,7 +2177,8 @@
     const viewportHeight = Math.max(760, shellHeight);
     const sizes = new Map(groups.map((group) => [group.id, estimatePurdueGroupSize(group)]));
     const marginX = viewportWidth >= 1280 ? 48 : 34;
-    const marginY = viewportHeight >= 900 ? 58 : 42;
+    // Extra top/bottom margin for top/bottom routing paths
+    const marginY = viewportHeight >= 900 ? 90 : 72;
     const gap = groups.length > 5 ? 34 : 48;
     const totalWidth = groups.reduce((sum, group) => sum + sizes.get(group.id).width, 0) + (Math.max(0, groups.length - 1) * gap);
     const width = Math.max(viewportWidth, totalWidth + (marginX * 2));
@@ -2105,9 +2330,29 @@
       `;
     }).join('');
 
+    // Build IT/OT separator between level 3 (OT) and level 4 (IT)
+    const itGroups = groups.filter((g) => !g.is_unknown && g.level >= 4);
+    const otGroups = groups.filter((g) => !g.is_unknown && g.level <= 3);
+    let separatorHtml = '';
+    if (itGroups.length && otGroups.length) {
+      // Find rightmost IT group and leftmost OT group boundaries
+      const itPositions = itGroups.map((g) => currentLayout.positions.get(g.id));
+      const otPositions = otGroups.map((g) => currentLayout.positions.get(g.id));
+      const itRightX = Math.max(...itPositions.map((p) => p.left + p.width));
+      const otLeftX = Math.min(...otPositions.map((p) => p.left));
+      const sepX = Math.round((itRightX + otLeftX) / 2);
+      const labelY = Math.round(currentLayout.height / 2);
+      separatorHtml = `
+        <div class="visibility-purdue-it-ot-separator" style="left:${sepX}px;"></div>
+        <div class="visibility-purdue-it-ot-label" style="left:${Math.max(8, sepX - 96)}px; top:${labelY - 64}px;">IT</div>
+        <div class="visibility-purdue-it-ot-label" style="left:${Math.min(currentLayout.width - 40, sepX + 8)}px; top:${labelY - 64}px;">OT</div>
+      `;
+    }
+
     diagram.innerHTML = `
       <svg class="visibility-links" id="visibilityLinks" aria-hidden="true"></svg>
       <div class="visibility-board" style="width:${currentLayout.width}px; height:${currentLayout.height}px;">
+        ${separatorHtml}
         ${groupsHtml}
       </div>
     `;
@@ -2300,12 +2545,29 @@
 
   function systemSidePoints(networkRect, systemRect, side, laneDepthOffset = 0) {
     const centerY = clamp(networkRect.midY, networkRect.top + 12, networkRect.bottom - 12);
+    const centerX = clamp(networkRect.midX, networkRect.left + 12, networkRect.right - 12);
 
     if (side === 'left') {
       return {
         anchor: { x: networkRect.left - 6, y: centerY },
         edge: { x: systemRect.left - 8, y: centerY },
         exit: { x: systemRect.left - 26 - laneDepthOffset, y: centerY },
+      };
+    }
+
+    if (side === 'top') {
+      return {
+        anchor: { x: centerX, y: networkRect.top - 6 },
+        edge: { x: centerX, y: systemRect.top - 8 },
+        exit: { x: centerX, y: systemRect.top - 28 - laneDepthOffset },
+      };
+    }
+
+    if (side === 'bottom') {
+      return {
+        anchor: { x: centerX, y: networkRect.bottom + 6 },
+        edge: { x: centerX, y: systemRect.bottom + 8 },
+        exit: { x: centerX, y: systemRect.bottom + 28 + laneDepthOffset },
       };
     }
 
@@ -2317,6 +2579,15 @@
   }
 
   function chooseSystemSides(sourceSystemRect, targetSystemRect) {
+    if (purdueModeEnabled) {
+      // In Purdue mode (horizontal layout) route connections through top/bottom
+      // to avoid overlapping the network card columns
+      if (sourceSystemRect.id === targetSystemRect.id) {
+        return { sourceSide: 'bottom', targetSide: 'bottom' };
+      }
+      return { sourceSide: 'top', targetSide: 'top' };
+    }
+
     if (sourceSystemRect.id === targetSystemRect.id) {
       const routeOnRight = sourceSystemRect.midX <= ((currentLayout?.width || 0) / 2);
       return routeOnRight
@@ -2667,14 +2938,23 @@
     });
 
     sourceLaneGroups.forEach((group) => {
-      group.sort((left, right) => left.targetRect.midY - right.targetRect.midY || left.sourceRect.midY - right.sourceRect.midY);
+      // In Purdue mode (top/bottom routing), sort by X position; otherwise by Y
+      if (purdueModeEnabled) {
+        group.sort((left, right) => left.targetRect.midX - right.targetRect.midX || left.sourceRect.midX - right.sourceRect.midX);
+      } else {
+        group.sort((left, right) => left.targetRect.midY - right.targetRect.midY || left.sourceRect.midY - right.sourceRect.midY);
+      }
       group.forEach((descriptor, index) => {
         descriptor.sourceLaneDepth = laneDepth(index, 16);
       });
     });
 
     targetLaneGroups.forEach((group) => {
-      group.sort((left, right) => left.sourceRect.midY - right.sourceRect.midY || left.targetRect.midY - right.targetRect.midY);
+      if (purdueModeEnabled) {
+        group.sort((left, right) => left.sourceRect.midX - right.sourceRect.midX || left.targetRect.midX - right.targetRect.midX);
+      } else {
+        group.sort((left, right) => left.sourceRect.midY - right.sourceRect.midY || left.targetRect.midY - right.targetRect.midY);
+      }
       group.forEach((descriptor, index) => {
         descriptor.targetLaneDepth = laneDepth(index, 16);
       });
@@ -2881,7 +3161,7 @@
     return contextMap.get(networkId);
   }
 
-  function applyNetworkOriginBadge(element, network, originsById, networkContext) {
+  function applyNetworkOriginBadge(element, network, originsById, networkContext, hasFocusedSelection = false) {
     const originBadge = element.querySelector('[data-network-origin]');
     const originLabel = element.querySelector('[data-network-origin-label]');
     const originValues = element.querySelector('[data-network-origin-values]');
@@ -2908,11 +3188,15 @@
       displayIps = targetOriginIps;
     }
 
+    // When a focused selection is active and this network is not part of it,
+    // hide the origin badge to avoid showing irrelevant origin IPs.
+    const shouldHideBadge = hasFocusedSelection && badgeMode === 'default';
+
     if (originBadge && originLabel && originValues) {
       originBadge.classList.toggle('visibility-network-origin--source-focus', badgeMode === 'source');
       originBadge.classList.toggle('visibility-network-origin--target-context', badgeMode === 'target');
 
-      if (displayIps.length) {
+      if (displayIps.length && !shouldHideBadge) {
         originBadge.hidden = false;
         originBadge.title = displayIps.join(' · ');
         originLabel.textContent = badgeMode === 'target' ? 'Desde' : 'Origen';
@@ -3030,6 +3314,7 @@
         networksById.get(networkId),
         originsById,
         networkOriginContext.get(networkId),
+        hasFocusedSelection,
       );
 
       const metric = destinationMetrics.get(networkId);
@@ -3222,14 +3507,34 @@
     }
   }
 
-  function exportDiagramStyles(fontFamily) {
+  function exportDiagramStyles(fontFamily, legendHeight = 50, isLight = false) {
+    const rootBg = isLight ? '#f5f7fc' : '#020617';
+    const textPrimary = isLight ? '#1a2035' : '#d6e2f2';
+    const textSecondary = isLight ? '#4B5563' : '#94a3b8';
+    const networkBg = isLight ? 'linear-gradient(180deg, rgba(245,248,255,0.98), rgba(235,242,255,0.98))' : 'linear-gradient(180deg, rgba(17,27,46,0.96), rgba(12,20,35,0.96))';
+    const networkBorder = isLight ? 'rgba(90,132,206,0.45)' : 'rgba(110,138,176,0.7)';
+    const networkColor = isLight ? '#0f172a' : '#d6e2f2';
+    const rangeColor = isLight ? '#475569' : '#a4b4c8';
+    const sysHeaderBg = isLight ? 'rgba(240,244,255,0.98)' : 'rgba(4,10,20,0.96)';
+    const sysHeaderColor = isLight ? '#1a2035' : '#dbe7f6';
+    const sysBorder = isLight ? 'rgba(90,132,206,0.28)' : 'rgba(148,163,184,0.24)';
+    const purdueBorder = isLight ? 'rgba(90,132,206,0.4)' : 'rgba(90,132,206,0.36)';
+    const critBg = isLight ? 'rgba(139,92,246,0.1)' : 'rgba(167,139,250,0.14)';
+    const critColor = isLight ? '#5b21b6' : '#ddd6fe';
+    const critStar = isLight ? '#7c3aed' : '#c4b5fd';
+    const originBg = isLight ? 'rgba(59,130,246,0.1)' : 'rgba(96,165,250,0.12)';
+    const originColor = isLight ? '#1d4ed8' : '#cfe2ff';
+    const countBg = isLight ? 'rgba(139,92,246,0.12)' : 'rgba(76,29,149,0.22)';
+    const countColor = isLight ? '#5b21b6' : '#ddd6fe';
+    const countBorder = isLight ? 'rgba(139,92,246,0.36)' : 'rgba(167,139,250,0.38)';
     return `
       .export-root {
-        --text-secondary: #94a3b8;
+        --text-secondary: ${textSecondary};
         width: 100%;
         height: 100%;
         font-family: ${fontFamily || 'system-ui, sans-serif'};
-        color: #d6e2f2;
+        color: ${textPrimary};
+        background: ${rootBg};
       }
 
       .export-legend {
@@ -3295,15 +3600,15 @@
       }
 
       .export-legend-button--critical {
-        border-color: rgba(249, 115, 22, 0.58);
-        background: rgba(154, 52, 18, 0.24);
-        color: #fdba74;
-        box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.16), 0 0 16px rgba(249, 115, 22, 0.1);
+        border-color: rgba(167, 139, 250, 0.58);
+        background: rgba(76, 29, 149, 0.24);
+        color: #ddd6fe;
+        box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.16), 0 0 16px rgba(167, 139, 250, 0.1);
       }
 
       .export-legend-button--critical::before {
-        background: rgba(249, 115, 22, 0.92);
-        box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
+        background: rgba(167, 139, 250, 0.92);
+        box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
       }
 
       .export-legend-button--layer {
@@ -3321,8 +3626,8 @@
       .export-diagram-wrap {
         position: relative;
         width: 100%;
-        height: calc(100% - 56px);
-        margin-top: 0.18rem;
+        height: calc(100% - ${legendHeight}px);
+        margin-top: 0;
       }
 
       .visibility-diagram {
@@ -3342,7 +3647,7 @@
 
       .visibility-system {
         position: absolute;
-        border: 2px dashed rgba(148, 163, 184, 0.24);
+        border: 2px dashed ${sysBorder};
         border-radius: 18px;
         background: rgba(15, 23, 42, 0.22);
         padding: 2.15rem 1.14rem 0.9rem;
@@ -3366,13 +3671,13 @@
 
       .visibility-system--purdue {
         border-style: solid;
-        border-color: rgba(250, 204, 21, 0.28);
-        background: linear-gradient(180deg, rgba(113, 63, 18, 0.13), rgba(15, 23, 42, 0.22));
+        border-color: ${purdueBorder};
+        background: rgba(15, 23, 42, 0.22);
       }
 
       .visibility-system--purdue-unknown {
         border-color: rgba(148, 163, 184, 0.28);
-        background: linear-gradient(180deg, rgba(51, 65, 85, 0.16), rgba(15, 23, 42, 0.22));
+        background: rgba(15, 23, 42, 0.18);
       }
 
       .visibility-system-header {
@@ -3380,7 +3685,7 @@
         top: -0.66rem;
         left: 0.82rem;
         padding: 0 0.46rem;
-        background: rgba(4, 10, 20, 0.96);
+        background: ${sysHeaderBg};
       }
 
       .visibility-system-header h3 {
@@ -3388,7 +3693,7 @@
         font-size: 0.84rem;
         font-weight: 800;
         letter-spacing: 0.01em;
-        color: #dbe7f6;
+        color: ${sysHeaderColor};
       }
 
       .visibility-system-content {
@@ -3400,12 +3705,12 @@
 
       .visibility-network {
         position: relative;
-        border: 1.5px solid rgba(110, 138, 176, 0.7);
+        border: 1.5px solid ${networkBorder};
         border-radius: 15px;
-        background: linear-gradient(180deg, rgba(17, 27, 46, 0.96), rgba(12, 20, 35, 0.96));
+        background: ${networkBg};
         padding: 0.46rem 0.68rem 0.5rem;
         margin: 0 0.12rem;
-        color: #d6e2f2;
+        color: ${networkColor};
         box-sizing: border-box;
       }
 
@@ -3477,7 +3782,7 @@
         font-size: 0.8rem;
         font-weight: 800;
         line-height: 1.18;
-        color: #f3f7fb;
+        color: ${networkColor};
         overflow-wrap: anywhere;
       }
 
@@ -3488,10 +3793,10 @@
         flex: 0 0 auto;
         min-width: 3rem;
         padding: 0.14rem 0.42rem;
-        border: 1px solid rgba(251, 146, 60, 0.38);
+        border: 1px solid ${countBorder};
         border-radius: 999px;
-        background: rgba(154, 52, 18, 0.22);
-        color: #fdba74;
+        background: ${countBg};
+        color: ${countColor};
         font-size: 0.64rem;
         font-weight: 800;
         line-height: 1.1;
@@ -3512,7 +3817,7 @@
 
       .visibility-network-range {
         font-size: 0.68rem;
-        color: #a4b4c8;
+        color: ${rangeColor};
         font-weight: 600;
       }
 
@@ -3525,13 +3830,12 @@
         margin-top: 0.08rem;
         padding: 0.16rem 0.42rem;
         border-radius: 999px;
-        background: rgba(96, 165, 250, 0.12);
-        color: #cfe2ff;
+        background: ${originBg};
+        color: ${originColor};
         font-size: 0.64rem;
         font-weight: 700;
         overflow-wrap: anywhere;
         box-sizing: border-box;
-        transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
       }
 
       .visibility-network--source .visibility-network-origin {
@@ -3560,9 +3864,8 @@
       .visibility-network-origin-context {
         position: absolute;
         top: -0.82rem;
-        right: 0.82rem;
+        left: 0.82rem;
         z-index: 8;
-        max-width: calc(100% - 1.6rem);
         padding: 0.14rem 0.46rem;
         border: 1px solid rgba(96, 165, 250, 0.42);
         border-radius: 999px;
@@ -3572,8 +3875,6 @@
         font-weight: 800;
         letter-spacing: 0.02em;
         box-shadow: 0 8px 20px rgba(2, 6, 23, 0.34);
-        overflow: hidden;
-        text-overflow: ellipsis;
         white-space: nowrap;
         box-sizing: border-box;
       }
@@ -3596,14 +3897,15 @@
       .visibility-network-critical {
         display: inline-flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: 0.34rem;
         width: fit-content;
         max-width: 100%;
         margin-top: 0.08rem;
         padding: 0.16rem 0.42rem;
         border-radius: 999px;
-        background: rgba(249, 115, 22, 0.14);
-        color: #fdba74;
+        background: ${critBg};
+        color: ${critColor};
         font-size: 0.64rem;
         font-weight: 700;
         overflow-wrap: anywhere;
@@ -3615,6 +3917,7 @@
         letter-spacing: 0.04em;
         font-size: 0.56rem;
         opacity: 0.92;
+        white-space: nowrap;
       }
 
       .visibility-network-critical-values {
@@ -3622,9 +3925,10 @@
       }
 
       .visibility-network-critical-star {
-        color: #fb923c;
+        color: ${critStar};
         font-size: 0.72rem;
         line-height: 1;
+        flex-shrink: 0;
       }
 
       .visibility-network-result-link {
@@ -3634,13 +3938,17 @@
   }
 
   async function exportVisibilityPng() {
+    const btn = document.getElementById('exportVisibilityPngBtn');
     const diagram = document.getElementById('visibilityDiagram');
     const linksSvg = document.getElementById('visibilityLinks');
     if (!diagram || !linksSvg) return;
 
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    if (btn) btn.disabled = true;
+
     const width = Math.max(diagram.scrollWidth, Math.ceil(diagram.getBoundingClientRect().width));
     const height = Math.max(diagram.scrollHeight, Math.ceil(diagram.getBoundingClientRect().height));
-    const legendHeight = 62;
+    const legendHeight = 50;
     const exportHeight = height + legendHeight;
     const fontFamily = getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
     const clone = diagram.cloneNode(true);
@@ -3657,38 +3965,42 @@
       { className: 'export-legend-button--layer', html: `Purdue <strong>${purdueModeEnabled ? 'ON' : 'OFF'}</strong>` },
     ].map((item) => `<div class="export-legend-button ${item.className}">${item.html}</div>`).join('');
 
+    const bgTop = isLight ? 'rgb(240,244,255)' : 'rgb(2,6,23)';
+    const bgBot = isLight ? 'rgb(230,236,252)' : 'rgb(8,15,28)';
+    const gridStroke = isLight ? 'rgba(90,132,206,0.07)' : 'rgba(148,163,184,0.05)';
+    const linkStroke = 'rgba(103,232,249,0.46)';
+
     const svgMarkup = `
       <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${exportHeight}" viewBox="0 0 ${width} ${exportHeight}">
         <defs>
           <linearGradient id="exportVisibilityBg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="rgb(2, 6, 23)" stop-opacity="0.98" />
-            <stop offset="100%" stop-color="rgb(8, 15, 28)" stop-opacity="0.98" />
+            <stop offset="0%" stop-color="${bgTop}" stop-opacity="1" />
+            <stop offset="100%" stop-color="${bgBot}" stop-opacity="1" />
           </linearGradient>
           <pattern id="exportVisibilityGrid" width="32" height="32" patternUnits="userSpaceOnUse">
-            <path d="M 32 0 L 0 0 0 32" fill="none" stroke="rgb(148, 163, 184)" stroke-opacity="0.05" stroke-width="1" />
+            <path d="M 32 0 L 0 0 0 32" fill="none" stroke="${gridStroke}" stroke-width="1" />
           </pattern>
         </defs>
         <style>
           .export-lines path {
             fill: none;
-            stroke: rgba(103, 232, 249, 0.46);
+            stroke: ${linkStroke};
             stroke-width: 1.9;
             stroke-linecap: round;
             stroke-linejoin: round;
             shape-rendering: geometricPrecision;
-            filter: drop-shadow(0 0 5px rgba(56, 189, 248, 0.16));
           }
         </style>
         <rect width="${width}" height="${exportHeight}" fill="url(#exportVisibilityBg)" />
         <rect width="${width}" height="${exportHeight}" fill="url(#exportVisibilityGrid)" />
         <foreignObject x="0" y="0" width="${width}" height="${exportHeight}">
-          <div xmlns="http://www.w3.org/1999/xhtml" class="export-root">
-            <style>${exportDiagramStyles(fontFamily)}</style>
-            <div class="export-legend">${legendMarkup}</div>
-            <div class="export-diagram-wrap">${clone.outerHTML}</div>
+          <div xmlns="http://www.w3.org/1999/xhtml" class="export-root" style="display:flex;flex-direction:column;width:${width}px;height:${exportHeight}px;overflow:hidden;">
+            <style>${exportDiagramStyles(fontFamily, legendHeight, isLight)}</style>
+            <div class="export-legend" style="flex-shrink:0;height:${legendHeight}px;box-sizing:border-box;">${legendMarkup}</div>
+            <div class="export-diagram-wrap" style="flex:1 1 auto;position:relative;overflow:hidden;">${clone.outerHTML}</div>
           </div>
         </foreignObject>
-        <g class="export-lines" transform="translate(0 ${legendHeight})">
+        <g class="export-lines" transform="translate(0,${legendHeight})">
           ${linksSvg.innerHTML}
         </g>
       </svg>
@@ -3703,7 +4015,7 @@
     try {
       await new Promise((resolve, reject) => {
         image.onload = resolve;
-        image.onerror = reject;
+        image.onerror = () => reject(new Error('No se pudo cargar la imagen SVG'));
       });
 
       const canvas = document.createElement('canvas');
@@ -3713,6 +4025,9 @@
       const context = canvas.getContext('2d');
       if (!context) throw new Error('No se pudo inicializar el canvas');
       context.scale(scale, scale);
+      // Pre-fill background for browsers that don't support SVG foreignObject in canvas
+      context.fillStyle = isLight ? '#f0f4ff' : '#020617';
+      context.fillRect(0, 0, width, exportHeight);
       context.drawImage(image, 0, 0, width, exportHeight);
 
       const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
@@ -3722,11 +4037,98 @@
       const link = document.createElement('a');
       link.href = downloadUrl;
       link.download = `diagrama_visibilidad_${ORG_NAME.toLowerCase()}.png`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      console.error('Export PNG error:', err);
+      alert('No se pudo exportar el PNG. Prueba en Chrome/Edge con el diagrama completamente cargado.');
     } finally {
       URL.revokeObjectURL(url);
+      if (btn) btn.disabled = false;
     }
+  }
+
+  function exportVisibilityDrawio() {
+    if (!currentDiagramData || !currentLayout) {
+      alert('El diagrama no está cargado todavía.');
+      return;
+    }
+
+    const networksById = networkMap();
+    const originsById = originMap();
+    const selectedLinks = selectedLinksForCurrentState();
+
+    const sourceNetworkIds = new Set();
+    const targetNetworkIds = new Set();
+    selectedLinks.forEach((link) => {
+      sourceNetworkIds.add(link.source_network_id);
+      targetNetworkIds.add(link.target_network_id);
+    });
+
+    let cellId = 2;
+    const cells = [];
+    const systemCellIds = new Map();
+    const networkCellIds = new Map();
+
+    // Determine groups/systems to render
+    const groups = purdueModeEnabled
+      ? buildPurdueGroups(currentDiagramData)
+      : sortSystemsForDiagram(currentDiagramData).map((sys) => ({
+          id: sys.id,
+          name: sys.name,
+          networks: (sys.network_ids || []).map((nid) => networksById.get(nid)).filter(Boolean),
+          is_unknown: false,
+        }));
+
+    groups.forEach((group) => {
+      const layout = currentLayout.positions.get(group.id);
+      if (!layout) return;
+      const sysId = `sys_${cellId++}`;
+      systemCellIds.set(group.id, sysId);
+      const isSource = group.networks.some((n) => sourceNetworkIds.has(n.id));
+      const isTarget = group.networks.some((n) => targetNetworkIds.has(n.id));
+      const sysColor = isSource ? ';strokeColor=#ef4444;' : isTarget ? ';strokeColor=#22c55e;' : ';strokeColor=#6e8ab0;';
+      cells.push(`<mxCell id="${sysId}" value="${escapeHtml(group.name)}" style="rounded=1;arcSize=8;dashed=1;whiteSpace=wrap;html=1;fillColor=none${sysColor}fontColor=#dbe7f6;fontSize=11;fontStyle=1;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="${layout.left}" y="${layout.top}" width="${layout.width}" height="${layout.height}" as="geometry" /></mxCell>`);
+
+      // Networks inside system
+      let netY = 36;
+      group.networks.forEach((net) => {
+        const netId = `net_${cellId++}`;
+        networkCellIds.set(net.id, netId);
+        const isNetSource = sourceNetworkIds.has(net.id);
+        const isNetTarget = targetNetworkIds.has(net.id);
+        const netStroke = isNetSource ? '#ef4444' : isNetTarget ? '#22c55e' : '#6e8ab0';
+        const netFill = isNetSource ? '#3b1010' : isNetTarget ? '#0a2e1a' : '#111b2e';
+        const critHosts = (net.critical_hosts || []).map((h) => h.ip).join(', ');
+        const label = critHosts ? `${escapeHtml(net.display_name)}\n${escapeHtml(net.range)}\n⚠ ${escapeHtml(critHosts)}` : `${escapeHtml(net.display_name)}\n${escapeHtml(net.range)}`;
+        cells.push(`<mxCell id="${netId}" value="${label}" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=${netFill};strokeColor=${netStroke};fontColor=#d6e2f2;fontSize=10;" vertex="1" parent="${sysId}"><mxGeometry x="8" y="${netY}" width="${Math.max(0, layout.width - 30)}" height="56" as="geometry" /></mxCell>`);
+        netY += 68;
+      });
+    });
+
+    // Edges
+    selectedLinks.forEach((link) => {
+      const srcCellId = networkCellIds.get(link.source_network_id);
+      const tgtCellId = networkCellIds.get(link.target_network_id);
+      if (!srcCellId || !tgtCellId) return;
+      const edgeId = `edge_${cellId++}`;
+      const label = link.visible_host_count ? `${link.visible_host_count} host(s)` : '';
+      cells.push(`<mxCell id="${edgeId}" value="${escapeHtml(label)}" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#67e8f9;strokeWidth=2;fontColor=#94a3b8;fontSize=9;" edge="1" source="${srcCellId}" target="${tgtCellId}" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>`);
+    });
+
+    const xml = `<mxfile host="app.diagrams.net" type="device"><diagram id="visibility_diagram" name="Diagrama de Visibilidad"><mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0"><root><mxCell id="0" /><mxCell id="1" parent="0" />${cells.join('')}</root></mxGraphModel></diagram></mxfile>`;
+
+    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `diagrama_visibilidad_${ORG_NAME.toLowerCase()}.drawio`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -3772,6 +4174,7 @@
     document.getElementById('purdueToggleBtn').addEventListener('click', togglePurdueMode);
     document.getElementById('refreshVisibilityBtn').addEventListener('click', loadAccessVectorDiagram);
     document.getElementById('exportVisibilityPngBtn').addEventListener('click', exportVisibilityPng);
+    document.getElementById('exportVisibilityDrawioBtn').addEventListener('click', exportVisibilityDrawio);
     document.getElementById('diagramShell').addEventListener('scroll', () => requestAnimationFrame(refreshLinkPositions));
     window.addEventListener('resize', () => {
       if (!currentDiagramData) return;

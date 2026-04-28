@@ -327,6 +327,38 @@
             text-align: left;
         }
     }
+
+    .location-autocomplete-wrap {
+        position: relative;
+    }
+
+    .location-autocomplete-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 200;
+        background: var(--bg-surface-active);
+        border: 1px solid var(--border-highlight);
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        max-height: 200px;
+        overflow-y: auto;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+    }
+
+    .location-autocomplete-option {
+        padding: 0.45rem 0.85rem;
+        cursor: pointer;
+        font-size: 0.9rem;
+        color: var(--text-primary);
+        transition: background 0.1s;
+    }
+
+    .location-autocomplete-option:hover,
+    .location-autocomplete-option.active {
+        background: var(--bg-surface-hover);
+    }
 </style>
 
 <div class="scan-page" style="margin-top: 1.5rem;">
@@ -348,28 +380,40 @@
                     {% endif %}
                 </div>
 
-                <div class="form-group" style="margin-bottom: 0;">
+                <div class="form-group location-autocomplete-wrap" style="margin-bottom: 0;">
                     <label for="location" style="font-size: 0.85rem; margin-bottom: 0.3rem;">Origen (From) *</label>
-                    <input type="text" id="location" name="location" required placeholder="Ej: Oficina Central" list="locationsList" autocomplete="off" style="padding: 0.5rem; font-size: 0.9rem;">
-                    <datalist id="locationsList"></datalist>
-                    <select id="locationSelector" aria-label="Seleccionar origen registrado"
-                        style="margin-top: 0.35rem; width: 100%; padding: 0.45rem 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #e2e8f0; font-size: 0.85rem;">
-                        <option value="">-- Seleccionar origen registrado --</option>
-                    </select>
+                    <input type="text" id="location" name="location" required placeholder="Ej: Oficina Central" autocomplete="off" style="padding: 0.5rem; font-size: 0.9rem;">
+                    <div id="locationDropdown" class="location-autocomplete-dropdown" style="display: none;"></div>
                 </div>
 
                 <div id="interfaceGroup" class="form-group" style="margin-bottom: 0;">
                     <label for="interface" style="font-size: 0.85rem; margin-bottom: 0.3rem;">Interfaz de Red *</label>
-                    <select id="interface" name="interface" required
-                        style="width: 100%; padding: 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #e2e8f0; font-size: 0.9rem;">
+                    <select id="interface" name="interface" required style="font-size: 0.9rem; padding: 0.5rem;">
                         <option value="">-- Seleccionar Interfaz --</option>
                     </select>
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
                     <label for="myip" style="font-size: 0.85rem; margin-bottom: 0.3rem;">Mi IP (Opcional)</label>
-                    <input type="text" id="myip" name="myip" placeholder="Ej: 192.168.1.50" style="padding: 0.5rem; background: #1e293b; border: 1px solid #475569; border-radius: 4px; color: #e2e8f0; font-size: 0.9rem;">
+                    <input type="text" id="myip" name="myip" placeholder="Ej: 192.168.1.50" style="padding: 0.5rem; font-size: 0.9rem;">
                 </div>
+            </div>
+
+            <!-- Rango de IPs (Común para las 3 fases) -->
+            <div class="form-group" style="margin-top: 1rem; margin-bottom: 0;">
+                <label for="target_range">Rango de IPs *</label>
+                <div id="networkSelectorContainer"
+                    style="display: none; gap: 0.5rem; align-items: stretch; margin-bottom: 0.5rem;">
+                    <select id="networkSelector" class="form-control"
+                        style="flex: 1; padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.1); color: var(--text-secondary);">
+                        <option value="">-- Seleccionar red de la Organización --</option>
+                    </select>
+                    <button type="button" onclick="addSelectedNetwork()" class="btn btn-sm"
+                        style="background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; white-space: nowrap;">➕
+                        Añadir al Rango</button>
+                </div>
+                <input type="text" id="target_range_active" name="target_range_active"
+                    placeholder="Ej: 192.168.1.0/24 o 192.168.1.100">
             </div>
         </div>
 
@@ -443,23 +487,6 @@
                     Se importa como un escaneo de reconocimiento y reemplaza el import anterior de NetExec para esta organización.
                 </p>
             </details>
-
-            <!-- Rango de IPs (Común para las 3 fases) -->
-            <div class="form-group">
-                <label for="target_range">Rango de IPs *</label>
-                <div id="networkSelectorContainer"
-                    style="display: none; gap: 0.5rem; align-items: stretch; margin-bottom: 0.5rem;">
-                    <select id="networkSelector" class="form-control"
-                        style="flex: 1; padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.1); color: var(--text-secondary);">
-                        <option value="">-- Seleccionar red de la Organización --</option>
-                    </select>
-                    <button type="button" onclick="addSelectedNetwork()" class="btn btn-sm"
-                        style="background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; white-space: nowrap;">➕
-                        Añadir al Rango</button>
-                </div>
-                <input type="text" id="target_range_active" name="target_range_active"
-                    placeholder="Ej: 192.168.1.0/24 o 192.168.1.100">
-            </div>
 
             <!-- FASE 1: CAPA 2 (ARP) -->
             <div class="scan-phase-card phase-1-border">
@@ -745,34 +772,44 @@
         updateNmapCommand();
     }
 
+    let _locationOptions = [];
+
+    function showLocationDropdown(filter) {
+        const dd = document.getElementById('locationDropdown');
+        if (!dd) return;
+        const lower = (filter || '').toLowerCase();
+        const matches = lower
+            ? _locationOptions.filter(v => v.toLowerCase().includes(lower))
+            : _locationOptions;
+        if (!matches.length) { dd.style.display = 'none'; return; }
+        dd.innerHTML = matches.map(v =>
+            `<div class="location-autocomplete-option" data-value="${escapeHtml(v)}">${escapeHtml(v)}</div>`
+        ).join('');
+        dd.style.display = 'block';
+        dd.querySelectorAll('.location-autocomplete-option').forEach(opt => {
+            opt.addEventListener('mousedown', e => {
+                e.preventDefault();
+                const inp = document.getElementById('location');
+                if (inp) { inp.value = opt.dataset.value; inp.dispatchEvent(new Event('change', { bubbles: true })); }
+                dd.style.display = 'none';
+            });
+        });
+    }
+
     // Cargar orígenes (locations) basado en organización
     async function loadLocations() {
         const orgInput = document.getElementById('organization');
         const orgName = orgInput ? orgInput.value.trim() : '';
-        const datalist = document.getElementById('locationsList');
-        const selector = document.getElementById('locationSelector');
-        
-        if (!datalist && !selector) return;
-        
-        if (!orgName) {
-            if (datalist) datalist.innerHTML = '';
-            if (selector) selector.innerHTML = '<option value="">-- Seleccionar origen registrado --</option>';
-            return;
-        }
+        _locationOptions = [];
+        const dd = document.getElementById('locationDropdown');
+        if (dd) dd.style.display = 'none';
+        if (!orgName) return;
 
         try {
             const response = await fetch(`/api/locations?organization=${encodeURIComponent(orgName)}`);
             if (response.ok) {
                 const locations = await response.json();
-                const options = locations.map(loc =>
-                    `<option value="${escapeHtml(loc.location)}">${escapeHtml(loc.location)}</option>`
-                ).join('');
-                if (datalist) datalist.innerHTML = options;
-                if (selector) {
-                    const current = selector.value;
-                    selector.innerHTML = '<option value="">-- Seleccionar origen registrado --</option>' + options;
-                    if (current && locations.some(loc => loc.location === current)) selector.value = current;
-                }
+                _locationOptions = locations.map(loc => loc.location);
             }
         } catch (error) {
             console.error('Error cargando orígenes:', error);
@@ -1437,16 +1474,20 @@
         orgInputEl.addEventListener('input', loadLocations);
         orgInputEl.addEventListener('change', loadLocations);
     }
-    const locationSelectorEl = document.getElementById('locationSelector');
-    if (locationSelectorEl) {
-        locationSelectorEl.addEventListener('change', () => {
-            const locationInput = document.getElementById('location');
-            if (locationInput && locationSelectorEl.value) {
-                locationInput.value = locationSelectorEl.value;
-                locationInput.dispatchEvent(new Event('change', { bubbles: true }));
-            }
+    const locationInputEl = document.getElementById('location');
+    if (locationInputEl) {
+        locationInputEl.addEventListener('focus', () => showLocationDropdown(locationInputEl.value));
+        locationInputEl.addEventListener('input', () => showLocationDropdown(locationInputEl.value));
+        locationInputEl.addEventListener('blur', () => {
+            setTimeout(() => { const dd = document.getElementById('locationDropdown'); if (dd) dd.style.display = 'none'; }, 150);
         });
     }
+    document.addEventListener('click', e => {
+        if (!e.target.closest('#locationDropdown') && e.target.id !== 'location') {
+            const dd = document.getElementById('locationDropdown');
+            if (dd) dd.style.display = 'none';
+        }
+    });
 
     document.getElementById('scan_mode').addEventListener('change', function () {
         toggleScanMode();

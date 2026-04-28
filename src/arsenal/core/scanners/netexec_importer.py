@@ -274,15 +274,62 @@ def _safe_query(db_path: Path, sql: str) -> List[sqlite3.Row]:
         return []
 
 
+def _table_columns(db_path: Path, table: str) -> set:
+    return {row['name'] for row in _safe_query(db_path, f"PRAGMA table_info({table})")}
+
+
+def _row_dict(row: sqlite3.Row) -> dict:
+    return {key: row[key] for key in row.keys()}
+
+
+def _boolish(value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {'1', 'true', 'yes', 'y', 'si', 'sí', 'enabled'}:
+        return True
+    if text in {'0', 'false', 'no', 'n', 'disabled'}:
+        return False
+    return value
+
+
+def _protocol_meta_from_host_row(row: sqlite3.Row,
+                                 protocol: str,
+                                 default_port: int,
+                                 skip: set = None,
+                                 bool_fields: set = None) -> dict:
+    """Preserva todos los campos host/protocolo que NetExec exponga.
+
+    Las versiones de NetExec cambian columnas entre protocolos y releases. En
+    lugar de depender de una lista cerrada, guardamos cualquier columna útil del
+    registro de hosts y normalizamos los booleanos conocidos.
+    """
+    skip = skip or set()
+    bool_fields = bool_fields or set()
+    raw = _row_dict(row)
+    meta = {'port': raw.get('port') or default_port}
+    for key, value in raw.items():
+        if key in skip or key in {'id', 'ip', 'host', 'hostname', 'domain', 'os'}:
+            continue
+        if value is None or value == '':
+            continue
+        meta[key] = _boolish(value) if key in bool_fields else value
+    return meta
+
+
 def _load_smb(db_path: Path, hosts: Dict[str, NetExecHost]) -> Tuple[List[NetExecCredential], List[dict]]:
     """Carga datos de smb.db. Devuelve (credenciales, dpapi_secrets)."""
     creds: List[NetExecCredential] = []
     dpapi: List[dict] = []
 
-    rows = _safe_query(db_path, "SELECT id, ip, hostname, domain, os, dc, smbv1, signing, "
-                                "spooler, zerologon, petitpotam FROM hosts")
+    rows = _safe_query(db_path, "SELECT * FROM hosts")
     host_id_by_ip: Dict[int, str] = {}
     hostname_to_ip: Dict[str, str] = {}
+    smb_bool_fields = {'dc', 'smbv1', 'signing', 'spooler', 'zerologon', 'petitpotam'}
 
     for r in rows:
         ip = r['ip']
@@ -292,15 +339,7 @@ def _load_smb(db_path: Path, hosts: Dict[str, NetExecHost]) -> Tuple[List[NetExe
         host.hostname = host.hostname or r['hostname']
         host.domain = host.domain or r['domain']
         host.os = host.os or r['os']
-        host.protocols['smb'] = {
-            'port': 445,
-            'dc': bool(r['dc']) if r['dc'] is not None else None,
-            'smbv1': bool(r['smbv1']) if r['smbv1'] is not None else None,
-            'signing': bool(r['signing']) if r['signing'] is not None else None,
-            'spooler': bool(r['spooler']) if r['spooler'] is not None else None,
-            'zerologon': bool(r['zerologon']) if r['zerologon'] is not None else None,
-            'petitpotam': bool(r['petitpotam']) if r['petitpotam'] is not None else None,
-        }
+        host.protocols['smb'] = _protocol_meta_from_host_row(r, 'smb', 445, bool_fields=smb_bool_fields)
         host_id_by_ip[r['id']] = ip
         if r['hostname']:
             hostname_to_ip[r['hostname']] = ip
@@ -388,18 +427,12 @@ def _load_simple_protocol(db_path: Path,
         return creds
 
     # Detectar el nombre real de la columna IP
-    schema = _safe_query(db_path, "PRAGMA table_info(hosts)")
-    cols = {row['name'] for row in schema}
+    cols = _table_columns(db_path, 'hosts')
     ip_col = 'ip' if 'ip' in cols else ('host' if 'host' in cols else None)
     if not ip_col:
         return creds
 
-    select_cols = [ip_col]
-    for opt in ('hostname', 'port', 'banner', 'os', 'server_banner'):
-        if opt in cols:
-            select_cols.append(opt)
-
-    sql = f"SELECT {', '.join(select_cols)} FROM hosts"
+    sql = "SELECT * FROM hosts"
     for r in _safe_query(db_path, sql):
         ip = r[ip_col]
         if not ip:
@@ -415,10 +448,11 @@ def _load_simple_protocol(db_path: Path,
             banner = r['banner']
         elif 'server_banner' in cols and r['server_banner']:
             banner = r['server_banner']
-        host.protocols[protocol] = {
-            'port': port or PROTOCOL_PORT_MAP[protocol][0],
-            'banner': banner,
-        }
+        meta = _protocol_meta_from_host_row(r, protocol, PROTOCOL_PORT_MAP[protocol][0], skip={ip_col})
+        meta['port'] = port or PROTOCOL_PORT_MAP[protocol][0]
+        if banner:
+            meta['banner'] = banner
+        host.protocols[protocol] = meta
 
     # Credentials/users (cualquiera de las dos formas)
     cred_table = None
@@ -452,8 +486,10 @@ def _load_simple_protocol(db_path: Path,
 
 def _load_ldap(db_path: Path, hosts: Dict[str, NetExecHost]) -> List[NetExecCredential]:
     creds: List[NetExecCredential] = []
-    for r in _safe_query(db_path, "SELECT ip, hostname, domain, os, signing_required, "
-                                  "channel_binding FROM hosts"):
+    cols = _table_columns(db_path, 'hosts')
+    if not cols:
+        return creds
+    for r in _safe_query(db_path, "SELECT * FROM hosts"):
         ip = r['ip']
         if not ip:
             continue
@@ -461,11 +497,9 @@ def _load_ldap(db_path: Path, hosts: Dict[str, NetExecHost]) -> List[NetExecCred
         host.hostname = host.hostname or r['hostname']
         host.domain = host.domain or r['domain']
         host.os = host.os or r['os']
-        host.protocols['ldap'] = {
-            'port': 389,
-            'signing_required': bool(r['signing_required']) if r['signing_required'] is not None else None,
-            'channel_binding': r['channel_binding'],
-        }
+        host.protocols['ldap'] = _protocol_meta_from_host_row(
+            r, 'ldap', 389, bool_fields={'signing_required'}
+        )
     for r in _safe_query(db_path, "SELECT domain, username, password, credtype FROM users"):
         if not r['username']:
             continue
@@ -477,7 +511,9 @@ def _load_ldap(db_path: Path, hosts: Dict[str, NetExecHost]) -> List[NetExecCred
 
 def _load_mssql(db_path: Path, hosts: Dict[str, NetExecHost]) -> List[NetExecCredential]:
     creds: List[NetExecCredential] = []
-    for r in _safe_query(db_path, "SELECT ip, hostname, domain, os, instances FROM hosts"):
+    if not _table_columns(db_path, 'hosts'):
+        return creds
+    for r in _safe_query(db_path, "SELECT * FROM hosts"):
         ip = r['ip']
         if not ip:
             continue
@@ -485,7 +521,7 @@ def _load_mssql(db_path: Path, hosts: Dict[str, NetExecHost]) -> List[NetExecCre
         host.hostname = host.hostname or r['hostname']
         host.domain = host.domain or r['domain']
         host.os = host.os or r['os']
-        host.protocols['mssql'] = {'port': 1433, 'instances': r['instances']}
+        host.protocols['mssql'] = _protocol_meta_from_host_row(r, 'mssql', 1433)
     for r in _safe_query(db_path, "SELECT domain, username, password, credtype FROM users"):
         if not r['username']:
             continue
@@ -496,7 +532,9 @@ def _load_mssql(db_path: Path, hosts: Dict[str, NetExecHost]) -> List[NetExecCre
 
 
 def _load_rdp(db_path: Path, hosts: Dict[str, NetExecHost]) -> None:
-    for r in _safe_query(db_path, "SELECT ip, port, hostname, domain, os, nla FROM hosts"):
+    if not _table_columns(db_path, 'hosts'):
+        return
+    for r in _safe_query(db_path, "SELECT * FROM hosts"):
         ip = r['ip']
         if not ip:
             continue
@@ -504,15 +542,14 @@ def _load_rdp(db_path: Path, hosts: Dict[str, NetExecHost]) -> None:
         host.hostname = host.hostname or r['hostname']
         host.domain = host.domain or r['domain']
         host.os = host.os or r['os']
-        host.protocols['rdp'] = {
-            'port': r['port'] or 3389,
-            'nla': bool(r['nla']) if r['nla'] is not None else None,
-        }
+        host.protocols['rdp'] = _protocol_meta_from_host_row(r, 'rdp', 3389, bool_fields={'nla'})
 
 
 def _load_winrm(db_path: Path, hosts: Dict[str, NetExecHost]) -> List[NetExecCredential]:
     creds: List[NetExecCredential] = []
-    for r in _safe_query(db_path, "SELECT ip, port, hostname, domain, os FROM hosts"):
+    if not _table_columns(db_path, 'hosts'):
+        return creds
+    for r in _safe_query(db_path, "SELECT * FROM hosts"):
         ip = r['ip']
         if not ip:
             continue
@@ -520,7 +557,7 @@ def _load_winrm(db_path: Path, hosts: Dict[str, NetExecHost]) -> List[NetExecCre
         host.hostname = host.hostname or r['hostname']
         host.domain = host.domain or r['domain']
         host.os = host.os or r['os']
-        host.protocols['winrm'] = {'port': r['port'] or 5985}
+        host.protocols['winrm'] = _protocol_meta_from_host_row(r, 'winrm', 5985)
     for r in _safe_query(db_path, "SELECT domain, username, password, credtype FROM users"):
         if not r['username']:
             continue

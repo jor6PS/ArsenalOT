@@ -2,6 +2,87 @@
 
 {% block title %}Dashboard Reconocimiento - {{ org_name }} | ArsenalOT{% endblock %}
 
+{% block extra_css %}
+<style>
+  /* ── Dashboard light-mode fixes ─────────────────────────── */
+  [data-theme="light"] #reconItemModal > div {
+    background: #ffffff;
+    border-color: rgba(90, 132, 206, 0.22);
+  }
+  [data-theme="light"] #reconItemModal > div > div:first-child {
+    border-bottom-color: rgba(90, 132, 206, 0.14);
+  }
+  [data-theme="light"] .dashboard-subpanel {
+    background: rgba(255, 255, 255, 0.6);
+    border-color: rgba(90, 132, 206, 0.14);
+  }
+  [data-theme="light"] .recon-system-card {
+    background: rgba(255, 255, 255, 0.72) !important;
+    border-color: rgba(90, 132, 206, 0.22) !important;
+  }
+  [data-theme="light"] .recon-system-column {
+    background: rgba(240, 245, 255, 0.6);
+    border-color: rgba(90, 132, 206, 0.14);
+  }
+  [data-theme="light"] .recon-system-title-row h4 {
+    color: #1a2035;
+  }
+  [data-theme="light"] .recon-system-badge {
+    background: rgba(90, 132, 206, 0.08);
+    border-color: rgba(90, 132, 206, 0.2);
+    color: #4B5563;
+  }
+  [data-theme="light"] .recon-empty-state {
+    background: rgba(240, 245, 255, 0.5);
+    border-color: rgba(90, 132, 206, 0.2);
+    color: var(--text-secondary);
+  }
+  [data-theme="light"] .recon-architecture-panel {
+    background: rgba(255, 255, 255, 0.75) !important;
+    border-color: rgba(90, 132, 206, 0.2) !important;
+  }
+  [data-theme="light"] .recon-recent-panel {
+    background: rgba(255, 255, 255, 0.75) !important;
+    border-color: rgba(90, 132, 206, 0.18) !important;
+  }
+  [data-theme="light"] .recon-table-container {
+    background: rgba(255, 255, 255, 0.6);
+    border-color: rgba(90, 132, 206, 0.14);
+  }
+  [data-theme="light"] .recon-table-container table th {
+    background: rgba(240, 245, 255, 0.96);
+    color: #4B5563;
+  }
+  [data-theme="light"] .pill {
+    background: rgba(255, 255, 255, 0.75);
+    border-color: rgba(90, 132, 206, 0.2);
+    color: #4B5563;
+  }
+  [data-theme="light"] .pill:hover {
+    background: rgba(240, 245, 255, 0.98);
+    color: #1a2035;
+    border-color: rgba(90, 132, 206, 0.42);
+  }
+  [data-theme="light"] .recon-filter-group {
+    background: rgba(255, 255, 255, 0.7);
+    border-color: rgba(90, 132, 206, 0.16);
+  }
+  [data-theme="light"] .recon-filter-head label {
+    color: #4B5563 !important;
+  }
+  [data-theme="light"] .recon-hero {
+    background: rgba(255, 255, 255, 0.82) !important;
+    border-color: rgba(34, 197, 94, 0.3) !important;
+  }
+  [data-theme="light"] .recon-hero-copy h2 {
+    color: #1a2035;
+  }
+  [data-theme="light"] .recon-hero-copy p {
+    color: #4B5563;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 {% set active_phase = 'recon' %}
 {% set active_section = 'dashboard' %}
@@ -99,20 +180,20 @@
 
         <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
             <!-- Formulario Nueva Red -->
-            <div
-                style="flex: 1; min-width: 250px; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid #1e293b;">
+            <div class="dashboard-subpanel"
+                style="flex: 1; min-width: 250px; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid rgba(148,163,184,0.18);">
                 <h4 style="margin-top: 0; font-size: 1rem; color: var(--text-primary); margin-bottom: 1rem;">Añadir
                     Nueva Red</h4>
                 <form id="addNetworkForm" onsubmit="event.preventDefault(); addNetwork();"
                     style="display: flex; flex-direction: column; gap: 0.75rem;">
                     <input type="text" id="systemName" placeholder="Sistema Opcional (ej. SCADA)"
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                     <input type="text" id="networkName" placeholder="Nombre de red (ej. Oficinas)" required
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                     <input type="text" id="networkRange" placeholder="Rango (ej. 192.168.1.0/24)" required
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                     <select id="purdueLevel"
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                         <option value="">Nivel Purdue (opcional)</option>
                         <option value="5">Nivel 5 - Empresa</option>
                         <option value="4">Nivel 4 - Sistemas corporativos</option>
@@ -151,8 +232,8 @@
             <span>🔀</span> Arquitectura de Electrónica de Red
         </h3>
         <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
-            <div
-                style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid #4a2f06;">
+            <div class="dashboard-subpanel"
+                style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid rgba(245,158,11,0.22);">
                 <h4 id="networkDeviceFormTitle"
                     style="margin-top: 0; font-size: 1rem; color: var(--text-primary); margin-bottom: 1rem;">
                     Añadir electrónica de red
@@ -160,29 +241,29 @@
                 <form id="addNetworkDeviceForm" onsubmit="event.preventDefault(); saveNetworkDevice();"
                     style="display: flex; flex-direction: column; gap: 0.75rem;">
                     <input type="text" id="networkDeviceSystem" placeholder="Sistema (ej. SCADA Línea 1)"
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                     <input type="text" id="networkDeviceName" placeholder="Nombre (ej. FW1, SW1)" required
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                     <select id="networkDeviceType" required
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                         <option value="">Tipo de activo</option>
                         <option value="firewall">Firewall</option>
                         <option value="router">Router</option>
                         <option value="switch">Switch</option>
                     </select>
                     <input type="text" id="networkDeviceManagementIp" placeholder="IP de gestión (opcional)"
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                     <label style="color: var(--text-secondary); font-size: 0.85rem;">Redes a las que da acceso</label>
                     <select id="networkDeviceNetworks" multiple size="5"
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; min-height: 8rem;"></select>
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary); min-height: 8rem;"></select>
                     <label style="color: var(--text-secondary); font-size: 0.85rem;">Orígenes de escaneo asociados</label>
                     <select id="networkDeviceOrigins" multiple size="4"
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; min-height: 6rem;"></select>
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary); min-height: 6rem;"></select>
                     <label style="color: var(--text-secondary); font-size: 0.85rem;">Conexiones físicas directas</label>
                     <select id="networkDeviceConnections" multiple size="4"
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; min-height: 6rem;"></select>
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary); min-height: 6rem;"></select>
                     <textarea id="networkDeviceNotes" placeholder="Notas (opcional)" rows="2"
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; resize: vertical;"></textarea>
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary); resize: vertical;"></textarea>
                     <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                         <button id="networkDeviceSubmitBtn" type="submit" class="btn"
                             style="flex: 1; margin-top: 0.25rem; padding: 0.6rem; background: #92400e; color: white; border-color: #f59e0b;">
@@ -218,15 +299,15 @@
                 <form id="addCriticalForm" onsubmit="event.preventDefault(); addCriticalDevice();"
                     style="display: flex; flex-direction: column; gap: 0.75rem;">
                     <input type="text" id="criticalSystemName" placeholder="Sistema (ej. SCADA Línea 1)"
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                     <input type="text" id="criticalName" placeholder="Nombre (ej. PLC Línea 1)" required
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                     <input type="text" id="criticalIps"
                         placeholder="IPs separadas por coma (ej. 192.168.1.10, 10.0.0.5)" required
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white;">
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                     <textarea id="criticalReason" placeholder="Motivo de criticidad (ej. Controla válvulas de planta)"
                         required rows="2"
-                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; resize: vertical;"></textarea>
+                        style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary); resize: vertical;"></textarea>
                     <button type="submit" class="btn"
                         style="margin-top: 0.5rem; padding: 0.6rem; background: #991b1b; color: white; border-color: #ef4444;">
                         🚨 Añadir Dispositivo Crítico
@@ -627,8 +708,8 @@
         .recon-system-head {
             display: flex;
             justify-content: space-between;
-            gap: 1rem;
-            align-items: flex-start;
+            gap: 0.55rem;
+            align-items: center;
             flex-wrap: wrap;
             margin-bottom: 0.75rem;
         }
@@ -993,7 +1074,7 @@
     }
 
     function formControlStyle(extra = '') {
-        return `padding: 0.65rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: white; ${extra}`;
+        return `padding: 0.65rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary); ${extra}`;
     }
 
     function optionSelected(values, value) {
