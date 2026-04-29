@@ -1,14 +1,17 @@
 import csv
+import base64
 import html
 import io
 import ipaddress
 import json
 import sqlite3
+from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 
+from arsenal.core.demo_seed import seed_demo_organization
 from arsenal.web.core.models import (
     NetworkCreateRequest,
     NetworkUpdateRequest,
@@ -249,6 +252,134 @@ async def create_organization(body: CreateOrgRequest):
         storage.save_pwndoc_audit_id(name.upper(), pwndoc_result["audit_id"])
 
     return {"ok": True, "name": name.upper(), "pwndoc": pwndoc_result}
+
+
+@router.post("/api/organizations/demo/load")
+async def load_demo_organization():
+    """Carga una organización demo completa para probar y enseñar la aplicación."""
+    try:
+        result = seed_demo_organization(storage, reset=True)
+        return _success_response(
+            "Organización demo cargada correctamente",
+            **result,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"No se pudo cargar la demo: {exc}")
+
+
+def _resolve_evidence_file(file_path: Optional[str], organization: str, location: str,
+                           scan_id: int, evidence_kind: str) -> Optional[Path]:
+    if not file_path:
+        return None
+
+    path = Path(file_path)
+    if path.is_absolute():
+        return path if path.exists() else None
+
+    candidates = [
+        Path.cwd() / path,
+        storage.get_scan_directory(organization, location, scan_id) / evidence_kind / path.name,
+        storage.get_scan_directory(organization, location, scan_id) / path,
+    ]
+    return next((candidate for candidate in candidates if candidate.exists()), None)
+
+
+def _fetch_evidence(scan_id: int, ip: str, port: int, enrichment_type: str):
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    row = cursor.execute("""
+        SELECT s.organization_name, s.location, e.file_path, e.data
+        FROM enrichments e
+        JOIN scan_results sr ON sr.id = e.scan_result_id
+        JOIN hosts h ON h.id = sr.host_id
+        JOIN scans s ON s.id = sr.scan_id
+        WHERE s.id = ?
+          AND h.ip_address = ?
+          AND sr.port = ?
+          AND e.enrichment_type = ?
+        ORDER BY e.created_at DESC
+        LIMIT 1
+    """, (scan_id, ip, port, enrichment_type)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Evidencia {enrichment_type} no encontrada")
+    return row
+
+
+@router.get("/api/evidence/screenshot/{scan_id}/{ip}/{port}")
+async def get_evidence_screenshot(scan_id: int, ip: str, port: int):
+    """Sirve capturas desde el router API principal para el Overview y detalle."""
+    evidence = _fetch_evidence(scan_id, ip, port, "Screenshot")
+    file_path = _resolve_evidence_file(
+        evidence["file_path"],
+        evidence["organization_name"],
+        evidence["location"],
+        scan_id,
+        "evidence/img",
+    )
+    if file_path:
+        return FileResponse(str(file_path), media_type="image/png", filename=file_path.name)
+
+    if evidence["data"]:
+        try:
+            return Response(content=base64.b64decode(evidence["data"]), media_type="image/png")
+        except Exception:
+            pass
+    raise HTTPException(status_code=404, detail="Archivo de screenshot no disponible")
+
+
+@router.get("/api/evidence/source/{scan_id}/{ip}/{port}")
+async def get_evidence_source(scan_id: int, ip: str, port: int):
+    """Sirve código fuente web desde archivo o desde el contenido guardado."""
+    evidence = _fetch_evidence(scan_id, ip, port, "Websource")
+    file_path = _resolve_evidence_file(
+        evidence["file_path"],
+        evidence["organization_name"],
+        evidence["location"],
+        scan_id,
+        "evidence/source",
+    )
+    if file_path:
+        return FileResponse(str(file_path), media_type="text/plain; charset=utf-8", filename=file_path.name)
+
+    if evidence["data"]:
+        return JSONResponse(content={"content": evidence["data"]})
+    raise HTTPException(status_code=404, detail="Código fuente no disponible")
+
+
+@router.get("/api/scan/{scan_id}/screenshots")
+async def get_scan_screenshots(scan_id: int):
+    """Lista capturas de un escaneo para la pantalla de detalle/overview."""
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("""
+        SELECT DISTINCT h.ip_address, sr.port
+        FROM enrichments e
+        JOIN scan_results sr ON sr.id = e.scan_result_id
+        JOIN hosts h ON h.id = sr.host_id
+        WHERE sr.scan_id = ? AND e.enrichment_type = 'Screenshot'
+        ORDER BY h.ip_address, sr.port
+    """, (scan_id,)).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+@router.get("/api/scan/{scan_id}/sources")
+async def get_scan_sources(scan_id: int):
+    """Lista fuentes web de un escaneo para la pantalla de detalle/overview."""
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("""
+        SELECT DISTINCT h.ip_address, sr.port
+        FROM enrichments e
+        JOIN scan_results sr ON sr.id = e.scan_result_id
+        JOIN hosts h ON h.id = sr.host_id
+        WHERE sr.scan_id = ? AND e.enrichment_type = 'Websource'
+        ORDER BY h.ip_address, sr.port
+    """, (scan_id,)).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 @router.get("/api/locations")
 async def get_locations(organization: Optional[str] = None):

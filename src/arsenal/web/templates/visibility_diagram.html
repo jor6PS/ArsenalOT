@@ -704,6 +704,23 @@
     outline-offset: 4px;
   }
 
+  .visibility-network--source.visibility-network--target {
+    border-color: transparent;
+    background:
+      linear-gradient(180deg, rgba(17, 27, 46, 0.96), rgba(12, 20, 35, 0.96)) padding-box,
+      linear-gradient(135deg, rgba(239, 68, 68, 0.96), rgba(245, 158, 11, 0.85), rgba(34, 197, 94, 0.94)) border-box;
+    box-shadow:
+      0 0 0 1px rgba(239, 68, 68, 0.12),
+      0 0 0 2px rgba(34, 197, 94, 0.1),
+      0 0 24px rgba(245, 158, 11, 0.08);
+  }
+
+  .visibility-network--origin-physical.visibility-network--source.visibility-network--target {
+    background:
+      linear-gradient(180deg, rgba(37, 99, 235, 0.24), rgba(19, 34, 58, 0.9)) padding-box,
+      linear-gradient(135deg, rgba(239, 68, 68, 0.96), rgba(245, 158, 11, 0.85), rgba(34, 197, 94, 0.94)) border-box;
+  }
+
   .visibility-network::before,
   .visibility-network::after {
     content: "";
@@ -734,6 +751,16 @@
 
   .visibility-network--target::before,
   .visibility-network--target::after {
+    border-color: rgba(34, 197, 94, 0.9);
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.08);
+  }
+
+  .visibility-network--source.visibility-network--target::before {
+    border-color: rgba(239, 68, 68, 0.92);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
+  }
+
+  .visibility-network--source.visibility-network--target::after {
     border-color: rgba(34, 197, 94, 0.9);
     box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.08);
   }
@@ -1155,6 +1182,16 @@
     border-color: rgba(22, 163, 74, 0.82);
     box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.18), 0 0 18px rgba(22, 163, 74, 0.1);
   }
+  [data-theme="light"] .visibility-network--source.visibility-network--target {
+    border-color: transparent;
+    background:
+      linear-gradient(180deg, rgba(255, 251, 245, 0.98), rgba(240, 253, 244, 0.98)) padding-box,
+      linear-gradient(135deg, rgba(220, 38, 38, 0.9), rgba(245, 158, 11, 0.82), rgba(22, 163, 74, 0.9)) border-box;
+    box-shadow:
+      0 0 0 1px rgba(220, 38, 38, 0.14),
+      0 0 0 2px rgba(22, 163, 74, 0.12),
+      0 0 18px rgba(245, 158, 11, 0.1);
+  }
   [data-theme="light"] .visibility-network--source::before,
   [data-theme="light"] .visibility-network--source::after {
     border-color: rgba(220, 38, 38, 0.9);
@@ -1166,6 +1203,14 @@
     border-color: rgba(22, 163, 74, 0.9);
     background: #f0fdf4;
     box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.14);
+  }
+  [data-theme="light"] .visibility-network--source.visibility-network--target::before {
+    border-color: rgba(220, 38, 38, 0.9);
+    background: #fff7ed;
+  }
+  [data-theme="light"] .visibility-network--source.visibility-network--target::after {
+    border-color: rgba(22, 163, 74, 0.9);
+    background: #fff7ed;
   }
   [data-theme="light"] .visibility-system--source {
     border-color: rgba(239, 68, 68, 0.44);
@@ -3786,11 +3831,28 @@
         box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.14), 0 0 22px rgba(34, 197, 94, 0.08);
       }
 
+      .visibility-network--source.visibility-network--target {
+        border-color: transparent;
+        background:
+          ${networkBg} padding-box,
+          linear-gradient(135deg, rgba(239, 68, 68, 0.96), rgba(245, 158, 11, 0.85), rgba(34, 197, 94, 0.94)) border-box;
+        box-shadow:
+          0 0 0 1px rgba(239, 68, 68, 0.12),
+          0 0 0 2px rgba(34, 197, 94, 0.1),
+          0 0 24px rgba(245, 158, 11, 0.08);
+      }
+
       .visibility-network--origin-physical {
         background:
           linear-gradient(180deg, rgba(37, 99, 235, 0.28), rgba(19, 34, 58, 0.94)),
           linear-gradient(180deg, rgba(17, 27, 46, 0.96), rgba(12, 20, 35, 0.96));
         box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.16), 0 0 0 1px rgba(96, 165, 250, 0.12);
+      }
+
+      .visibility-network--origin-physical.visibility-network--source.visibility-network--target {
+        background:
+          linear-gradient(180deg, rgba(37, 99, 235, 0.24), rgba(19, 34, 58, 0.9)) padding-box,
+          linear-gradient(135deg, rgba(239, 68, 68, 0.96), rgba(245, 158, 11, 0.85), rgba(34, 197, 94, 0.94)) border-box;
       }
 
       .visibility-network::before,
@@ -3823,6 +3885,16 @@
 
       .visibility-network--target::before,
       .visibility-network--target::after {
+        border-color: rgba(34, 197, 94, 0.9);
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.08);
+      }
+
+      .visibility-network--source.visibility-network--target::before {
+        border-color: rgba(239, 68, 68, 0.92);
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
+      }
+
+      .visibility-network--source.visibility-network--target::after {
         border-color: rgba(34, 197, 94, 0.9);
         box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.08);
       }
@@ -4304,11 +4376,19 @@
         drawRoundRect(rect.left, rect.top, rect.width, rect.height, 15);
         context.fillStyle = isPhysical ? palette.networkPhysicalBg : palette.networkBg;
         context.fill();
-        context.strokeStyle = isSource
-          ? 'rgba(239,68,68,0.92)'
-          : isTarget
-            ? 'rgba(34,197,94,0.9)'
-            : palette.networkBorder;
+        if (isSource && isTarget) {
+          const mixedStroke = context.createLinearGradient(rect.left, rect.top, rect.left + rect.width, rect.top + rect.height);
+          mixedStroke.addColorStop(0, 'rgba(239,68,68,0.96)');
+          mixedStroke.addColorStop(0.52, 'rgba(245,158,11,0.86)');
+          mixedStroke.addColorStop(1, 'rgba(34,197,94,0.94)');
+          context.strokeStyle = mixedStroke;
+        } else {
+          context.strokeStyle = isSource
+            ? 'rgba(239,68,68,0.92)'
+            : isTarget
+              ? 'rgba(34,197,94,0.9)'
+              : palette.networkBorder;
+        }
         context.lineWidth = 1.5;
         context.stroke();
 
@@ -4317,7 +4397,9 @@
           context.arc(side === 'left' ? rect.left - 1 : rect.left + rect.width + 1, rect.top + (rect.height / 2), 5, 0, Math.PI * 2);
           context.fillStyle = isLight ? '#ffffff' : '#040a14';
           context.fill();
-          context.strokeStyle = isSource ? 'rgba(239,68,68,0.92)' : isTarget ? 'rgba(34,197,94,0.9)' : 'rgba(148,163,184,0.78)';
+          context.strokeStyle = isSource && isTarget
+            ? (side === 'left' ? 'rgba(239,68,68,0.92)' : 'rgba(34,197,94,0.9)')
+            : isSource ? 'rgba(239,68,68,0.92)' : isTarget ? 'rgba(34,197,94,0.9)' : 'rgba(148,163,184,0.78)';
           context.lineWidth = 2;
           context.stroke();
         });
