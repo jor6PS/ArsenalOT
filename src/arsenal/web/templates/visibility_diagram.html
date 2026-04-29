@@ -4215,6 +4215,11 @@
         networkBg: isLight ? '#ffffff' : '#101827',
         networkPhysicalBg: isLight ? '#e0ecff' : '#13223a',
         networkBorder: isLight ? 'rgba(51,65,85,0.22)' : 'rgba(148,163,184,0.18)',
+        originBg: isLight ? 'rgba(59,130,246,0.1)' : 'rgba(96,165,250,0.12)',
+        originColor: isLight ? '#1d4ed8' : '#cfe2ff',
+        originContextBg: isLight ? 'rgba(239,246,255,0.96)' : 'rgba(8,15,28,0.96)',
+        originContextColor: isLight ? '#1d4ed8' : '#bfdbfe',
+        originContextBorder: isLight ? 'rgba(59,130,246,0.42)' : 'rgba(96,165,250,0.42)',
         link: isLight ? 'rgba(37,99,235,0.56)' : 'rgba(103,232,249,0.48)',
       };
 
@@ -4392,6 +4397,17 @@
         context.lineWidth = 1.5;
         context.stroke();
 
+        if (isPhysical) {
+          context.save();
+          context.setLineDash([6, 5]);
+          drawRoundRect(rect.left - 4, rect.top - 4, rect.width + 8, rect.height + 8, 18);
+          context.strokeStyle = isLight ? 'rgba(37,99,235,0.54)' : 'rgba(96,165,250,0.54)';
+          context.lineWidth = 2;
+          context.stroke();
+          context.setLineDash([]);
+          context.restore();
+        }
+
         ['left', 'right'].forEach((side) => {
           context.beginPath();
           context.arc(side === 'left' ? rect.left - 1 : rect.left + rect.width + 1, rect.top + (rect.height / 2), 5, 0, Math.PI * 2);
@@ -4413,6 +4429,23 @@
         context.fillStyle = palette.muted;
         context.fillText(fitText(range, rect.width - 24), rect.left + 11, rect.top + 37);
 
+        const originContext = network.querySelector('.visibility-network-origin-context');
+        if (originContext && !originContext.hidden && getComputedStyle(originContext).display !== 'none') {
+          const contextText = fitText(originContext.innerText, rect.width - 28);
+          if (contextText) {
+            context.font = `800 9px ${fontFamily}`;
+            const contextWidth = Math.min(rect.width - 22, Math.max(44, context.measureText(contextText).width + 16));
+            drawRoundRect(rect.left + 13, rect.top - 15, contextWidth, 17, 9);
+            context.fillStyle = palette.originContextBg;
+            context.fill();
+            context.strokeStyle = palette.originContextBorder;
+            context.lineWidth = 1;
+            context.stroke();
+            context.fillStyle = palette.originContextColor;
+            context.fillText(contextText, rect.left + 21, rect.top - 3);
+          }
+        }
+
         const visibleBadges = [...network.querySelectorAll('.visibility-network-origin, .visibility-network-critical')]
           .filter((badge) => !badge.hidden && getComputedStyle(badge).display !== 'none');
         let badgeY = rect.top + 47;
@@ -4426,19 +4459,19 @@
           drawRoundRect(rect.left + 11, badgeY, badgeWidth, 18, 9);
           context.fillStyle = critical
             ? (isLight ? 'rgba(237,233,254,0.92)' : 'rgba(167,139,250,0.13)')
-            : isSource
-              ? (isLight ? 'rgba(254,226,226,0.92)' : 'rgba(239,68,68,0.14)')
-              : isTarget
-                ? (isLight ? 'rgba(220,252,231,0.92)' : 'rgba(34,197,94,0.14)')
-                : (isLight ? 'rgba(226,232,240,0.9)' : 'rgba(148,163,184,0.1)');
+            : badge.classList.contains('visibility-network-origin--source-focus')
+              ? (isLight ? 'rgba(254,226,226,0.92)' : 'rgba(239,68,68,0.18)')
+              : badge.classList.contains('visibility-network-origin--target-context')
+                ? (isLight ? 'rgba(226,232,240,0.82)' : 'rgba(148,163,184,0.1)')
+                : palette.originBg;
           context.fill();
           context.fillStyle = critical
             ? (isLight ? '#5b21b6' : '#ddd6fe')
-            : isSource
-              ? (isLight ? '#991b1b' : '#fecaca')
-              : isTarget
-                ? (isLight ? '#166534' : '#bbf7d0')
-                : palette.muted;
+            : badge.classList.contains('visibility-network-origin--source-focus')
+              ? (isLight ? '#991b1b' : '#fee2e2')
+              : badge.classList.contains('visibility-network-origin--target-context')
+                ? (isLight ? '#64748b' : 'rgba(207,226,255,0.72)')
+                : palette.originColor;
           context.fillText(badgeText, rect.left + 19, badgeY + 12);
           badgeY += 21;
         });
