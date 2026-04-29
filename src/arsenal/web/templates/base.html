@@ -83,15 +83,6 @@
                         <line x1="10" y1="14" x2="21" y2="3"/>
                     </svg>
                 </a>
-                <a href="http://localhost:7777" target="_blank" rel="noopener noreferrer" class="sidebar-item sidebar-item--external" title="Graph Viewer">
-                    <span class="sidebar-item-icon">{{ icons.icon('graph', 'svg-icon') }}</span>
-                    <span class="sidebar-item-label">Graph Viewer</span>
-                    <svg viewBox="0 0 24 24" class="sidebar-external-icon svg-icon" aria-hidden="true">
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                        <polyline points="15 3 21 3 21 9"/>
-                        <line x1="10" y1="14" x2="21" y2="3"/>
-                    </svg>
-                </a>
                 <a href="/docs" target="_blank" rel="noopener noreferrer" class="sidebar-item sidebar-item--external" title="API Docs">
                     <span class="sidebar-item-icon">{{ icons.icon('api', 'svg-icon') }}</span>
                     <span class="sidebar-item-label">API Docs</span>
@@ -189,6 +180,10 @@
                         <a href="/pentest/{{ org_url }}/recon/visibility-diagram" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/visibility-diagram' %} sidebar-item--active{% endif %}" title="Diagrama de visibilidad">
                             <span class="sidebar-item-icon">{{ icons.icon('network', 'svg-icon') }}</span>
                             <span class="sidebar-item-label">Visibilidad</span>
+                        </a>
+                        <a href="/pentest/{{ org_url }}/recon/global-map" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/global-map' %} sidebar-item--active{% endif %}" title="Mapa global">
+                            <span class="sidebar-item-icon">{{ icons.icon('network', 'svg-icon') }}</span>
+                            <span class="sidebar-item-label">Mapa Global</span>
                         </a>
                         <a href="/pentest/{{ org_url }}/recon/attack-path" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/attack-path' %} sidebar-item--active{% endif %}" title="Attack Path">
                             <span class="sidebar-item-icon">{{ icons.icon('network', 'svg-icon') }}</span>

@@ -54,6 +54,11 @@ async def recon_visibility_diagram_page(request: Request, org_name: str):
     """Diagrama de visibilidad entre orígenes, sistemas y redes."""
     return templates.TemplateResponse(request, "visibility_diagram.html", {"org_name": org_name})
 
+@router.get("/pentest/{org_name}/recon/global-map", response_class=HTMLResponse)
+async def recon_global_map_page(request: Request, org_name: str):
+    """Mapa global jerárquico de organización, sistemas, redes, assets y servicios."""
+    return templates.TemplateResponse(request, "global_map.html", {"org_name": org_name})
+
 @router.get("/pentest/{org_name}/recon/attack-path", response_class=HTMLResponse)
 async def recon_attack_path_page(request: Request, org_name: str):
     """Diagrama de caminos de ataque hacia un asset objetivo."""

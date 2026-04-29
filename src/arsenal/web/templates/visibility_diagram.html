@@ -2326,6 +2326,29 @@
     return `Capas <strong>${escapeHtml(layerState)}</strong>`;
   }
 
+  function exportFilterSummary(label, selectedIds, total, activeOnly = false) {
+    if (!total) return `${label}: sin opciones`;
+    if (activeOnly) {
+      return selectedIds.size > 0
+        ? `${label}: ${selectedIds.size}/${total} seleccionado(s)`
+        : `${label}: sin filtro`;
+    }
+    return selectedIds.size === total
+      ? `${label}: todos (${total})`
+      : `${label}: ${selectedIds.size}/${total} seleccionado(s)`;
+  }
+
+  function exportLayerSummary() {
+    const layers = layerOptions(currentDiagramData);
+    if (!layers.length) return 'Capas: sin opciones';
+    const activeLabels = layers
+      .filter((layer) => selectedLayerIds.has(layer.id))
+      .map((layer) => layer.label.replace(/\s+/g, ' ').trim());
+    if (activeLabels.length === layers.length) return `Capas: todas (${layers.length})`;
+    if (!activeLabels.length) return 'Capas: ninguna';
+    return `Capas: ${activeLabels.join(' · ')}`;
+  }
+
   function renderedSystemIdForNetwork(networkId, networksById) {
     const element = document.getElementById(nodeId(networkId));
     const renderedSystem = element?.closest('[data-system-id]')?.dataset.systemId;
@@ -3993,10 +4016,10 @@
     clone.style.width = `${width}px`;
     clone.style.height = `${height}px`;
     const legendMarkup = [
-      { className: 'export-legend-button--origin', html: document.getElementById('originFilterToggle')?.innerHTML || 'Orígenes' },
-      { className: 'export-legend-button--destination', html: document.getElementById('destinationFilterToggle')?.innerHTML || 'Destinos' },
-      { className: 'export-legend-button--critical', html: document.getElementById('criticalFilterToggle')?.innerHTML || 'Críticos' },
-      { className: 'export-legend-button--layer', html: layerExportLabel() },
+      { className: 'export-legend-button--origin', html: escapeHtml(exportFilterSummary('Orígenes', selectedOriginIds, (currentDiagramData?.origins || []).length)) },
+      { className: 'export-legend-button--destination', html: escapeHtml(exportFilterSummary('Destinos', selectedDestinationIds, destinationOptions(currentDiagramData).length)) },
+      { className: 'export-legend-button--critical', html: escapeHtml(exportFilterSummary('Críticos', selectedCriticalIds, criticalOptions(currentDiagramData).length, true)) },
+      { className: 'export-legend-button--layer', html: escapeHtml(exportLayerSummary()) },
       { className: 'export-legend-button--layer', html: `Purdue <strong>${purdueModeEnabled ? 'ON' : 'OFF'}</strong>` },
     ].map((item) => `<div class="export-legend-button ${item.className}">${item.html}</div>`).join('');
 
@@ -4176,28 +4199,28 @@
 
       const legendItems = [
         {
-          text: (document.getElementById('originFilterToggle')?.innerText || 'Origenes').replace(/\s+/g, ' ').trim(),
+          text: exportFilterSummary('Orígenes', selectedOriginIds, (currentDiagramData?.origins || []).length),
           bg: isLight ? 'rgba(254,226,226,0.92)' : 'rgba(127,29,29,0.24)',
           border: 'rgba(239,68,68,0.52)',
           dot: 'rgba(239,68,68,0.92)',
           color: isLight ? '#991b1b' : '#fecaca',
         },
         {
-          text: (document.getElementById('destinationFilterToggle')?.innerText || 'Destinos').replace(/\s+/g, ' ').trim(),
+          text: exportFilterSummary('Destinos', selectedDestinationIds, destinationOptions(currentDiagramData).length),
           bg: isLight ? 'rgba(220,252,231,0.92)' : 'rgba(20,83,45,0.22)',
           border: 'rgba(34,197,94,0.5)',
           dot: 'rgba(34,197,94,0.92)',
           color: isLight ? '#166534' : '#bbf7d0',
         },
         {
-          text: (document.getElementById('criticalFilterToggle')?.innerText || 'Criticos').replace(/\s+/g, ' ').trim(),
+          text: exportFilterSummary('Críticos', selectedCriticalIds, criticalOptions(currentDiagramData).length, true),
           bg: isLight ? 'rgba(237,233,254,0.92)' : 'rgba(76,29,149,0.24)',
           border: 'rgba(167,139,250,0.52)',
           dot: 'rgba(167,139,250,0.92)',
           color: isLight ? '#5b21b6' : '#ddd6fe',
         },
         {
-          text: `Capas ${layerExportLabel().replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()}`,
+          text: exportLayerSummary(),
           bg: isLight ? 'rgba(219,234,254,0.92)' : 'rgba(30,64,175,0.26)',
           border: 'rgba(59,130,246,0.52)',
           dot: 'rgba(59,130,246,0.94)',

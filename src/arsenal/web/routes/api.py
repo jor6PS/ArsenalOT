@@ -1,4 +1,5 @@
 import csv
+import html
 import io
 import ipaddress
 import json
@@ -754,6 +755,15 @@ def _diagram_discovery_method_to_layer_key(discovery_method: str, has_mac: bool 
     return None
 
 
+def _html_title(title: str, rows: list) -> str:
+    body = "".join(
+        f"<div><b>{html.escape(str(label))}</b>: {html.escape(str(value))}</div>"
+        for label, value in rows
+        if value not in (None, "")
+    )
+    return f"<div class='global-map-tooltip'><strong>{html.escape(title)}</strong>{body}</div>"
+
+
 @router.get("/api/visibility-diagram")
 async def get_visibility_diagram(organization: str):
     """Devuelve un diagrama de visibilidad basado en resultados reales de escaneo."""
@@ -1174,6 +1184,258 @@ async def get_visibility_diagram(organization: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando diagrama de visibilidad: {e}")
+
+
+@router.get("/api/global-map")
+async def get_global_map(organization: str):
+    """Devuelve el mapa global desde SQLite: organizaciÃ³n -> sistemas -> redes -> assets -> servicios."""
+    org = organization.upper()
+
+    def parse_network(value: str):
+        try:
+            return ipaddress.ip_network(str(value or "").strip(), strict=False)
+        except ValueError:
+            return None
+
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    try:
+        org_row = conn.execute("""
+            SELECT o.name, o.description, o.created_at,
+                   COUNT(DISTINCT s.id) AS scan_count,
+                   COUNT(DISTINCT CASE WHEN COALESCE(s.status, '') = 'completed' THEN s.id END) AS completed_scan_count,
+                   COUNT(DISTINCT sr.host_id) AS asset_count,
+                   COUNT(DISTINCT CASE WHEN sr.port IS NOT NULL THEN sr.id END) AS service_count,
+                   MIN(s.started_at) AS first_scan_at,
+                   MAX(COALESCE(s.completed_at, s.started_at)) AS last_scan_at
+            FROM organizations o
+            LEFT JOIN scans s ON UPPER(s.organization_name) = UPPER(o.name)
+            LEFT JOIN scan_results sr ON sr.scan_id = s.id
+                 AND COALESCE(s.scan_mode, 'active') != 'passive'
+                 AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'
+            WHERE UPPER(o.name) = UPPER(?)
+            GROUP BY o.name, o.description, o.created_at
+        """, (org,)).fetchone()
+
+        declared_rows = conn.execute("""
+            SELECT system_name, network_name, network_range, purdue_level
+            FROM networks
+            WHERE UPPER(organization_name) = UPPER(?)
+        """, (org,)).fetchall()
+
+        asset_rows = conn.execute("""
+            SELECT h.id AS host_id,
+                   h.ip_address,
+                   COALESCE(NULLIF(TRIM(hsm.hostname), ''), NULLIF(TRIM(h.hostname), '')) AS hostname,
+                   COALESCE(NULLIF(TRIM(hsm.mac_address), ''), NULLIF(TRIM(h.mac_address), '')) AS mac_address,
+                   COALESCE(NULLIF(TRIM(hsm.vendor), ''), NULLIF(TRIM(h.vendor), '')) AS vendor,
+                   COUNT(DISTINCT sr.scan_id) AS scan_count,
+                   COUNT(DISTINCT CASE WHEN sr.port IS NOT NULL THEN sr.id END) AS service_count,
+                   MIN(sr.discovered_at) AS first_seen,
+                   MAX(COALESCE(hsm.last_seen, sr.discovered_at)) AS last_seen,
+                   GROUP_CONCAT(DISTINCT s.location) AS locations,
+                   GROUP_CONCAT(DISTINCT s.scan_type) AS scan_types
+            FROM scan_results sr
+            JOIN scans s ON s.id = sr.scan_id
+            JOIN hosts h ON h.id = sr.host_id
+            LEFT JOIN host_scan_metadata hsm
+                   ON hsm.scan_id = sr.scan_id
+                  AND hsm.host_id = sr.host_id
+            WHERE UPPER(s.organization_name) = UPPER(?)
+              AND COALESCE(s.scan_mode, 'active') != 'passive'
+              AND COALESCE(s.status, '') = 'completed'
+              AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'
+              AND COALESCE(TRIM(h.ip_address), '') != ''
+            GROUP BY h.id, h.ip_address
+        """, (org,)).fetchall()
+
+        service_rows = conn.execute("""
+            SELECT h.ip_address,
+                   sr.port,
+                   COALESCE(sr.protocol, 'tcp') AS protocol,
+                   COALESCE(NULLIF(TRIM(sr.service_name), ''), 'unknown') AS service_name,
+                   NULLIF(TRIM(sr.product), '') AS product,
+                   NULLIF(TRIM(sr.version), '') AS version,
+                   COUNT(DISTINCT sr.scan_id) AS scan_count,
+                   MIN(sr.discovered_at) AS first_seen,
+                   MAX(sr.discovered_at) AS last_seen
+            FROM scan_results sr
+            JOIN scans s ON s.id = sr.scan_id
+            JOIN hosts h ON h.id = sr.host_id
+            WHERE UPPER(s.organization_name) = UPPER(?)
+              AND COALESCE(s.scan_mode, 'active') != 'passive'
+              AND COALESCE(s.status, '') = 'completed'
+              AND sr.port IS NOT NULL
+              AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'
+            GROUP BY h.ip_address, sr.port, COALESCE(sr.protocol, 'tcp'), COALESCE(NULLIF(TRIM(sr.service_name), ''), 'unknown'), NULLIF(TRIM(sr.product), ''), NULLIF(TRIM(sr.version), '')
+        """, (org,)).fetchall()
+    finally:
+        conn.close()
+
+    org_data = dict(org_row) if org_row else {
+        "name": org, "description": "", "created_at": "", "scan_count": 0,
+        "completed_scan_count": 0, "asset_count": 0, "service_count": 0,
+        "first_scan_at": "", "last_scan_at": "",
+    }
+    nodes = [{
+        "id": f"org:{org}",
+        "type": "organization",
+        "label": org,
+        "title": _html_title("OrganizaciÃ³n", [
+            ("Escaneos", org_data["scan_count"]),
+            ("Escaneos completados", org_data["completed_scan_count"]),
+            ("Activos descubiertos", org_data["asset_count"]),
+            ("Servicios", org_data["service_count"]),
+            ("Primer escaneo", org_data["first_scan_at"]),
+            ("Ãšltimo escaneo", org_data["last_scan_at"]),
+        ]),
+    }]
+    edges = []
+    systems = {}
+    networks = {}
+    unknown_networks = {}
+
+    def unique_append(values: list, value):
+        if value not in (None, "") and value not in values:
+            values.append(value)
+
+    def ensure_system(name: str):
+        label = str(name or "").strip() or "Sin sistema"
+        system = systems.setdefault(label, {"id": f"system:{label}", "name": label, "networks": set(), "assets": set()})
+        return system
+
+    def ensure_network(system_name: str, network_range: str, network_name: str = None, purdue_level=None, parsed=None, unknown=False):
+        system = ensure_system("Unknown" if unknown else system_name)
+        normalized = str(parsed) if parsed else (str(network_range or "").strip() or "Unknown")
+        key = (system["name"], normalized)
+        network = networks.setdefault(key, {
+            "id": f"network:{system['name']}:{normalized}",
+            "system_id": system["id"],
+            "system_name": system["name"],
+            "range": normalized,
+            "names": [],
+            "purdue_levels": [],
+            "assets": set(),
+            "parsed": parsed,
+            "unknown": unknown,
+        })
+        unique_append(network["names"], network_name)
+        unique_append(network["purdue_levels"], purdue_level)
+        system["networks"].add(network["id"])
+        return network
+
+    for row in declared_rows:
+        ensure_network(row["system_name"], row["network_range"], row["network_name"], row["purdue_level"], parse_network(row["network_range"]))
+
+    known_networks = list(networks.values())
+
+    def network_for_ip(ip_value: str):
+        try:
+            ip_obj = ipaddress.ip_address(str(ip_value or "").strip())
+        except ValueError:
+            return ensure_network("Unknown", "Unknown", "Unknown", unknown=True)
+
+        matches = [
+            network for network in known_networks
+            if network["parsed"] and network["parsed"].version == ip_obj.version and ip_obj in network["parsed"]
+        ]
+        if matches:
+            return max(matches, key=lambda network: network["parsed"].prefixlen)
+        bucket = ipaddress.ip_network(f"{ip_obj}/24" if ip_obj.version == 4 else f"{ip_obj}/64", strict=False)
+        return unknown_networks.setdefault(str(bucket), ensure_network("Unknown", str(bucket), str(bucket), parsed=bucket, unknown=True))
+
+    assets = {}
+    for row in asset_rows:
+        network = network_for_ip(row["ip_address"])
+        asset_id = f"asset:{row['ip_address']}"
+        assets[asset_id] = {"id": asset_id, "network_id": network["id"], "ip": row["ip_address"], "hostname": row["hostname"] or "", "services": set(), "row": dict(row)}
+        network["assets"].add(asset_id)
+        for system in systems.values():
+            if system["id"] == network["system_id"]:
+                system["assets"].add(asset_id)
+                break
+
+    for row in service_rows:
+        asset_id = f"asset:{row['ip_address']}"
+        if asset_id not in assets:
+            continue
+        service_id = f"service:{row['ip_address']}:{row['protocol']}:{row['port']}:{row['service_name']}:{row['product'] or ''}:{row['version'] or ''}"
+        assets[asset_id]["services"].add(service_id)
+        nodes.append({
+            "id": service_id,
+            "type": "service",
+            "label": f"{row['port']}/{row['protocol']} {row['service_name']}",
+            "title": _html_title("Servicio", [
+                ("Asset", row["ip_address"]),
+                ("Puerto", f"{row['port']}/{row['protocol']}"),
+                ("Servicio", row["service_name"]),
+                ("Producto", row["product"]),
+                ("VersiÃ³n", row["version"]),
+                ("Escaneos", row["scan_count"]),
+                ("Primera detecciÃ³n", row["first_seen"]),
+                ("Ãšltima detecciÃ³n", row["last_seen"]),
+            ]),
+        })
+        edges.append({"from": asset_id, "to": service_id, "type": "asset-service", "label": "expone"})
+
+    for system in sorted(systems.values(), key=lambda item: item["name"].lower()):
+        nodes.append({
+            "id": system["id"],
+            "type": "system",
+            "label": system["name"],
+            "title": _html_title("Sistema", [("Redes", len(system["networks"])), ("Assets", len(system["assets"]))]),
+        })
+        edges.append({"from": f"org:{org}", "to": system["id"], "type": "org-system", "label": "contiene"})
+
+    for network in sorted(networks.values(), key=lambda item: (item["unknown"], str(item["range"]))):
+        display_name = " / ".join(network["names"]) if network["names"] else network["range"]
+        nodes.append({
+            "id": network["id"],
+            "type": "network",
+            "label": f"{display_name}\n{network['range']}",
+            "title": _html_title("Red", [
+                ("Sistema", network["system_name"]),
+                ("Nombre", display_name),
+                ("Rango", network["range"]),
+                ("Purdue", ", ".join(map(str, network["purdue_levels"]))),
+                ("Assets", len(network["assets"])),
+                ("Tipo", "Descubierta" if network["unknown"] else "Declarada"),
+            ]),
+        })
+        edges.append({"from": network["system_id"], "to": network["id"], "type": "system-network", "label": "agrupa"})
+
+    for asset in sorted(assets.values(), key=lambda item: _diagram_ip_sort_key(item["ip"])):
+        row = asset["row"]
+        nodes.append({
+            "id": asset["id"],
+            "type": "asset",
+            "label": f"{asset['ip']}\n{asset['hostname']}" if asset["hostname"] else asset["ip"],
+            "title": _html_title("Asset", [
+                ("IP", asset["ip"]),
+                ("Hostname", asset["hostname"]),
+                ("MAC", row["mac_address"]),
+                ("Fabricante", row["vendor"]),
+                ("Servicios", len(asset["services"])),
+                ("Escaneos", row["scan_count"]),
+                ("Ubicaciones", row["locations"]),
+                ("Tipos de escaneo", row["scan_types"]),
+                ("Primera detecciÃ³n", row["first_seen"]),
+                ("Ãšltima detecciÃ³n", row["last_seen"]),
+            ]),
+        })
+        edges.append({"from": asset["network_id"], "to": asset["id"], "type": "network-asset", "label": "descubre"})
+
+    return {
+        "organization": org,
+        "nodes": nodes,
+        "edges": edges,
+        "stats": {
+            "systems": len(systems),
+            "networks": len(networks),
+            "assets": len(assets),
+            "services": len([node for node in nodes if node["type"] == "service"]),
+        },
+    }
 
 
 def _asset_hostname_lookup(org: str) -> dict:

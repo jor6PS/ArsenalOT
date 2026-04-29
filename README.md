@@ -37,7 +37,6 @@ docker-compose up -d --build
 ### 3. Acceso
 *   **ArsenalOT Web**: [http://localhost:8000](http://localhost:8000)
 *   **Neo4j Browser**: [http://localhost:7474](http://localhost:7474)
-*   **Neo4j Graph Viewer**: [http://localhost:7777](http://localhost:7777)
 *   **PwnDoc**: [https://localhost:8443](https://localhost:8443)
 
 > [!TIP]

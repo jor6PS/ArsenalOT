@@ -1,0 +1,400 @@
+{% extends "base.html" %}
+
+{% block title %}Mapa global - {{ org_name }} | ArsenalOT{% endblock %}
+
+{% block content %}
+{% set active_phase = 'recon' %}
+{% set active_section = 'global_map' %}
+{% include "org_tabs.html" %}
+
+<link rel="stylesheet" href="/static/vendor/vis-network.min.css">
+<script src="/static/vendor/vis-network.min.js"></script>
+
+<style>
+  .global-map-page { margin-top: 1.25rem; color: var(--text-primary); }
+  .global-map-toolbar, .global-map-panel {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.92));
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.18);
+  }
+  .global-map-toolbar { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; padding: 1rem; margin-bottom: 0.9rem; }
+  .global-map-toolbar h2 { margin: 0; font-size: 1.1rem; }
+  .global-map-toolbar p { margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.86rem; max-width: 78ch; }
+  .global-map-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+  .global-map-search { position: relative; min-width: min(360px, 42vw); }
+  .global-map-search-input {
+    width: 100%;
+    min-height: 34px;
+    padding: 0.48rem 0.72rem;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.86);
+    color: var(--text-primary);
+    outline: none;
+  }
+  .global-map-search-input:focus { border-color: rgba(56, 189, 248, 0.58); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12); }
+  .global-map-search-results {
+    position: absolute;
+    top: calc(100% + 0.42rem);
+    right: 0;
+    z-index: 40;
+    display: none;
+    width: min(460px, 86vw);
+    max-height: 320px;
+    overflow: auto;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    background: rgba(2, 6, 23, 0.98);
+    box-shadow: 0 22px 46px rgba(0, 0, 0, 0.38);
+  }
+  .global-map-search-result {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.62rem 0.76rem;
+    border: 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    background: transparent;
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+  }
+  .global-map-search-result:hover,
+  .global-map-search-result.is-active { background: rgba(56, 189, 248, 0.11); }
+  .global-map-search-result small { color: var(--text-secondary); font-weight: 700; }
+  .global-map-panel { overflow: hidden; }
+  .global-map-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    align-items: center;
+    padding: 0.8rem 0.95rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(4, 10, 20, 0.72);
+  }
+  .global-map-check {
+    display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.48rem 0.68rem;
+    border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 999px;
+    background: rgba(15, 23, 42, 0.86); color: var(--text-secondary); font-size: 0.82rem; font-weight: 700; cursor: pointer;
+  }
+  .global-map-check::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--node-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color) 20%, transparent);
+  }
+  .global-map-check input { accent-color: var(--node-color); }
+  .global-map-check.is-active { color: #e0f2fe; border-color: color-mix(in srgb, var(--node-color) 56%, rgba(148, 163, 184, 0.18)); background: color-mix(in srgb, var(--node-color) 16%, rgba(15, 23, 42, 0.86)); }
+  .global-map-check:not(.is-active) { opacity: 0.55; }
+  .global-map-summary { display: flex; gap: 0.7rem; flex-wrap: wrap; padding: 0.72rem 0.95rem; border-bottom: 1px solid rgba(148, 163, 184, 0.12); color: var(--text-secondary); font-size: 0.8rem; }
+  .global-map-summary strong { color: var(--text-primary); }
+  #globalMapNetwork { position: relative; width: 100%; height: min(74vh, 760px); min-height: 560px; background: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.08), transparent 34%), #020617; }
+  .global-map-loading { padding: 2rem; color: var(--text-secondary); }
+  .global-map-tooltip-popover {
+    position: absolute; z-index: 30; display: none; pointer-events: none; max-width: 340px;
+    white-space: normal; line-height: 1.45; padding: 0.78rem 0.86rem; border-radius: 12px;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.96));
+    color: #e5edf8; border: 1px solid rgba(148, 163, 184, 0.28);
+    box-shadow: 0 20px 46px rgba(0,0,0,0.42);
+    backdrop-filter: blur(10px);
+  }
+  .global-map-tooltip-popover strong { display: block; margin-bottom: 0.4rem; color: #bae6fd; font-size: 0.88rem; }
+  .global-map-tooltip-popover div { color: #cbd5e1; font-size: 0.78rem; }
+  .global-map-tooltip-popover b { color: #f8fafc; }
+  [data-theme="light"] #globalMapNetwork { background: #eef3ff; }
+  [data-theme="light"] .global-map-toolbar, [data-theme="light"] .global-map-panel { background: #ffffff; }
+  [data-theme="light"] .global-map-filters { background: #f8fafc; }
+  [data-theme="light"] .global-map-search-results { background: #ffffff; }
+</style>
+
+<div class="global-map-page">
+  <div class="global-map-toolbar">
+    <div>
+      <h2>Mapa Global</h2>
+      <p>Grafo de organización, sistemas, redes, assets y servicios construido desde SQLite, sin consultar Neo4j. Arrastra, acerca y aleja directamente sobre el diagrama.</p>
+    </div>
+    <div class="global-map-actions">
+      <div class="global-map-search">
+        <input class="global-map-search-input" id="globalMapSearchInput" type="search" placeholder="Buscar nodo o propiedad..." autocomplete="off">
+        <div class="global-map-search-results" id="globalMapSearchResults"></div>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="refreshGlobalMapBtn">Recargar</button>
+      <button class="btn btn-primary btn-sm" id="fitGlobalMapBtn">Centrar</button>
+    </div>
+  </div>
+
+  <div class="global-map-panel">
+    <div class="global-map-filters" aria-label="Filtros de nodos">
+      <label class="global-map-check is-active" style="--node-color:#60a5fa"><input type="checkbox" data-node-type="organization" checked> Organización</label>
+      <label class="global-map-check is-active" style="--node-color:#34d399"><input type="checkbox" data-node-type="system" checked> Sistemas</label>
+      <label class="global-map-check is-active" style="--node-color:#f59e0b"><input type="checkbox" data-node-type="network" checked> Redes</label>
+      <label class="global-map-check is-active" style="--node-color:#a78bfa"><input type="checkbox" data-node-type="asset" checked> Assets</label>
+      <label class="global-map-check is-active" style="--node-color:#fb7185"><input type="checkbox" data-node-type="service" checked> Servicios</label>
+    </div>
+    <div class="global-map-summary" id="globalMapSummary"><span>Cargando mapa...</span></div>
+    <div id="globalMapNetwork">
+      <div class="global-map-loading">Cargando datos desde SQLite...</div>
+      <div class="global-map-tooltip-popover" id="globalMapTooltip" role="tooltip"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const ORG_NAME = "{{ org_name }}";
+  let globalMapRaw = { nodes: [], edges: [], stats: {} };
+  let globalMapNetwork = null;
+  let renderedGlobalMapNodes = [];
+  let currentSearchMatches = [];
+  let currentSearchIndex = -1;
+  const hierarchy = ['organization', 'system', 'network', 'asset', 'service'];
+  const legendLabels = { organization: 'Organización', system: 'Sistemas', network: 'Redes', asset: 'Assets', service: 'Servicios' };
+  const nodeStyles = {
+    organization: { shape: 'dot', size: 34, color: { background: '#60a5fa', border: '#bfdbfe', hover: { background: '#3b82f6', border: '#dbeafe' }, highlight: { background: '#3b82f6', border: '#dbeafe' } }, font: { color: '#dbeafe', size: 16, face: 'Inter, Arial', bold: true }, borderWidth: 2.2, shadow: { enabled: true, color: 'rgba(96,165,250,0.28)', size: 18, x: 0, y: 8 } },
+    system: { shape: 'dot', size: 27, color: { background: '#34d399', border: '#bbf7d0', hover: { background: '#10b981', border: '#dcfce7' }, highlight: { background: '#10b981', border: '#dcfce7' } }, font: { color: '#d1fae5', size: 13, face: 'Inter, Arial', bold: true }, borderWidth: 1.8 },
+    network: { shape: 'dot', size: 23, color: { background: '#f59e0b', border: '#fde68a', hover: { background: '#d97706', border: '#fef3c7' }, highlight: { background: '#d97706', border: '#fef3c7' } }, font: { color: '#fde68a', size: 12, face: 'Inter, Arial' }, borderWidth: 1.6 },
+    asset: { shape: 'dot', size: 18, color: { background: '#a78bfa', border: '#ddd6fe', hover: { background: '#8b5cf6', border: '#ede9fe' }, highlight: { background: '#8b5cf6', border: '#ede9fe' } }, font: { color: '#ede9fe', size: 11, face: 'Inter, Arial' }, borderWidth: 1.4 },
+    service: { shape: 'dot', size: 13, color: { background: '#fb7185', border: '#fecdd3', hover: { background: '#f43f5e', border: '#ffe4e6' }, highlight: { background: '#f43f5e', border: '#ffe4e6' } }, font: { color: '#ffe4e6', size: 10, face: 'Inter, Arial' }, borderWidth: 1.2 }
+  };
+
+  function checkedTypes() {
+    const direct = new Set([...document.querySelectorAll('[data-node-type]')].filter((input) => input.checked).map((input) => input.dataset.nodeType));
+    return new Set(hierarchy.filter((type, index) => hierarchy.slice(0, index + 1).every((ancestor) => direct.has(ancestor))));
+  }
+
+  function renderSummary(nodes, edges) {
+    const count = (type) => nodes.filter((node) => node.type === type).length;
+    document.getElementById('globalMapSummary').innerHTML = `
+      <span><strong>${count('organization')}</strong> org</span>
+      <span><strong>${count('system')}</strong> sistemas</span>
+      <span><strong>${count('network')}</strong> redes</span>
+      <span><strong>${count('asset')}</strong> assets</span>
+      <span><strong>${count('service')}</strong> servicios</span>
+      <span><strong>${edges.length}</strong> relaciones visibles</span>`;
+  }
+
+  function renderGlobalMap() {
+    const enabled = checkedTypes();
+    const nodes = globalMapRaw.nodes
+      .filter((node) => enabled.has(node.type))
+      .map((node) => ({
+        ...nodeStyles[node.type],
+        ...node,
+        label: String(node.label || ''),
+        tooltipHtml: node.title,
+        searchText: buildNodeSearchText(node),
+        title: undefined,
+        mass: ({ organization: 8, system: 4, network: 2.6, asset: 1.6, service: 1 }[node.type] || 1)
+      }));
+    renderedGlobalMapNodes = nodes;
+    const visibleIds = new Set(nodes.map((node) => node.id));
+    const edges = globalMapRaw.edges
+      .filter((edge) => visibleIds.has(edge.from) && visibleIds.has(edge.to))
+      .map((edge) => ({
+        ...edge,
+        arrows: 'to',
+        length: edge.type === 'org-system' ? 210 : edge.type === 'system-network' ? 170 : edge.type === 'network-asset' ? 125 : 92,
+        color: { color: 'rgba(148, 163, 184, 0.44)', highlight: '#38bdf8' },
+        font: { color: '#94a3b8', size: 9, strokeWidth: 0, align: 'middle' },
+        smooth: { type: 'dynamic', roundness: 0.35 }
+      }));
+
+    const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+    const options = {
+      layout: { improvedLayout: true, randomSeed: 14 },
+      physics: {
+        enabled: true,
+        solver: 'forceAtlas2Based',
+        forceAtlas2Based: {
+          gravitationalConstant: -82,
+          centralGravity: 0.018,
+          springLength: 138,
+          springConstant: 0.07,
+          damping: 0.48,
+          avoidOverlap: 0.82
+        },
+        stabilization: { enabled: true, iterations: 260, updateInterval: 25, fit: true }
+      },
+      interaction: { hover: true, tooltipDelay: 180, navigationButtons: false, keyboard: true },
+      nodes: { chosen: { node: true, label: true }, scaling: { label: { enabled: false } } },
+      edges: { width: 1.35, arrows: { to: { enabled: true, scaleFactor: 0.55 } } },
+    };
+    const container = document.getElementById('globalMapNetwork');
+    if (!globalMapNetwork) globalMapNetwork = new vis.Network(container, data, options);
+    else { globalMapNetwork.setOptions(options); globalMapNetwork.setData(data); }
+    renderSummary(nodes, edges);
+    bindGlobalMapTooltip();
+    runGlobalMapSearch(false);
+    window.setTimeout(() => globalMapNetwork.fit({ animation: { duration: 350, easingFunction: 'easeInOutQuad' } }), 220);
+  }
+
+  function buildNodeSearchText(node) {
+    const withoutTags = String(node.title || '').replace(/<[^>]*>/g, ' ');
+    return `${node.label || ''} ${legendLabels[node.type] || node.type} ${withoutTags}`.replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    }[char]));
+  }
+
+  function runGlobalMapSearch(autoFocusFirst = true) {
+    const input = document.getElementById('globalMapSearchInput');
+    const results = document.getElementById('globalMapSearchResults');
+    if (!input || !results) return;
+    const query = input.value.trim().toLowerCase();
+    clearGlobalMapSelection();
+    if (query.length < 2) {
+      currentSearchMatches = [];
+      currentSearchIndex = -1;
+      results.style.display = 'none';
+      results.innerHTML = '';
+      return;
+    }
+
+    currentSearchMatches = renderedGlobalMapNodes
+      .filter((node) => node.searchText.includes(query))
+      .slice(0, 40);
+    currentSearchIndex = currentSearchMatches.length ? 0 : -1;
+    renderSearchResults(query);
+    if (autoFocusFirst && currentSearchMatches.length === 1) focusSearchMatch(0);
+  }
+
+  function renderSearchResults(query) {
+    const results = document.getElementById('globalMapSearchResults');
+    if (!results) return;
+    if (!currentSearchMatches.length) {
+      results.innerHTML = `<div class="global-map-search-result"><span>Sin coincidencias para “${escapeHtml(query)}”</span></div>`;
+      results.style.display = 'block';
+      return;
+    }
+    const hint = currentSearchMatches.length === 1
+      ? '1 coincidencia'
+      : `${currentSearchMatches.length} coincidencias · elige una`;
+    results.innerHTML = `
+      <button class="global-map-search-result is-active" type="button" data-search-index="0">
+        <span>${escapeHtml(currentSearchMatches[0].label)}</span><small>${escapeHtml(legendLabels[currentSearchMatches[0].type] || currentSearchMatches[0].type)} · ${hint}</small>
+      </button>
+      ${currentSearchMatches.slice(1).map((node, idx) => `
+        <button class="global-map-search-result" type="button" data-search-index="${idx + 1}">
+          <span>${escapeHtml(node.label)}</span><small>${escapeHtml(legendLabels[node.type] || node.type)}</small>
+        </button>
+      `).join('')}`;
+    results.style.display = 'block';
+  }
+
+  function focusSearchMatch(index) {
+    if (!globalMapNetwork || !currentSearchMatches[index]) return;
+    currentSearchIndex = index;
+    const node = currentSearchMatches[index];
+    globalMapNetwork.selectNodes([node.id], false);
+    globalMapNetwork.focus(node.id, {
+      scale: 1.35,
+      animation: { duration: 520, easingFunction: 'easeInOutQuad' }
+    });
+    document.querySelectorAll('.global-map-search-result').forEach((item) => {
+      item.classList.toggle('is-active', Number(item.dataset.searchIndex) === index);
+    });
+  }
+
+  function clearGlobalMapSelection() {
+    if (globalMapNetwork) globalMapNetwork.unselectAll();
+  }
+
+  function bindGlobalMapTooltip() {
+    const tooltip = ensureGlobalMapTooltip();
+    if (!globalMapNetwork || !tooltip || globalMapNetwork._arsenalTooltipBound) return;
+    globalMapNetwork._arsenalTooltipBound = true;
+    globalMapNetwork.on('hoverNode', (params) => {
+      const node = globalMapNetwork.body.data.nodes.get(params.node);
+      if (!node?.tooltipHtml) return;
+      tooltip.innerHTML = node.tooltipHtml;
+      tooltip.style.display = 'block';
+      positionGlobalMapTooltip(params.pointer?.DOM || params.event?.center || { x: 16, y: 16 });
+    });
+    globalMapNetwork.on('blurNode', () => { tooltip.style.display = 'none'; });
+    globalMapNetwork.on('dragStart', () => { tooltip.style.display = 'none'; });
+    globalMapNetwork.on('zoom', () => { tooltip.style.display = 'none'; });
+    globalMapNetwork.on('mousemove', (params) => {
+      if (tooltip.style.display === 'block') positionGlobalMapTooltip(params.pointer.DOM);
+    });
+  }
+
+  function ensureGlobalMapTooltip() {
+    const container = document.getElementById('globalMapNetwork');
+    let tooltip = document.getElementById('globalMapTooltip');
+    if (!tooltip && container) {
+      tooltip = document.createElement('div');
+      tooltip.id = 'globalMapTooltip';
+      tooltip.className = 'global-map-tooltip-popover';
+      tooltip.setAttribute('role', 'tooltip');
+      container.appendChild(tooltip);
+    }
+    return tooltip;
+  }
+
+  function positionGlobalMapTooltip(point) {
+    const tooltip = ensureGlobalMapTooltip();
+    const container = document.getElementById('globalMapNetwork');
+    if (!tooltip || !container) return;
+    const x = Math.min(point.x + 18, container.clientWidth - tooltip.offsetWidth - 12);
+    const y = Math.min(point.y + 18, container.clientHeight - tooltip.offsetHeight - 12);
+    tooltip.style.left = `${Math.max(12, x)}px`;
+    tooltip.style.top = `${Math.max(12, y)}px`;
+  }
+
+  async function loadGlobalMap() {
+    document.getElementById('globalMapSummary').innerHTML = '<span>Cargando mapa...</span>';
+    const response = await fetch(`/api/global-map?organization=${encodeURIComponent(ORG_NAME)}`);
+    if (!response.ok) throw new Error(await response.text());
+    globalMapRaw = await response.json();
+    renderGlobalMap();
+  }
+
+  document.querySelectorAll('[data-node-type]').forEach((input) => input.addEventListener('change', () => {
+    input.closest('.global-map-check')?.classList.toggle('is-active', input.checked);
+    renderGlobalMap();
+  }));
+  document.getElementById('globalMapSearchInput').addEventListener('input', () => runGlobalMapSearch(true));
+  document.getElementById('globalMapSearchInput').addEventListener('keydown', (event) => {
+    if (!currentSearchMatches.length) return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      focusSearchMatch(currentSearchIndex >= 0 ? currentSearchIndex : 0);
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      focusSearchMatch((currentSearchIndex + 1) % currentSearchMatches.length);
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      focusSearchMatch((currentSearchIndex - 1 + currentSearchMatches.length) % currentSearchMatches.length);
+    }
+  });
+  document.getElementById('globalMapSearchResults').addEventListener('click', (event) => {
+    const result = event.target.closest('[data-search-index]');
+    if (!result) return;
+    focusSearchMatch(Number(result.dataset.searchIndex));
+  });
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.global-map-search')) {
+      document.getElementById('globalMapSearchResults').style.display = 'none';
+    }
+  });
+  document.getElementById('globalMapSearchInput').addEventListener('focus', () => {
+    if (currentSearchMatches.length) document.getElementById('globalMapSearchResults').style.display = 'block';
+  });
+  document.getElementById('refreshGlobalMapBtn').addEventListener('click', () => loadGlobalMap().catch(console.error));
+  document.getElementById('fitGlobalMapBtn').addEventListener('click', () => globalMapNetwork?.fit({ animation: true }));
+  loadGlobalMap().catch((err) => {
+    console.error(err);
+    document.getElementById('globalMapNetwork').innerHTML = '<div class="global-map-loading">No se pudo cargar el mapa global.</div>';
+    document.getElementById('globalMapSummary').innerHTML = '<span>Error cargando datos desde SQLite.</span>';
+  });
+</script>
+{% endblock %}
