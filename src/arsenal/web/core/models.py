@@ -37,13 +37,13 @@ class NetworkCreateRequest(BaseModel):
     network_name: str
     network_range: str
     system_name: Optional[str] = None
-    purdue_level: Optional[int] = None
+    purdue_level: Optional[float] = None
 
 class NetworkUpdateRequest(BaseModel):
     network_name: str
     network_range: str
     system_name: Optional[str] = None
-    purdue_level: Optional[int] = None
+    purdue_level: Optional[float] = None
 
 class CriticalDeviceRequest(BaseModel):
     organization: str

@@ -2264,19 +2264,20 @@
   function purdueLevelValue(network) {
     const levels = (network?.purdue_levels || [])
       .map((level) => Number(level))
-      .filter((level) => Number.isInteger(level) && level >= 0 && level <= 5);
+      .filter((level) => [0, 1, 2, 3, 3.5, 4, 5].includes(level));
     if (!levels.length) return null;
     return Math.max(...levels);
   }
 
   function purdueLevelLabel(level) {
     const labels = {
-      5: 'Nivel 5 · Empresa',
-      4: 'Nivel 4 · Sistemas corporativos',
-      3: 'Nivel 3 · Operaciones de planta',
-      2: 'Nivel 2 · Supervisión',
-      1: 'Nivel 1 · Control básico',
-      0: 'Nivel 0 · Proceso físico',
+      5: 'Nivel 5 · Internet DMZ',
+      4: 'Nivel 4 · Enterprise Zone',
+      3.5: 'Nivel 3.5 · Plant DMZ',
+      3: 'Nivel 3 · Control Center / Processing LAN',
+      2: 'Nivel 2 · Local HMI LAN',
+      1: 'Nivel 1 · Controller LAN',
+      0: 'Nivel 0 · Physical Process / Field I/O',
     };
     return labels[level] || `Nivel ${level}`;
   }
@@ -2509,8 +2510,8 @@
       `;
     }).join('');
 
-    // Build IT/OT separator between level 4 (IT) above and level 3 (OT) below
-    const itGroups = groups.filter((g) => !g.is_unknown && g.level >= 4);
+    // Build separator between IT/DMZ/Plant DMZ and the OT control/cell area.
+    const itGroups = groups.filter((g) => !g.is_unknown && g.level >= 3.5);
     const otGroups = groups.filter((g) => !g.is_unknown && g.level <= 3);
     let separatorHtml = '';
     if (itGroups.length && otGroups.length) {
@@ -2522,8 +2523,8 @@
       const labelX = Math.round(currentLayout.width / 2);
       separatorHtml = `
         <div class="visibility-purdue-it-ot-separator" style="top:${sepY}px;"></div>
-        <div class="visibility-purdue-it-ot-label" style="left:${Math.max(8, labelX - 96)}px; top:${sepY - 34}px;">IT</div>
-        <div class="visibility-purdue-it-ot-label" style="left:${Math.min(currentLayout.width - 48, labelX + 8)}px; top:${sepY + 8}px;">OT</div>
+        <div class="visibility-purdue-it-ot-label" style="left:${Math.max(8, labelX - 126)}px; top:${sepY - 34}px;">IT / DMZ</div>
+        <div class="visibility-purdue-it-ot-label" style="left:${Math.min(currentLayout.width - 86, labelX + 8)}px; top:${sepY + 8}px;">OT / Cell Area</div>
       `;
     }
 

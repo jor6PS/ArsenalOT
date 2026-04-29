@@ -5,9 +5,12 @@ import io
 import ipaddress
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
+from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 
@@ -896,7 +899,7 @@ def _html_title(title: str, rows: list) -> str:
 
 
 @router.get("/api/visibility-diagram")
-async def get_visibility_diagram(organization: str):
+def _get_visibility_diagram_sync(organization: str):
     """Devuelve un diagrama de visibilidad basado en resultados reales de escaneo."""
     try:
         org = organization.upper()
@@ -909,7 +912,7 @@ async def get_visibility_diagram(organization: str):
         layer_usage = {}
 
         def ensure_network_group(system_name: str, network_range: str, network_name: str = None,
-                                 purdue_level: int = None, is_unknown: bool = False,
+                                 purdue_level: float = None, is_unknown: bool = False,
                                  parsed_network=None):
             normalized_range = str(network_range or "").strip() or "Unknown"
             system_slug = _diagram_system_slug(system_name, is_unknown=is_unknown)
@@ -1317,8 +1320,12 @@ async def get_visibility_diagram(organization: str):
         raise HTTPException(status_code=500, detail=f"Error generando diagrama de visibilidad: {e}")
 
 
+async def get_visibility_diagram(organization: str):
+    return await run_in_threadpool(_get_visibility_diagram_sync, organization)
+
+
 @router.get("/api/global-map")
-async def get_global_map(organization: str):
+def _get_global_map_sync(organization: str):
     """Devuelve el mapa global desde SQLite: organizaciÃ³n -> sistemas -> redes -> assets -> servicios."""
     org = organization.upper()
 
@@ -1567,6 +1574,10 @@ async def get_global_map(organization: str):
             "services": len([node for node in nodes if node["type"] == "service"]),
         },
     }
+
+
+async def get_global_map(organization: str):
+    return await run_in_threadpool(_get_global_map_sync, organization)
 
 
 def _asset_hostname_lookup(org: str) -> dict:
@@ -1849,11 +1860,11 @@ def _origin_graph_for_attack_path(diagram: dict, target_ip: str, target_network:
 
 
 @router.get("/api/attack-path")
-async def get_attack_path(organization: str, target_ip: Optional[str] = None, layers: Optional[str] = None):
+def _get_attack_path_sync(organization: str, target_ip: Optional[str] = None, layers: Optional[str] = None):
     """Devuelve el grafo de caminos de ataque hacia un asset objetivo."""
     try:
         org = organization.upper()
-        diagram = await get_visibility_diagram(org)
+        diagram = _get_visibility_diagram_sync(org)
         selected_layers = _normalize_attack_path_layers(layers, diagram.get("layers", []))
         asset_options = _attack_path_asset_options(diagram, org)
         layers_payload = []
@@ -1944,17 +1955,17 @@ async def get_attack_path(organization: str, target_ip: Optional[str] = None, la
 
 
 @router.get("/api/attack-path/candidates")
-async def get_attack_path_candidates(organization: str, min_hops: int = 2, limit: int = 50,
+def _get_attack_path_candidates_sync(organization: str, min_hops: int = 2, limit: int = 50,
                                      layers: Optional[str] = None):
     """Devuelve assets que generan attack paths con al menos min_hops saltos."""
     try:
         org = organization.upper()
         min_hops = max(2, int(min_hops or 2))
         limit = max(1, min(200, int(limit or 50)))
-        base = await get_attack_path(org, layers=layers)
+        base = _get_attack_path_sync(org, layers=layers)
         candidates = []
         for asset in base.get("asset_options", []):
-            data = await get_attack_path(org, asset["ip"], layers=layers)
+            data = _get_attack_path_sync(org, asset["ip"], layers=layers)
             stats = data.get("stats") or {}
             if (stats.get("max_hops") or 0) >= min_hops:
                 candidates.append({
@@ -1981,6 +1992,782 @@ async def get_attack_path_candidates(organization: str, min_hops: int = 2, limit
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error buscando attack paths: {e}")
+
+
+async def get_attack_path(organization: str, target_ip: Optional[str] = None, layers: Optional[str] = None):
+    return await run_in_threadpool(_get_attack_path_sync, organization, target_ip, layers)
+
+
+async def get_attack_path_candidates(organization: str, min_hops: int = 2, limit: int = 50,
+                                     layers: Optional[str] = None):
+    return await run_in_threadpool(_get_attack_path_candidates_sync, organization, min_hops, limit, layers)
+
+
+_FINDING_SEVERITY_ORDER = {
+    "critical": 4,
+    "high": 3,
+    "medium": 2,
+    "low": 1,
+    "info": 0,
+}
+
+_FINDING_SEVERITY_LABEL = {
+    "critical": "Crítica",
+    "high": "Alta",
+    "medium": "Media",
+    "low": "Baja",
+    "info": "Info",
+}
+
+_FINDING_OT_PORTS = (
+    102, 502, 789, 1089, 1090, 1091, 1911, 1962, 2222, 2223, 2404, 4000,
+    4840, 4843, 4911, 5901, 7890, 9600, 10000, 12320, 12321, 18245, 18246,
+    19999, 20000, 20547, 34962, 34963, 34964, 34980, 44818, 46823, 46824,
+    47808, 47809, 47810, 47820, 55000, 55001, 55002, 55003, 55555, 55556,
+    55900, 55901, 55902, 55903, 61408, 62351, 62352, 62353, 62354, 62355,
+)
+
+_FINDING_CANDIDATE_RULES = [
+    {
+        "id": "purdue-cross-level",
+        "name": "Cruce Purdue IT/DMZ hacia OT",
+        "category": "Segmentación",
+        "description": "Detecta visibilidad desde zonas IT/DMZ (L5/L4) hacia OT (L3 o inferior) y desde Plant DMZ (L3.5) hacia celdas/control (L2 o inferior).",
+        "data_sources": ["visibility_diagram", "networks", "scan_results", "scans"],
+        "evidence_policy": "Solo usa relaciones calculadas desde resultados de escaneo y redes declaradas en SQLite.",
+    },
+    {
+        "id": "critical-reachable",
+        "name": "Activo crítico alcanzable",
+        "category": "Activos críticos",
+        "description": "Detecta IPs declaradas como críticas que aparecen como destino en una relación de visibilidad.",
+        "data_sources": ["visibility_diagram", "critical_devices", "scan_results"],
+        "evidence_policy": "No infiere criticidad: la IP debe estar en la tabla de dispositivos críticos.",
+    },
+    {
+        "id": "shadow-network",
+        "name": "Red no inventariada o de proveedor",
+        "category": "Inventario",
+        "description": "Detecta redes desconocidas por correlación de IPs fuera de rangos declarados o redes cuyo nombre/sistema indica proveedor, shadow o no inventariada.",
+        "data_sources": ["visibility_diagram", "networks", "scan_results"],
+        "evidence_policy": "La red debe existir como red declarada o como bucket desconocido generado por IPs observadas.",
+    },
+    {
+        "id": "credentials",
+        "name": "Credenciales recuperadas",
+        "category": "Credenciales",
+        "description": "Detecta credenciales guardadas por importaciones NetExec persistidas en la tabla credentials.",
+        "data_sources": ["credentials"],
+        "evidence_policy": "Usa SQLite como fuente canónica; la nota CREDENCIALES.md es una representación gestionada de esos datos.",
+    },
+    {
+        "id": "web-evidence",
+        "name": "Evidencia web disponible",
+        "category": "Evidencia web",
+        "description": "Detecta evidencias web guardadas en enrichments y prioriza interfaces propias de activos industriales cuando el servicio/producto observado contiene términos OT como HMI, SCADA, PLC, Historian, WinCC, FactoryTalk, Ignition, AVEVA, ThinManager o gateway.",
+        "data_sources": ["enrichments", "scan_results", "hosts", "scans"],
+        "evidence_policy": "Solo se crea si existe Screenshot/Websource en SQLite; la clasificación OT se basa en service_name/product/version observados o en activo crítico declarado.",
+    },
+    {
+        "id": "industrial-service",
+        "name": "Servicio industrial expuesto",
+        "category": "Exposición OT",
+        "description": "Detecta puertos incluidos en la opción de escaneo Nmap de puertos OT sobre redes Purdue L3 o inferiores.",
+        "data_sources": ["scan_results", "hosts", "scans", "networks"],
+        "evidence_policy": "Es un candidato de exposición, no una vulnerabilidad; requiere validación del auditor antes de convertirlo en finding.",
+    },
+    {
+        "id": "attack-path",
+        "name": "Ruta de ataque indirecta",
+        "category": "Attack path",
+        "description": "Detecta activos con rutas de visibilidad indirectas de dos o más saltos usando capas L3/L7.",
+        "data_sources": ["visibility_diagram", "attack_path"],
+        "evidence_policy": "Usa el cálculo local de attack path basado en relaciones de visibilidad; no asume explotación real.",
+    },
+]
+
+_FINDING_CANDIDATE_RULES_BY_ID = {
+    rule["id"]: rule
+    for rule in _FINDING_CANDIDATE_RULES
+}
+
+
+def _finding_clean(value, default: str = "") -> str:
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text if text else default
+
+
+def _finding_truncate(value, max_len: int = 260) -> str:
+    text = " ".join(_finding_clean(value).split())
+    if len(text) <= max_len:
+        return text
+    return f"{text[:max_len - 1].rstrip()}…"
+
+
+def _finding_slug(value: str) -> str:
+    slug = "".join(ch.lower() if ch.isascii() and ch.isalnum() else "-" for ch in _finding_clean(value))
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug.strip("-")[:140] or "item"
+
+
+def _finding_id(kind: str, *parts) -> str:
+    return f"{kind}:{_finding_slug('|'.join(_finding_clean(part) for part in parts))}"
+
+
+def _finding_unique(values, limit: int = None) -> list:
+    seen = set()
+    result = []
+    for value in values or []:
+        text = _finding_clean(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+        if limit and len(result) >= limit:
+            break
+    return result
+
+
+def _finding_join(values, limit: int = 8, empty: str = "Sin datos") -> str:
+    unique = _finding_unique(values, limit=limit)
+    if not unique:
+        return empty
+    suffix = ""
+    if values and len(_finding_unique(values)) > len(unique):
+        suffix = "…"
+    return ", ".join(unique) + suffix
+
+
+def _finding_network_levels(network: dict) -> list:
+    levels = []
+    for level in (network or {}).get("purdue_levels") or []:
+        try:
+            parsed = float(level)
+        except (TypeError, ValueError):
+            continue
+        if parsed in {0.0, 1.0, 2.0, 3.0, 3.5, 4.0, 5.0}:
+            levels.append(parsed)
+    return sorted(set(levels), reverse=True)
+
+
+def _finding_format_level(level) -> str:
+    try:
+        parsed = float(level)
+    except (TypeError, ValueError):
+        return str(level)
+    return str(int(parsed)) if parsed.is_integer() else str(parsed)
+
+
+def _finding_purdue_level_name(level) -> str:
+    labels = {
+        5.0: "Internet DMZ",
+        4.0: "Enterprise Zone",
+        3.5: "Plant DMZ",
+        3.0: "Control Center / Processing LAN",
+        2.0: "Local HMI LAN",
+        1.0: "Controller LAN",
+        0.0: "Physical Process / Field I/O",
+    }
+    try:
+        parsed = float(level)
+    except (TypeError, ValueError):
+        return f"Nivel {level}"
+    return labels.get(parsed, f"Nivel {_finding_format_level(parsed)}")
+
+
+def _finding_network_label(network: dict) -> str:
+    if not network:
+        return "Red desconocida"
+    display = _finding_clean(network.get("display_name"), "Red")
+    net_range = _finding_clean(network.get("range"))
+    system = _finding_clean(network.get("system_name"))
+    levels = _finding_network_levels(network)
+    level_text = f" · Purdue L{', L'.join(_finding_format_level(level) for level in levels)}" if levels else ""
+    range_text = f" ({net_range})" if net_range and net_range != display else ""
+    system_text = f"{system} / " if system else ""
+    return f"{system_text}{display}{range_text}{level_text}"
+
+
+def _finding_origin_label(origin: dict) -> str:
+    if not origin:
+        return "Origen desconocido"
+    locations = _finding_join(origin.get("locations") or [], limit=3, empty="")
+    ip = _finding_clean(origin.get("ip"), "sin IP")
+    return f"{locations} ({ip})" if locations else ip
+
+
+def _finding_layer_labels(layer_keys: list) -> str:
+    labels = []
+    for layer_key in layer_keys or []:
+        meta = _DIAGRAM_LAYER_META.get(layer_key) or {}
+        labels.append(meta.get("label") or str(layer_key).upper())
+    return _finding_join(labels, limit=5, empty="Sin capa")
+
+
+def _finding_evidence(*rows) -> list:
+    evidence = []
+    for label, value in rows:
+        text = _finding_clean(value)
+        if text:
+            evidence.append({"label": label, "value": text})
+    return evidence
+
+
+def _finding_report_hint(title: str, summary: str, evidence: list, impact: str, recommendation: str) -> str:
+    evidence_text = "\n".join(
+        f"- {item['label']}: {item['value']}"
+        for item in evidence
+        if item.get("value")
+    )
+    sections = [
+        f"### {title}",
+        summary,
+    ]
+    if evidence_text:
+        sections.append(f"Evidencia observada:\n{evidence_text}")
+    if impact:
+        sections.append(f"Impacto potencial:\n{impact}")
+    if recommendation:
+        sections.append(f"Recomendación:\n{recommendation}")
+    return "\n\n".join(sections)
+
+
+def _finding_candidate(kind: str, category: str, severity: str, title: str, summary: str,
+                       impact: str, recommendation: str, evidence: list, links: list = None,
+                       confidence: str = "media", tags: list = None, assets: list = None,
+                       origins: list = None, rule_id: str = None) -> dict:
+    severity_key = _finding_clean(severity, "info").lower()
+    if severity_key not in _FINDING_SEVERITY_ORDER:
+        severity_key = "info"
+    resolved_rule_id = rule_id or kind
+    rule = _FINDING_CANDIDATE_RULES_BY_ID.get(resolved_rule_id) or {}
+    candidate = {
+        "id": _finding_id(kind, title, summary),
+        "kind": kind,
+        "rule_id": resolved_rule_id,
+        "rule_name": rule.get("name") or resolved_rule_id,
+        "category": category,
+        "severity": severity_key,
+        "severity_label": _FINDING_SEVERITY_LABEL[severity_key],
+        "severity_rank": _FINDING_SEVERITY_ORDER[severity_key],
+        "confidence": confidence,
+        "title": title,
+        "summary": summary,
+        "impact": impact,
+        "recommendation": recommendation,
+        "evidence": evidence or [],
+        "links": links or [],
+        "tags": _finding_unique(tags or [], limit=12),
+        "assets": _finding_unique(assets or [], limit=24),
+        "origins": _finding_unique(origins or [], limit=24),
+        "rule": rule,
+    }
+    candidate["report_hint"] = _finding_report_hint(
+        candidate["title"],
+        candidate["summary"],
+        candidate["evidence"],
+        candidate["impact"],
+        candidate["recommendation"],
+    )
+    return candidate
+
+
+def _finding_add_candidate(candidates: list, seen: set, candidate: dict):
+    candidate_id = candidate.get("id")
+    if not candidate_id or candidate_id in seen:
+        return
+    seen.add(candidate_id)
+    candidates.append(candidate)
+
+
+def _finding_host_networks(ip_value: str, networks: list) -> list:
+    try:
+        ip_obj = ipaddress.ip_address(str(ip_value or "").strip())
+    except ValueError:
+        return []
+    matches = []
+    for network in networks or []:
+        try:
+            parsed = ipaddress.ip_network(str(network.get("range") or ""), strict=False)
+        except ValueError:
+            continue
+        if parsed.version == ip_obj.version and ip_obj in parsed:
+            matches.append((parsed.prefixlen, network))
+    if not matches:
+        return []
+    best_prefix = max(item[0] for item in matches)
+    return [network for prefix, network in matches if prefix == best_prefix]
+
+
+def _finding_ot_web_matches(service_text: str) -> list:
+    terms = {
+        "hmi": "HMI",
+        "scada": "SCADA",
+        "plc": "PLC",
+        "historian": "Historian",
+        "ignition": "Ignition",
+        "wincc": "WinCC",
+        "factorytalk": "FactoryTalk",
+        "aveva": "AVEVA",
+        "thinmanager": "ThinManager",
+        "gateway": "Gateway",
+    }
+    normalized = _finding_clean(service_text).lower()
+    return [label for token, label in terms.items() if token in normalized]
+
+
+@router.get("/api/finding-candidate-rules")
+async def get_finding_candidate_rules():
+    """Devuelve las reglas locales usadas para generar candidatos de hallazgos."""
+    return {
+        "rules": _FINDING_CANDIDATE_RULES,
+        "count": len(_FINDING_CANDIDATE_RULES),
+        "principle": "Los candidatos no son findings finales: cada regla debe apoyarse en evidencias locales y ser revisada por el auditor.",
+    }
+
+
+@router.get("/api/finding-candidates")
+def _get_finding_candidates_sync(organization: str, include_medium: bool = True):
+    """Sugiere hallazgos candidatos revisables para acelerar la redacción del informe."""
+    try:
+        org = organization.upper()
+        org_url = quote(org, safe="")
+        links = {
+            "results": f"/pentest/{org_url}/recon/results",
+            "visibility": f"/pentest/{org_url}/recon/visibility-diagram",
+            "attack_path": f"/pentest/{org_url}/recon/attack-path",
+            "findings": f"/pentest/{org_url}/recon/findings",
+            "global_map": f"/pentest/{org_url}/recon/global-map",
+        }
+
+        diagram = _get_visibility_diagram_sync(org)
+        networks = {network["id"]: network for network in diagram.get("networks", [])}
+        origins = {origin["id"]: origin for origin in diagram.get("origins", [])}
+        critical_by_ip = {
+            critical["ip"]: critical
+            for critical in diagram.get("critical_hosts", [])
+            if critical.get("ip")
+        }
+        candidates = []
+        seen = set()
+
+        for relation in diagram.get("relations", []):
+            origin = origins.get(relation.get("source_origin_id"))
+            target_network = networks.get(relation.get("target_network_id"))
+            target_levels = _finding_network_levels(target_network)
+            source_networks = [
+                networks[source_id]
+                for source_id in relation.get("source_network_ids") or []
+                if source_id in networks
+            ]
+            source_levels = [
+                level
+                for network in source_networks
+                for level in _finding_network_levels(network)
+            ]
+            source_max_level = max(source_levels) if source_levels else None
+            target_min_level = min(target_levels) if target_levels else None
+            enterprise_to_ot = source_max_level is not None and source_max_level >= 4 and target_min_level is not None and target_min_level <= 3
+            plant_dmz_to_cell = source_max_level == 3.5 and target_min_level is not None and target_min_level <= 2
+            if enterprise_to_ot or plant_dmz_to_cell:
+                severity = "critical" if target_min_level is not None and target_min_level <= 2 else "high"
+                target_hosts = relation.get("target_ips") or []
+                evidence = _finding_evidence(
+                    ("Origen", _finding_origin_label(origin)),
+                    ("Red origen", _finding_join([_finding_network_label(network) for network in source_networks], limit=4)),
+                    ("Red destino", _finding_network_label(target_network)),
+                    ("Zona Purdue destino", _finding_purdue_level_name(target_min_level)),
+                    ("Hosts visibles", _finding_join(target_hosts, limit=8)),
+                    ("Capas de detección", _finding_layer_labels(relation.get("layer_keys"))),
+                    ("Escaneos implicados", _finding_join(relation.get("scan_ids"), limit=8)),
+                )
+                target_level_text = " / ".join(f"L{_finding_format_level(level)}" for level in target_levels)
+                source_level_text = f"L{_finding_format_level(source_max_level)}"
+                title = f"Visibilidad desde Purdue {source_level_text} hacia {target_network.get('display_name') if target_network else 'red OT'}"
+                summary = (
+                    f"El origen {_finding_origin_label(origin)} en una zona Purdue {source_level_text} alcanza "
+                    f"{len(target_hosts)} host(s) en una red destino {target_level_text} ({_finding_purdue_level_name(target_min_level)})."
+                )
+                _finding_add_candidate(candidates, seen, _finding_candidate(
+                    "purdue-cross-level",
+                    "Segmentación",
+                    severity,
+                    title,
+                    summary,
+                    "La conectividad directa entre IT/DMZ y redes OT de supervisión, control o proceso puede facilitar movimiento lateral y exposición de activos industriales.",
+                    "Revisar reglas de filtrado, rutas, ACL y saltos permitidos; documentar únicamente los flujos justificados y bloquear el resto.",
+                    evidence,
+                    links=[{"label": "Ver diagrama de visibilidad", "href": links["visibility"]}],
+                    confidence="alta",
+                    tags=["Purdue", "segmentación", "visibilidad"],
+                    assets=target_hosts,
+                    origins=[_finding_origin_label(origin)],
+                ))
+
+            for target_ip in relation.get("target_ips") or []:
+                critical = critical_by_ip.get(target_ip)
+                if not critical:
+                    continue
+                target_levels = _finding_network_levels(target_network)
+                source_max_level = max(source_levels) if source_levels else None
+                severity = "critical" if (target_levels and min(target_levels) <= 2) or source_max_level == 5 else "high"
+                evidence = _finding_evidence(
+                    ("Activo crítico", f"{critical.get('device_name') or target_ip} ({target_ip})"),
+                    ("Motivo de criticidad", critical.get("reason")),
+                    ("Origen con visibilidad", _finding_origin_label(origin)),
+                    ("Red destino", _finding_network_label(target_network)),
+                    ("Capas de detección", _finding_layer_labels(relation.get("layer_keys"))),
+                )
+                _finding_add_candidate(candidates, seen, _finding_candidate(
+                    "critical-reachable",
+                    "Activos críticos",
+                    severity,
+                    f"Activo crítico alcanzable: {critical.get('device_name') or target_ip}",
+                    f"El activo crítico {target_ip} aparece alcanzable desde {_finding_origin_label(origin)}.",
+                    "La exposición de activos críticos reduce las barreras de contención y puede convertir una visibilidad de red en una ruta de compromiso operativo.",
+                    "Validar si el flujo está autorizado, restringirlo a bastiones o servicios concretos y monitorizar los intentos de acceso a este activo.",
+                    evidence,
+                    links=[
+                        {"label": "Ver visibilidad", "href": links["visibility"]},
+                        {"label": "Analizar attack path", "href": f"{links['attack_path']}?target_ip={quote(target_ip, safe='')}&layers=l3,l7"},
+                    ],
+                    confidence="alta",
+                    tags=["activo crítico", "exposición"],
+                    assets=[target_ip],
+                    origins=[_finding_origin_label(origin)],
+                ))
+
+        for network in diagram.get("networks", []):
+            network_text = " ".join([
+                _finding_clean(network.get("system_name")),
+                _finding_clean(network.get("display_name")),
+                _finding_clean(network.get("range")),
+                _finding_join(network.get("network_names") or [], limit=5, empty=""),
+            ]).lower()
+            looks_shadow = (
+                network.get("is_unknown")
+                or "shadow" in network_text
+                or "proveedor" in network_text
+                or "vendor" in network_text
+                or "no inventari" in network_text
+            )
+            if not looks_shadow:
+                continue
+            incoming_origins = [
+                _finding_origin_label(origins[origin_id])
+                for origin_id in network.get("incoming_origin_ids") or []
+                if origin_id in origins
+            ]
+            critical_hosts = [
+                f"{host.get('device_name') or host.get('ip')} ({host.get('ip')})"
+                for host in network.get("critical_hosts") or []
+            ]
+            severity = "high" if incoming_origins or critical_hosts else "medium"
+            evidence = _finding_evidence(
+                ("Red", _finding_network_label(network)),
+                ("Tipo", "Descubierta/no inventariada" if network.get("is_unknown") else "Declarada como no inventariada o proveedor"),
+                ("Hosts conocidos", network.get("known_host_count")),
+                ("Orígenes con visibilidad entrante", _finding_join(incoming_origins, limit=6)),
+                ("Activos críticos asociados", _finding_join(critical_hosts, limit=6)),
+            )
+            _finding_add_candidate(candidates, seen, _finding_candidate(
+                "shadow-network",
+                "Inventario",
+                severity,
+                f"Red no inventariada o de proveedor: {network.get('display_name') or network.get('range')}",
+                "Se ha detectado una red que requiere validación de inventario, ownership y exposición real dentro del alcance.",
+                "Las redes no inventariadas suelen ocultar accesos de terceros, saltos de mantenimiento o activos fuera del control habitual.",
+                "Confirmar propietario, propósito, punto de entrada y necesidad de conectividad; registrar la red y aislarla si no está justificada.",
+                evidence,
+                links=[
+                    {"label": "Ver mapa global", "href": links["global_map"]},
+                    {"label": "Ver visibilidad", "href": links["visibility"]},
+                ],
+                confidence="media",
+                tags=["inventario", "terceros", "shadow IT/OT"],
+                assets=[host.get("ip") for host in network.get("critical_hosts") or []],
+                origins=incoming_origins,
+            ))
+
+        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        try:
+            credential_rows = conn.execute("""
+                SELECT domain, username, password, credtype, source_protocol, source_host_ip, scan_id, created_at
+                FROM credentials
+                WHERE UPPER(organization_name) = UPPER(?)
+                ORDER BY created_at DESC, domain, username
+            """, (org,)).fetchall()
+
+            web_rows = conn.execute("""
+                SELECT h.ip_address,
+                       COALESCE(NULLIF(TRIM(h.hostname), ''), '') AS hostname,
+                       sr.port, COALESCE(sr.protocol, 'tcp') AS protocol,
+                       COALESCE(sr.service_name, '') AS service_name,
+                       COALESCE(sr.product, '') AS product,
+                       COALESCE(sr.version, '') AS version,
+                       s.id AS scan_id, s.location, s.myip AS source_ip,
+                       SUM(CASE WHEN LOWER(e.enrichment_type) = 'screenshot' THEN 1 ELSE 0 END) AS screenshot_count,
+                       SUM(CASE WHEN LOWER(e.enrichment_type) IN ('websource', 'source', 'source_code') THEN 1 ELSE 0 END) AS source_count
+                FROM enrichments e
+                JOIN scan_results sr ON sr.id = e.scan_result_id
+                JOIN hosts h ON h.id = sr.host_id
+                JOIN scans s ON s.id = sr.scan_id
+                WHERE UPPER(s.organization_name) = UPPER(?)
+                  AND COALESCE(s.scan_mode, 'active') != 'passive'
+                  AND LOWER(e.enrichment_type) IN ('screenshot', 'websource', 'source', 'source_code')
+                  AND sr.port IS NOT NULL
+                GROUP BY h.ip_address, h.hostname, sr.port, COALESCE(sr.protocol, 'tcp'),
+                         COALESCE(sr.service_name, ''), COALESCE(sr.product, ''), COALESCE(sr.version, ''),
+                         s.id, s.location, s.myip
+                ORDER BY h.ip_address, sr.port
+                LIMIT 40
+            """, (org,)).fetchall()
+
+            ot_port_placeholders = ",".join("?" for _ in _FINDING_OT_PORTS)
+            service_rows = conn.execute(f"""
+                SELECT DISTINCT h.ip_address,
+                       COALESCE(NULLIF(TRIM(h.hostname), ''), '') AS hostname,
+                       sr.port, COALESCE(sr.protocol, 'tcp') AS protocol,
+                       COALESCE(sr.service_name, '') AS service_name,
+                       COALESCE(sr.product, '') AS product,
+                       COALESCE(sr.version, '') AS version,
+                       s.id AS scan_id, s.location, s.myip AS source_ip
+                FROM scan_results sr
+                JOIN hosts h ON h.id = sr.host_id
+                JOIN scans s ON s.id = sr.scan_id
+                WHERE UPPER(s.organization_name) = UPPER(?)
+                  AND COALESCE(s.scan_mode, 'active') != 'passive'
+                  AND COALESCE(sr.discovery_method, 'unknown') != 'passive_capture'
+                  AND sr.port IS NOT NULL
+                  AND sr.port IN ({ot_port_placeholders})
+                ORDER BY h.ip_address, sr.port
+                LIMIT 60
+            """, (org, *_FINDING_OT_PORTS)).fetchall()
+        finally:
+            conn.close()
+
+        if credential_rows:
+            privileged_rows = []
+            for row in credential_rows:
+                username = _finding_clean(row["username"]).lower()
+                password = _finding_clean(row["password"]).lower()
+                credtype = _finding_clean(row["credtype"]).lower()
+                if any(token in username for token in ("admin", "adm", "svc", "engineer")) or password in {"admin", "password", "welcome1!"} or credtype in {"ntlm", "hash"}:
+                    privileged_rows.append(row)
+            credential_samples = [
+                f"{_finding_clean(row['domain'], '.')}\\{row['username']} ({_finding_clean(row['credtype'], 'secreto')}, {_finding_clean(row['source_protocol'], 'origen desconocido')} desde {_finding_clean(row['source_host_ip'], 'sin host')})"
+                for row in credential_rows[:8]
+            ]
+            source_hosts = _finding_unique([row["source_host_ip"] for row in credential_rows], limit=12)
+            evidence = _finding_evidence(
+                ("Credenciales únicas", len(credential_rows)),
+                ("Dominios", _finding_join([row["domain"] for row in credential_rows], limit=8)),
+                ("Usuarios de muestra", _finding_join(credential_samples, limit=8)),
+                ("Hosts origen", _finding_join(source_hosts, limit=8)),
+                ("Protocolos", _finding_join([row["source_protocol"] for row in credential_rows], limit=8)),
+            )
+            _finding_add_candidate(candidates, seen, _finding_candidate(
+                "credentials",
+                "Credenciales",
+                "critical" if privileged_rows else "high",
+                "Credenciales recuperadas durante la auditoría",
+                f"Se han almacenado {len(credential_rows)} credencial(es) o secreto(s) asociados a la organización.",
+                "Las credenciales recuperadas pueden permitir movimiento lateral, acceso persistente o pivote hacia redes y sistemas OT.",
+                "Revisar origen de la exposición, rotar secretos, forzar MFA donde aplique y analizar reutilización de cuentas en IT/OT.",
+                evidence,
+                links=[
+                    {"label": "Ver bitácora", "href": f"/pentest/{org_url}/bitacora"},
+                    {"label": "Crear finding", "href": links["findings"]},
+                ],
+                confidence="alta",
+                tags=["credenciales", "movimiento lateral"],
+                assets=source_hosts,
+            ))
+
+        for row in web_rows:
+            row_dict = dict(row)
+            ip_value = _finding_clean(row_dict.get("ip_address"))
+            port_value = row_dict.get("port")
+            service_text = " ".join([
+                _finding_clean(row_dict.get("service_name")),
+                _finding_clean(row_dict.get("product")),
+                _finding_clean(row_dict.get("version")),
+            ]).lower()
+            ot_matches = _finding_ot_web_matches(service_text)
+            is_critical_asset = ip_value in critical_by_ip
+            is_ot_console = bool(ot_matches) or is_critical_asset
+            if not is_ot_console and not include_medium:
+                continue
+            endpoint = f"{ip_value}:{port_value}/{_finding_clean(row_dict.get('protocol'), 'tcp')}"
+            severity = "high" if is_ot_console else "medium"
+            detection_reason = (
+                f"Términos OT observados: {_finding_join(ot_matches, limit=8)}"
+                if ot_matches
+                else "Activo crítico declarado" if is_critical_asset
+                else "Evidencia web sin término OT específico"
+            )
+            evidence = _finding_evidence(
+                ("Consola/servicio", f"{endpoint} · {_finding_clean(row_dict.get('service_name'), 'web')} {_finding_clean(row_dict.get('product'))}".strip()),
+                ("Motivo de clasificación", detection_reason),
+                ("Activo", f"{ip_value} · {row_dict.get('hostname')}" if row_dict.get("hostname") else ip_value),
+                ("Capturas", row_dict.get("screenshot_count")),
+                ("Código fuente", row_dict.get("source_count")),
+                ("Origen del escaneo", f"{row_dict.get('location') or 'sin ubicación'} ({row_dict.get('source_ip') or 'sin IP origen'})"),
+            )
+            row_links = [
+                {"label": "Ver resultados", "href": links["results"]},
+                {"label": "Crear finding", "href": links["findings"]},
+            ]
+            if row_dict.get("screenshot_count"):
+                row_links.insert(0, {
+                    "label": "Ver captura",
+                    "href": f"/api/evidence/screenshot/{row_dict.get('scan_id')}/{quote(ip_value, safe='')}/{port_value}",
+                })
+            _finding_add_candidate(candidates, seen, _finding_candidate(
+                "web-evidence",
+                "Evidencia web",
+                severity,
+                f"{'Interfaz industrial web' if is_ot_console else 'Interfaz web'} expuesta en {endpoint}",
+                f"Existe evidencia visual/código de una interfaz web en {endpoint}. {detection_reason}.",
+                "Las interfaces web de activos industriales o plataformas de operación facilitan fingerprinting, validación de exposición y potencial acceso interactivo.",
+                "Clasificar la criticidad de la consola, verificar autenticación, endurecimiento, exposición entre redes y capturar evidencias representativas para informe.",
+                evidence,
+                links=row_links,
+                confidence="alta" if is_ot_console else "media",
+                tags=["web", "evidencia", "OT" if is_ot_console else "servicio"],
+                assets=[ip_value],
+                origins=[_finding_clean(row_dict.get("source_ip"))],
+            ))
+
+        for row in service_rows:
+            row_dict = dict(row)
+            ip_value = _finding_clean(row_dict.get("ip_address"))
+            matched_networks = _finding_host_networks(ip_value, diagram.get("networks", []))
+            target_network = matched_networks[0] if matched_networks else None
+            levels = _finding_network_levels(target_network)
+            min_level = min(levels) if levels else None
+            if min_level is not None and min_level > 3:
+                continue
+            endpoint = f"{ip_value}:{row_dict.get('port')}/{_finding_clean(row_dict.get('protocol'), 'tcp')}"
+            relation_origins = []
+            for relation in diagram.get("relations", []):
+                if ip_value in (relation.get("target_ips") or []):
+                    origin = origins.get(relation.get("source_origin_id"))
+                    if origin:
+                        relation_origins.append(_finding_origin_label(origin))
+            evidence = _finding_evidence(
+                ("Servicio industrial", f"{endpoint} · {_finding_clean(row_dict.get('service_name'), 'servicio')} {_finding_clean(row_dict.get('product'))}".strip()),
+                ("Red", _finding_network_label(target_network)),
+                ("Zona Purdue", _finding_purdue_level_name(min_level) if min_level is not None else "Sin nivel declarado"),
+                ("Orígenes con visibilidad", _finding_join(relation_origins, limit=8)),
+                ("Escaneo", f"{row_dict.get('location') or 'sin ubicación'} ({row_dict.get('source_ip') or 'sin IP origen'})"),
+            )
+            severity = "critical" if ip_value in critical_by_ip or (min_level is not None and min_level <= 1) else "high"
+            _finding_add_candidate(candidates, seen, _finding_candidate(
+                "industrial-service",
+                "Exposición OT",
+                severity,
+                f"Servicio industrial expuesto en {endpoint}",
+                f"Se ha identificado un puerto de la lista OT de Nmap en una red Purdue {_finding_format_level(min_level) if min_level is not None else 'sin clasificar'} ({_finding_network_label(target_network)}).",
+                "Los servicios industriales expuestos pueden permitir reconocimiento específico, escritura no autenticada o interacción directa con proceso si no existen controles adicionales.",
+                "Limitar accesos a estaciones autorizadas, aplicar listas de control, segmentar por función y revisar autenticación/firmware del equipo.",
+                evidence,
+                links=[
+                    {"label": "Ver visibilidad", "href": links["visibility"]},
+                    {"label": "Analizar attack path", "href": f"{links['attack_path']}?target_ip={quote(ip_value, safe='')}&layers=l3,l7"},
+                ],
+                confidence="media",
+                tags=["OT", "servicio industrial", "Purdue"],
+                assets=[ip_value],
+                origins=relation_origins,
+            ))
+
+        try:
+            attack_candidates = _get_attack_path_candidates_sync(org, min_hops=2, limit=10, layers="l3,l7")
+        except Exception:
+            attack_candidates = {"candidates": []}
+
+        for item in attack_candidates.get("candidates", []):
+            target_ip = _finding_clean(item.get("ip"))
+            stats = item.get("stats") or {}
+            target_network = item.get("target_network") or {}
+            is_critical = target_ip in critical_by_ip or "crítico:" in _finding_clean(item.get("label")).lower()
+            max_hops = stats.get("max_hops") or 0
+            severity = "critical" if is_critical or max_hops >= 3 else "high"
+            evidence = _finding_evidence(
+                ("Objetivo", item.get("label") or target_ip),
+                ("Red objetivo", _finding_network_label(target_network)),
+                ("Saltos máximos", max_hops),
+                ("Orígenes alcanzables", stats.get("reachable_count")),
+                ("Orígenes con ruta indirecta", stats.get("indirect_count")),
+                ("Capas evaluadas", "L3/L7"),
+            )
+            _finding_add_candidate(candidates, seen, _finding_candidate(
+                "attack-path",
+                "Attack path",
+                severity,
+                f"Ruta de ataque de {max_hops} saltos hacia {target_ip}",
+                f"El activo {target_ip} presenta rutas indirectas desde {stats.get('indirect_count') or 0} origen(es), con hasta {max_hops} salto(s).",
+                "Una ruta indirecta evidencia que un atacante podría pivotar por visibilidad entre segmentos hasta alcanzar un objetivo que no siempre es accesible de forma directa.",
+                "Validar los pivotes reales, priorizar cortes de visibilidad intermedia y documentar la ruta como narrativa técnica en el informe.",
+                evidence,
+                links=[{"label": "Abrir attack path", "href": f"{links['attack_path']}?target_ip={quote(target_ip, safe='')}&layers=l3,l7"}],
+                confidence="media",
+                tags=["attack path", "pivot", "visibilidad"],
+                assets=[target_ip],
+            ))
+
+        if not include_medium:
+            candidates = [
+                candidate for candidate in candidates
+                if candidate.get("severity_rank", 0) >= _FINDING_SEVERITY_ORDER["high"]
+            ]
+
+        candidates.sort(
+            key=lambda item: (
+                -item.get("severity_rank", 0),
+                item.get("category", ""),
+                item.get("title", "").lower(),
+            )
+        )
+
+        summary = {
+            "total": len(candidates),
+            "critical": len([item for item in candidates if item.get("severity") == "critical"]),
+            "high": len([item for item in candidates if item.get("severity") == "high"]),
+            "medium": len([item for item in candidates if item.get("severity") == "medium"]),
+            "low": len([item for item in candidates if item.get("severity") == "low"]),
+            "info": len([item for item in candidates if item.get("severity") == "info"]),
+            "categories": {},
+        }
+        for candidate in candidates:
+            category = candidate.get("category") or "Otros"
+            summary["categories"][category] = summary["categories"].get(category, 0) + 1
+
+        return {
+            "organization": org,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "mode": "candidate_review",
+            "summary": summary,
+            "source": {
+                "database": "sqlite",
+                "visibility_stats": diagram.get("stats") or {},
+                "attack_layers": "l3,l7",
+            },
+            "candidates": candidates,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando candidatos de hallazgos: {e}")
+
+
+async def get_finding_candidates(organization: str, include_medium: bool = True):
+    return await run_in_threadpool(_get_finding_candidates_sync, organization, include_medium)
 
 
 @router.get("/api/recon-dashboard/export")
@@ -2060,7 +2847,7 @@ async def export_recon_dashboard(organization: str):
             "instructions": (
                 "Editar este JSON y volver a importarlo en ArsenalOT. "
                 "Tipos de electrónica válidos: firewall, router, switch. "
-                "purdue_level admite valores 0, 1, 2, 3, 4 o 5."
+                "purdue_level admite valores 0, 1, 2, 3, 3.5, 4 o 5."
             ),
             "systems": exported_systems,
         }

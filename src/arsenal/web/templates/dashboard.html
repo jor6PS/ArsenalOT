@@ -195,12 +195,13 @@
                     <select id="purdueLevel"
                         style="padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
                         <option value="">Nivel Purdue (opcional)</option>
-                        <option value="5">Nivel 5 - Empresa</option>
-                        <option value="4">Nivel 4 - Sistemas corporativos</option>
-                        <option value="3">Nivel 3 - Operaciones de planta</option>
-                        <option value="2">Nivel 2 - Supervisión</option>
-                        <option value="1">Nivel 1 - Control básico</option>
-                        <option value="0">Nivel 0 - Proceso físico</option>
+                        <option value="5">Nivel 5 - Internet DMZ</option>
+                        <option value="4">Nivel 4 - Enterprise Zone</option>
+                        <option value="3.5">Nivel 3.5 - Plant DMZ</option>
+                        <option value="3">Nivel 3 - Control Center / Processing LAN</option>
+                        <option value="2">Nivel 2 - Local HMI LAN</option>
+                        <option value="1">Nivel 1 - Controller LAN</option>
+                        <option value="0">Nivel 0 - Physical Process / Field I/O</option>
                     </select>
                     <button type="submit" class="btn"
                         style="margin-top: 0.5rem; padding: 0.6rem; background: #2563eb; color: white; transition: 0.2s;">➕
@@ -1013,13 +1014,33 @@
             .replace(/'/g, '&#039;');
     }
 
+    const PURDUE_LEVELS = [
+        { value: '5', label: 'Nivel 5 - Internet DMZ' },
+        { value: '4', label: 'Nivel 4 - Enterprise Zone' },
+        { value: '3.5', label: 'Nivel 3.5 - Plant DMZ' },
+        { value: '3', label: 'Nivel 3 - Control Center / Processing LAN' },
+        { value: '2', label: 'Nivel 2 - Local HMI LAN' },
+        { value: '1', label: 'Nivel 1 - Controller LAN' },
+        { value: '0', label: 'Nivel 0 - Physical Process / Field I/O' },
+    ];
+
     function systemLabel(systemName) {
         return systemName || 'Sin Sistema Asociado';
     }
 
     function purdueLabel(level) {
         if (level === null || level === undefined || level === '') return 'Sin Purdue';
-        return `Purdue L${level}`;
+        const normalized = Number(level);
+        const value = Number.isInteger(normalized) ? String(normalized) : String(level);
+        const meta = PURDUE_LEVELS.find(item => item.value === value);
+        return meta ? meta.label : `Purdue L${value}`;
+    }
+
+    function purdueOptionsHtml(selectedValue = '') {
+        const selected = selectedValue === null || selectedValue === undefined ? '' : String(selectedValue);
+        return PURDUE_LEVELS
+            .map(level => `<option value="${level.value}" ${selected === level.value ? 'selected' : ''}>${escapeHtml(level.label)}</option>`)
+            .join('');
     }
 
     function systemSort(a, b) {
@@ -1136,7 +1157,7 @@
                 <input type="text" id="modalNetworkRange" placeholder="Rango CIDR (ej. 192.168.1.0/24)" required value="${escapeHtml(item?.network_range || '')}" style="${formControlStyle()}">
                 <select id="modalPurdueLevel" style="${formControlStyle()}">
                     <option value="">Nivel Purdue (opcional)</option>
-                    ${[5, 4, 3, 2, 1, 0].map(level => `<option value="${level}" ${String(item?.purdue_level ?? '') === String(level) ? 'selected' : ''}>Nivel ${level}</option>`).join('')}
+                    ${purdueOptionsHtml(item?.purdue_level ?? '')}
                 </select>
             `;
         } else if (kind === 'device') {
@@ -1205,7 +1226,7 @@
                     network_name: document.getElementById('modalNetworkName').value.trim(),
                     network_range: document.getElementById('modalNetworkRange').value.trim(),
                     system_name: systemName,
-                    purdue_level: purdueValue === '' ? null : parseInt(purdueValue, 10)
+                    purdue_level: purdueValue === '' ? null : parseFloat(purdueValue)
                 };
                 if (!payload.network_name || !payload.network_range) return;
                 const response = await fetch(itemId ? `/api/networks/${itemId}` : '/api/networks', {
@@ -1937,7 +1958,7 @@
                     system_name: sysInput.value || null,
                     network_name: nameInput.value,
                     network_range: rangeInput.value,
-                    purdue_level: purdueInput.value === '' ? null : parseInt(purdueInput.value, 10)
+                    purdue_level: purdueInput.value === '' ? null : parseFloat(purdueInput.value)
                 })
             });
 

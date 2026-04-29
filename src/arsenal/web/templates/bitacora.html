@@ -61,6 +61,7 @@
     <div class="bk-actions">
       <button class="bk-btn" id="generalBtn" onclick="openFixed('general')">General</button>
       <button class="bk-btn" id="vulnerabilitiesBtn" onclick="openFixed('vulnerabilities')">Vulnerabilidades</button>
+      <button class="bk-btn" id="candidatesBtn" onclick="openFixed('candidates')">Candidatos</button>
       <button class="bk-btn" id="credentialsBtn" onclick="openFixed('credentials')">Credenciales</button>
       <button class="bk-btn" onclick="openNewVectorModal()">Nuevo origen</button>
       <button class="bk-btn primary" id="fillBtn" onclick="fillFromScans()">Rellenar</button>
@@ -248,7 +249,11 @@ async function fillFromScans() {
     const response = await fetch(`/api/bitacora/${encodeURIComponent(ORG)}/fill-from-scans`, { method: 'POST' });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || 'Error rellenando');
-    setStatus(`Notas: ${data.created} nuevas, ${data.skipped} existentes`);
+    const evidenceText = Number(data.evidence_copied || 0) > 0
+      ? ` · Evidencias copiadas: ${data.evidence_copied}`
+      : ' · Sin evidencias nuevas';
+    const errorText = (data.errors || []).length ? ` · Errores: ${data.errors.length}` : '';
+    setStatus(`Notas: ${data.created} nuevas, ${data.skipped} existentes${evidenceText}${errorText}`);
     await loadManifest(currentFile);
   } catch (error) {
     setStatus(`Error: ${error.message}`);

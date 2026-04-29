@@ -142,7 +142,7 @@ class ScanStorage:
                 system_name TEXT,
                 network_name TEXT NOT NULL,
                 network_range TEXT NOT NULL,
-                purdue_level INTEGER,
+                purdue_level REAL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (organization_name) REFERENCES organizations(name) ON DELETE CASCADE
             )
@@ -154,7 +154,7 @@ class ScanStorage:
         except sqlite3.OperationalError:
             pass  # Columna ya existe
         try:
-            cursor.execute("ALTER TABLE networks ADD COLUMN purdue_level INTEGER")
+            cursor.execute("ALTER TABLE networks ADD COLUMN purdue_level REAL")
         except sqlite3.OperationalError:
             pass  # Columna ya existe
 
@@ -1840,16 +1840,16 @@ class ScanStorage:
         }
     
     @staticmethod
-    def _validate_purdue_level(purdue_level) -> Optional[int]:
-        """Normaliza un nivel Purdue opcional entre 0 y 5."""
+    def _validate_purdue_level(purdue_level) -> Optional[float]:
+        """Normaliza un nivel Purdue opcional entre 0, 1, 2, 3, 3.5, 4 y 5."""
         if purdue_level is None or purdue_level == "":
             return None
         try:
-            level = int(purdue_level)
+            level = float(purdue_level)
         except (TypeError, ValueError):
-            raise ValueError("El nivel Purdue debe ser un número entre 0 y 5.")
-        if level < 0 or level > 5:
-            raise ValueError("El nivel Purdue debe estar entre 0 y 5.")
+            raise ValueError("El nivel Purdue debe ser 0, 1, 2, 3, 3.5, 4 o 5.")
+        if level not in {0.0, 1.0, 2.0, 3.0, 3.5, 4.0, 5.0}:
+            raise ValueError("El nivel Purdue debe ser 0, 1, 2, 3, 3.5, 4 o 5.")
         return level
 
     @staticmethod
@@ -1911,7 +1911,7 @@ class ScanStorage:
             return [dict(row) for row in cursor.fetchall()]
 
     def add_network(self, organization: str, network_name: str, network_range: str,
-                    system_name: str = None, purdue_level: int = None) -> int:
+                    system_name: str = None, purdue_level: float = None) -> int:
         """Añade una red a la organización."""
         # Validar y normalizar rango
         try:
@@ -1973,7 +1973,7 @@ class ScanStorage:
             conn.close()
 
     def update_network(self, network_id: int, network_name: str, network_range: str,
-                       system_name: str = None, purdue_level: int = None) -> bool:
+                       system_name: str = None, purdue_level: float = None) -> bool:
         """Actualiza una red existente."""
         try:
             # Usar strict=False para permitir rangos con bits de host (ej. 192.168.1.1/24)

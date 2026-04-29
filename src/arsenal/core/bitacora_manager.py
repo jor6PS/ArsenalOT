@@ -83,6 +83,16 @@ def _open_permissions(path: Path):
         pass
 
 
+def _format_purdue_level(level) -> str:
+    if level is None:
+        return '—'
+    try:
+        parsed = float(level)
+    except (TypeError, ValueError):
+        return str(level)
+    return str(int(parsed)) if parsed.is_integer() else str(parsed)
+
+
 class BitacoraManager:
     """Gestiona la bitácora Obsidian integrada."""
 
@@ -264,6 +274,7 @@ class BitacoraManager:
         fixed_notes = [
             ("general", "General", "GENERAL.md", "# General\n\n"),
             ("vulnerabilities", "Vulnerabilidades", "VULNERABILIDADES.md", "# Vulnerabilidades\n\n"),
+            ("candidates", "Candidatos", "CANDIDATOS.md", "# Candidatos\n\n"),
             ("credentials", "Credenciales", "CREDENCIALES.md", "## IT\n\n## OT\n"),
         ]
         fixed = []
@@ -966,7 +977,7 @@ class BitacoraManager:
                         'obj': _ipa.ip_network(n['network_range'], strict=False),
                         'name': n['network_name'] or '-',
                         'system': n['system_name'] or 'Sin sistema',
-                        'purdue': n['purdue_level'] if n['purdue_level'] is not None else '-',
+                        'purdue': _format_purdue_level(n['purdue_level']) if n['purdue_level'] is not None else '-',
                         'range': n['network_range'],
                     })
                 except ValueError:
@@ -1439,7 +1450,7 @@ class BitacoraManager:
                         'obj':    _ipa.ip_network(n['network_range'], strict=False),
                         'name':   n['network_name'] or '—',
                         'system': n['system_name'] or '—',
-                        'purdue': n['purdue_level'] if n['purdue_level'] is not None else '—',
+                        'purdue': _format_purdue_level(n['purdue_level']) if n['purdue_level'] is not None else '—',
                         'range':  n['network_range'],
                     })
                 except ValueError:
@@ -1839,6 +1850,7 @@ class BitacoraManager:
             placeholders = ','.join('?' * len(scan_ids))
             rows = conn.execute(
                 f"""SELECT LOWER(e.enrichment_type) AS etype, e.file_path,
+                           sr.scan_id,
                            h.ip_address, sr.port
                     FROM enrichments e
                     JOIN scan_results sr ON sr.id = e.scan_result_id
@@ -1847,7 +1859,7 @@ class BitacoraManager:
                       AND LOWER(e.enrichment_type) IN ('screenshot', 'websource',
                                                         'source_code', 'source')
                       AND e.file_path IS NOT NULL
-                    ORDER BY h.ip_address, sr.port""",
+                    ORDER BY h.ip_address, sr.port, sr.scan_id DESC""",
                 scan_ids
             ).fetchall()
 
@@ -1856,6 +1868,7 @@ class BitacoraManager:
             for r in rows:
                 key   = (r['ip_address'], r['port'])
                 entry = {'ip': r['ip_address'], 'port': r['port'],
+                         'scan_id': r['scan_id'],
                          'file_path': r['file_path']}
                 etype = r['etype']
                 if etype == 'screenshot' and key not in seen_ss:
@@ -1902,7 +1915,7 @@ class BitacoraManager:
             if not src.exists():
                 ev['vault_name'] = None
                 continue
-            name = f"{ev['ip']}_{ev['port']}.png"
+            name = f"scan_{ev.get('scan_id')}_{ev['ip']}_{ev['port']}.png"
             dst  = ev_dir / name
             try:
                 shutil.copy2(src, dst)
@@ -1916,7 +1929,7 @@ class BitacoraManager:
             if not src.exists():
                 ev['vault_name'] = None
                 continue
-            name = f"{ev['ip']}_{ev['port']}.txt"
+            name = f"scan_{ev.get('scan_id')}_{ev['ip']}_{ev['port']}.txt"
             dst  = src_dir / name
             try:
                 shutil.copy2(src, dst)
@@ -2129,11 +2142,8 @@ class BitacoraManager:
                 evidencias = self._fetch_evidencias(org_name, location, db_path, myip)
                 total_ev   = (len(evidencias['screenshots'])
                               + len(evidencias['sources']))
-                if total_ev > 0:
-                    self._copy_evidencias(org_name, evidencias)
+                if total_ev > 0 and self.update_location_evidence(org_name, location, db_path, myip):
                     evidence_copied += total_ev
-                    self.update_location_evidence(org_name, location,
-                                                   db_path, myip)
             except Exception as e:
                 tag = f"{location} ({self._ip_label(myip)})"
                 errors.append(f"{tag}: {str(e)}")

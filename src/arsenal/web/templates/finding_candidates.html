@@ -1,0 +1,905 @@
+{% extends "base.html" %}
+
+{% block title %}Hallazgos candidatos - {{ org_name }} | ArsenalOT{% endblock %}
+
+{% block extra_css %}
+<style>
+  .candidate-page {
+    margin-top: 1.25rem;
+    color: var(--text-primary);
+  }
+
+  .candidate-hero,
+  .candidate-toolbar,
+  .candidate-card {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(2, 6, 23, 0.92));
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
+  }
+
+  .candidate-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: start;
+    padding: 1.2rem;
+    margin-bottom: 1rem;
+  }
+
+  .candidate-hero h1 {
+    margin: 0;
+    font-size: clamp(1.35rem, 2vw, 1.9rem);
+    letter-spacing: -0.03em;
+  }
+
+  .candidate-hero p {
+    margin: 0.45rem 0 0;
+    max-width: 84ch;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    font-size: 0.92rem;
+  }
+
+  .candidate-hero-actions {
+    display: flex;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .candidate-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 36px;
+    padding: 0.55rem 0.85rem;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.72);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .candidate-btn:hover {
+    border-color: rgba(78, 205, 196, 0.42);
+    background: rgba(78, 205, 196, 0.12);
+  }
+
+  .candidate-btn.primary {
+    border-color: rgba(78, 205, 196, 0.45);
+    background: rgba(78, 205, 196, 0.16);
+    color: #d9fffb;
+  }
+
+  .candidate-summary {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(120px, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+  }
+
+  .candidate-stat {
+    padding: 0.85rem;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.7);
+  }
+
+  .candidate-stat strong {
+    display: block;
+    font-size: 1.35rem;
+    line-height: 1;
+  }
+
+  .candidate-stat span {
+    display: block;
+    margin-top: 0.3rem;
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .candidate-stat.critical { border-color: rgba(239, 68, 68, 0.36); }
+  .candidate-stat.high { border-color: rgba(249, 115, 22, 0.32); }
+  .candidate-stat.medium { border-color: rgba(234, 179, 8, 0.32); }
+
+  .candidate-toolbar {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) auto auto auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.9rem;
+    margin-bottom: 1rem;
+  }
+
+  .candidate-input,
+  .candidate-select {
+    width: 100%;
+    min-height: 40px;
+    box-sizing: border-box;
+    padding: 0.62rem 0.72rem;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 10px;
+    background: rgba(2, 6, 23, 0.58);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.86rem;
+  }
+
+  .candidate-input:focus,
+  .candidate-select:focus {
+    outline: none;
+    border-color: rgba(78, 205, 196, 0.48);
+    box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.12);
+  }
+
+  .candidate-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 750;
+  }
+
+  .candidate-check input {
+    margin: 0;
+    accent-color: #4ecdc4;
+  }
+
+  .category-filter {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+
+  .rules-panel {
+    display: none;
+    margin-bottom: 1rem;
+    padding: 0.95rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.68);
+  }
+
+  .rules-panel.open {
+    display: block;
+  }
+
+  .rules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.7rem;
+  }
+
+  .rule-card {
+    padding: 0.75rem;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 12px;
+    background: rgba(2, 6, 23, 0.34);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    line-height: 1.48;
+  }
+
+  .rule-card strong {
+    display: block;
+    margin-bottom: 0.28rem;
+    color: var(--text-primary);
+    font-size: 0.88rem;
+  }
+
+  .category-chip {
+    padding: 0.42rem 0.68rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.7);
+    color: #94a3b8;
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 850;
+    cursor: pointer;
+  }
+
+  .category-chip.active {
+    border-color: rgba(78, 205, 196, 0.42);
+    background: rgba(78, 205, 196, 0.14);
+    color: #cffffb;
+  }
+
+  .candidate-meta-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    margin-bottom: 0.8rem;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+  }
+
+  .candidate-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 1rem;
+  }
+
+  .candidate-card {
+    position: relative;
+    overflow: hidden;
+    padding: 1rem;
+  }
+
+  .candidate-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: #64748b;
+  }
+
+  .candidate-card.severity-critical::before { background: #ef4444; }
+  .candidate-card.severity-high::before { background: #f97316; }
+  .candidate-card.severity-medium::before { background: #eab308; }
+  .candidate-card.severity-low::before { background: #22c55e; }
+  .candidate-card.reviewed {
+    opacity: 0.64;
+  }
+
+  .candidate-card.in-bitacora {
+    outline: 1px solid rgba(34, 197, 94, 0.28);
+  }
+
+  .candidate-card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    align-items: flex-start;
+  }
+
+  .candidate-card h2 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+    line-height: 1.32;
+  }
+
+  .severity-badge {
+    flex: 0 0 auto;
+    padding: 0.25rem 0.52rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .severity-badge.critical {
+    background: rgba(239, 68, 68, 0.16);
+    color: #fecaca;
+    border: 1px solid rgba(239, 68, 68, 0.36);
+  }
+
+  .severity-badge.high {
+    background: rgba(249, 115, 22, 0.16);
+    color: #fed7aa;
+    border: 1px solid rgba(249, 115, 22, 0.32);
+  }
+
+  .severity-badge.medium {
+    background: rgba(234, 179, 8, 0.16);
+    color: #fef08a;
+    border: 1px solid rgba(234, 179, 8, 0.32);
+  }
+
+  .severity-badge.low,
+  .severity-badge.info {
+    background: rgba(34, 197, 94, 0.13);
+    color: #bbf7d0;
+    border: 1px solid rgba(34, 197, 94, 0.28);
+  }
+
+  .candidate-card-sub {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    margin: 0.48rem 0 0;
+  }
+
+  .mini-pill {
+    padding: 0.18rem 0.44rem;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.12);
+    color: #cbd5e1;
+    font-size: 0.7rem;
+    font-weight: 800;
+  }
+
+  .candidate-summary-text,
+  .candidate-card details {
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+    line-height: 1.5;
+  }
+
+  .candidate-summary-text {
+    margin: 0.78rem 0;
+  }
+
+  .evidence-list {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0.85rem 0;
+  }
+
+  .evidence-item {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr);
+    gap: 0.6rem;
+    padding: 0.48rem 0.58rem;
+    border: 1px solid rgba(148, 163, 184, 0.11);
+    border-radius: 10px;
+    background: rgba(2, 6, 23, 0.32);
+  }
+
+  .evidence-item dt {
+    color: #9ff4ee;
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .evidence-item dd {
+    margin: 0;
+    min-width: 0;
+    color: #dbeafe;
+    font-size: 0.8rem;
+    overflow-wrap: anywhere;
+  }
+
+  .candidate-card details {
+    margin-top: 0.65rem;
+  }
+
+  .candidate-card summary {
+    cursor: pointer;
+    color: #bfdbfe;
+    font-weight: 850;
+  }
+
+  .candidate-actions {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    margin-top: 0.95rem;
+  }
+
+  .candidate-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+    padding: 0.45rem 0.62rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 0.76rem;
+    font-weight: 850;
+    cursor: pointer;
+  }
+
+  .candidate-link:hover {
+    border-color: rgba(78, 205, 196, 0.38);
+    background: rgba(78, 205, 196, 0.1);
+  }
+
+  .candidate-link:disabled {
+    cursor: not-allowed;
+    border-color: rgba(34, 197, 94, 0.28);
+    color: #bbf7d0;
+    opacity: 0.8;
+  }
+
+  .candidate-empty,
+  .candidate-loading {
+    padding: 2rem 1rem;
+    border: 1px dashed rgba(148, 163, 184, 0.24);
+    border-radius: 16px;
+    color: var(--text-secondary);
+    text-align: center;
+    line-height: 1.55;
+  }
+
+  #candidateToast {
+    position: fixed;
+    right: 1.25rem;
+    bottom: 1.25rem;
+    z-index: 1100;
+    max-width: 420px;
+    padding: 0.72rem 0.9rem;
+    border: 1px solid rgba(78, 205, 196, 0.42);
+    border-radius: 10px;
+    background: #111827;
+    color: #d9fffb;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+
+  @media (max-width: 1100px) {
+    .candidate-hero,
+    .candidate-toolbar {
+      grid-template-columns: 1fr;
+    }
+
+    .candidate-hero-actions {
+      justify-content: flex-start;
+    }
+
+    .candidate-summary {
+      grid-template-columns: repeat(2, minmax(120px, 1fr));
+    }
+  }
+
+  @media (max-width: 560px) {
+    .candidate-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .evidence-item {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set active_phase = 'recon' %}
+{% set active_section = 'finding_candidates' %}
+{% include "org_tabs.html" %}
+
+<script>const ORG_NAME = {{ org_name | tojson }};</script>
+
+<section class="candidate-page">
+  <header class="candidate-hero">
+    <div>
+      <h1>Hallazgos candidatos</h1>
+      <p>Señales técnicas extraídas de SQLite, visibilidad, evidencias web, credenciales, vulnerabilidades y attack paths. No son findings finales: son piezas revisables para que el auditor decida qué merece ir al informe.</p>
+    </div>
+    <div class="candidate-hero-actions">
+      <button class="candidate-btn primary" type="button" onclick="copyVisibleMarkdown()">Copiar visibles</button>
+      <button class="candidate-btn" type="button" onclick="downloadVisibleMarkdown()">Exportar Markdown</button>
+      <button class="candidate-btn" type="button" onclick="toggleRulesPanel()">Ver reglas</button>
+      <a class="candidate-btn" href="/pentest/{{ org_name | urlencode }}/recon/findings">Abrir Findings</a>
+    </div>
+  </header>
+
+  <div class="candidate-summary" id="candidateSummary">
+    <div class="candidate-stat"><strong>-</strong><span>Total</span></div>
+    <div class="candidate-stat critical"><strong>-</strong><span>Críticas</span></div>
+    <div class="candidate-stat high"><strong>-</strong><span>Altas</span></div>
+    <div class="candidate-stat medium"><strong>-</strong><span>Medias</span></div>
+    <div class="candidate-stat"><strong>-</strong><span>Categorías</span></div>
+    <div class="candidate-stat"><strong>-</strong><span>Revisadas</span></div>
+  </div>
+
+  <div class="candidate-toolbar">
+    <input id="candidateSearch" class="candidate-input" type="search" placeholder="Buscar por título, activo, origen, evidencia o recomendación..." oninput="applyCandidateFilters()">
+    <select id="severityFilter" class="candidate-select" onchange="applyCandidateFilters()">
+      <option value="">Todas las severidades</option>
+      <option value="critical">Críticas</option>
+      <option value="high">Altas</option>
+      <option value="medium">Medias</option>
+      <option value="low">Bajas</option>
+      <option value="info">Info</option>
+    </select>
+    <label class="candidate-check"><input id="includeMedium" type="checkbox" checked onchange="loadCandidates()"> Incluir medias</label>
+    <label class="candidate-check"><input id="hideReviewed" type="checkbox" onchange="applyCandidateFilters()"> Ocultar revisadas</label>
+  </div>
+
+  <div class="category-filter" id="categoryFilter"></div>
+
+  <section class="rules-panel" id="rulesPanel">
+    <div class="candidate-meta-line">
+      <span>Reglas locales usadas para detectar candidatos</span>
+      <span id="rulesStatus"></span>
+    </div>
+    <div class="rules-grid" id="rulesList"></div>
+  </section>
+
+  <div class="candidate-meta-line">
+    <span id="candidateStatus">Cargando candidatos...</span>
+    <span id="candidateGenerated"></span>
+  </div>
+
+  <div id="candidateList" class="candidate-grid">
+    <div class="candidate-loading">Analizando resultados y correlacionando señales...</div>
+  </div>
+</section>
+
+<div id="candidateToast"></div>
+
+<script>
+let candidatePayload = null;
+let allCandidates = [];
+let visibleCandidates = [];
+let selectedCategories = new Set();
+let allCategoryNames = [];
+let candidateRules = [];
+let bitacoraCandidateIds = new Set();
+let toastTimer = null;
+const reviewedKey = `arsenalot:finding-candidates:reviewed:${ORG_NAME}`;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await Promise.all([loadRules(), loadBitacoraCandidateIds()]);
+  await loadCandidates();
+});
+
+function getReviewedSet() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(reviewedKey) || '[]'));
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function saveReviewedSet(values) {
+  localStorage.setItem(reviewedKey, JSON.stringify([...values]));
+}
+
+async function loadCandidates() {
+  const list = document.getElementById('candidateList');
+  const status = document.getElementById('candidateStatus');
+  list.innerHTML = '<div class="candidate-loading">Analizando resultados y correlacionando señales...</div>';
+  status.textContent = 'Cargando candidatos...';
+  try {
+    const includeMedium = document.getElementById('includeMedium').checked;
+    const response = await fetch(`/api/finding-candidates?organization=${encodeURIComponent(ORG_NAME)}&include_medium=${includeMedium}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || response.statusText);
+    candidatePayload = data;
+    allCandidates = data.candidates || [];
+    allCategoryNames = Object.keys((data.summary && data.summary.categories) || {}).sort((a, b) => a.localeCompare(b));
+    selectedCategories = new Set(allCategoryNames);
+    renderSummary();
+    renderCategoryFilter();
+    document.getElementById('candidateGenerated').textContent = data.generated_at ? `Generado: ${formatDate(data.generated_at)}` : '';
+    applyCandidateFilters();
+  } catch (error) {
+    status.textContent = 'No se pudieron cargar los candidatos.';
+    list.innerHTML = `<div class="candidate-empty">Error cargando candidatos: ${escHtml(error.message)}</div>`;
+  }
+}
+
+async function loadRules() {
+  try {
+    const response = await fetch('/api/finding-candidate-rules');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || response.statusText);
+    candidateRules = data.rules || [];
+    renderRules();
+  } catch (error) {
+    document.getElementById('rulesStatus').textContent = `Error cargando reglas: ${error.message}`;
+  }
+}
+
+async function loadBitacoraCandidateIds() {
+  try {
+    const response = await fetch(`/api/bitacora/${encodeURIComponent(ORG_NAME)}/candidate-findings`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || response.statusText);
+    bitacoraCandidateIds = new Set(data.candidate_ids || []);
+  } catch (_) {
+    bitacoraCandidateIds = new Set();
+  }
+}
+
+function toggleRulesPanel() {
+  document.getElementById('rulesPanel').classList.toggle('open');
+}
+
+function renderRules() {
+  const list = document.getElementById('rulesList');
+  const status = document.getElementById('rulesStatus');
+  status.textContent = `${candidateRules.length} regla(s)`;
+  list.innerHTML = candidateRules.map(rule => `
+    <div class="rule-card">
+      <strong>${escHtml(rule.name)}</strong>
+      <div>${escHtml(rule.description)}</div>
+      <div><b>Fuentes:</b> ${escHtml((rule.data_sources || []).join(', '))}</div>
+      <div><b>Control:</b> ${escHtml(rule.evidence_policy || '')}</div>
+    </div>
+  `).join('');
+}
+
+function renderSummary() {
+  const summary = candidatePayload?.summary || {};
+  const reviewed = getReviewedSet();
+  const reviewedCount = allCandidates.filter(item => reviewed.has(item.id)).length;
+  const stats = [
+    ['total', 'Total', ''],
+    ['critical', 'Críticas', 'critical'],
+    ['high', 'Altas', 'high'],
+    ['medium', 'Medias', 'medium'],
+    ['categories', 'Categorías', ''],
+    ['reviewed', 'Revisadas', ''],
+  ];
+  document.getElementById('candidateSummary').innerHTML = stats.map(([key, label, cls]) => {
+    const value = key === 'categories'
+      ? Object.keys(summary.categories || {}).length
+      : key === 'reviewed'
+        ? reviewedCount
+        : (summary[key] || 0);
+    return `<div class="candidate-stat ${cls}"><strong>${escHtml(value)}</strong><span>${escHtml(label)}</span></div>`;
+  }).join('');
+}
+
+function renderCategoryFilter() {
+  const container = document.getElementById('categoryFilter');
+  if (!allCategoryNames.length) {
+    container.innerHTML = '';
+    return;
+  }
+  const allActive = selectedCategories.size === allCategoryNames.length;
+  const chips = [
+    `<button type="button" class="category-chip ${allActive ? 'active' : ''}" onclick="selectAllCategories()">Todas</button>`,
+    ...allCategoryNames.map(category => {
+      const count = candidatePayload.summary.categories[category] || 0;
+      const active = selectedCategories.has(category) ? 'active' : '';
+      return `<button type="button" class="category-chip ${active}" onclick="toggleCategory('${jsAttr(category)}')">${escHtml(category)} · ${count}</button>`;
+    })
+  ];
+  container.innerHTML = chips.join('');
+}
+
+function selectAllCategories() {
+  selectedCategories = new Set(allCategoryNames);
+  renderCategoryFilter();
+  applyCandidateFilters();
+}
+
+function toggleCategory(category) {
+  if (selectedCategories.has(category)) {
+    selectedCategories.delete(category);
+  } else {
+    selectedCategories.add(category);
+  }
+  if (!selectedCategories.size) selectedCategories = new Set(allCategoryNames);
+  renderCategoryFilter();
+  applyCandidateFilters();
+}
+
+function applyCandidateFilters() {
+  const query = document.getElementById('candidateSearch').value.trim().toLowerCase();
+  const severity = document.getElementById('severityFilter').value;
+  const hideReviewed = document.getElementById('hideReviewed').checked;
+  const reviewed = getReviewedSet();
+
+  visibleCandidates = allCandidates.filter(candidate => {
+    if (severity && candidate.severity !== severity) return false;
+    if (selectedCategories.size && !selectedCategories.has(candidate.category)) return false;
+    if (hideReviewed && reviewed.has(candidate.id)) return false;
+    if (!query) return true;
+    return candidateSearchText(candidate).includes(query);
+  });
+
+  document.getElementById('candidateStatus').textContent =
+    `${visibleCandidates.length} de ${allCandidates.length} candidato(s) visibles`;
+  renderCandidateList();
+}
+
+function candidateSearchText(candidate) {
+  const evidence = (candidate.evidence || []).map(item => `${item.label} ${item.value}`).join(' ');
+  return [
+    candidate.title,
+    candidate.summary,
+    candidate.impact,
+    candidate.recommendation,
+    candidate.category,
+    candidate.rule_name,
+    candidate.rule_id,
+    candidate.severity_label,
+    candidate.confidence,
+    (candidate.tags || []).join(' '),
+    (candidate.assets || []).join(' '),
+    (candidate.origins || []).join(' '),
+    evidence,
+  ].join(' ').toLowerCase();
+}
+
+function renderCandidateList() {
+  const list = document.getElementById('candidateList');
+  const reviewed = getReviewedSet();
+  renderSummary();
+
+  if (!visibleCandidates.length) {
+    list.innerHTML = '<div class="candidate-empty">No hay candidatos que coincidan con los filtros actuales. Si quieres ver señales de menor prioridad, activa “Incluir medias”.</div>';
+    return;
+  }
+
+  list.innerHTML = visibleCandidates.map(candidate => {
+    const isReviewed = reviewed.has(candidate.id);
+    const inBitacora = bitacoraCandidateIds.has(candidate.id);
+    const evidence = (candidate.evidence || []).map(item => `
+      <div class="evidence-item">
+        <dt>${escHtml(item.label)}</dt>
+        <dd>${escHtml(item.value)}</dd>
+      </div>
+    `).join('');
+    const tags = [
+      candidate.category,
+      candidate.rule_name || candidate.rule_id,
+      `Confianza ${candidate.confidence || 'media'}`,
+      ...(candidate.tags || []).slice(0, 3),
+    ].map(tag => `<span class="mini-pill">${escHtml(tag)}</span>`).join('');
+    const links = (candidate.links || []).map(link => `
+      <a class="candidate-link" href="${escAttr(link.href)}" ${String(link.href || '').startsWith('/api/') ? 'target="_blank" rel="noopener noreferrer"' : ''}>${escHtml(link.label || 'Abrir')}</a>
+    `).join('');
+    return `
+      <article class="candidate-card severity-${escAttr(candidate.severity)} ${isReviewed ? 'reviewed' : ''} ${inBitacora ? 'in-bitacora' : ''}" id="${escAttr(candidate.id)}">
+        <div class="candidate-card-head">
+          <div>
+            <h2>${escHtml(candidate.title)}</h2>
+            <div class="candidate-card-sub">${tags}</div>
+          </div>
+          <span class="severity-badge ${escAttr(candidate.severity)}">${escHtml(candidate.severity_label || candidate.severity)}</span>
+        </div>
+        <p class="candidate-summary-text">${escHtml(candidate.summary)}</p>
+        <dl class="evidence-list">${evidence}</dl>
+        <details>
+          <summary>Regla, impacto y recomendación</summary>
+          <p><strong>Regla:</strong> ${escHtml(candidate.rule_name || candidate.rule_id || 'Sin regla')}</p>
+          <p><strong>Control:</strong> ${escHtml(candidate.rule?.evidence_policy || 'Pendiente de documentar.')}</p>
+          <p><strong>Impacto:</strong> ${escHtml(candidate.impact || 'Pendiente de revisar.')}</p>
+          <p><strong>Recomendación:</strong> ${escHtml(candidate.recommendation || 'Pendiente de revisar.')}</p>
+        </details>
+        <div class="candidate-actions">
+          <button type="button" class="candidate-link" onclick="addCandidateToBitacora('${jsAttr(candidate.id)}')" ${inBitacora ? 'disabled' : ''}>${inBitacora ? 'Ya en bitácora' : 'Incluir en bitácora'}</button>
+          <button type="button" class="candidate-link" onclick="copyCandidate('${jsAttr(candidate.id)}')">Copiar bloque</button>
+          <button type="button" class="candidate-link" onclick="toggleReviewed('${jsAttr(candidate.id)}')">${isReviewed ? 'Marcar pendiente' : 'Marcar revisada'}</button>
+          ${links}
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+function findCandidate(id) {
+  return allCandidates.find(candidate => candidate.id === id);
+}
+
+async function copyCandidate(id) {
+  const candidate = findCandidate(id);
+  if (!candidate) return;
+  await copyText(candidate.report_hint || candidate.summary || candidate.title);
+  showToast('Bloque copiado para el informe.');
+}
+
+async function addCandidateToBitacora(id) {
+  const candidate = findCandidate(id);
+  if (!candidate) return;
+  try {
+    const response = await fetch(`/api/bitacora/${encodeURIComponent(ORG_NAME)}/candidate-findings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        candidate_id: candidate.id,
+        title: candidate.title,
+        severity_label: candidate.severity_label,
+        category: candidate.category,
+        rule_id: candidate.rule_id,
+        rule_name: candidate.rule_name,
+        summary: candidate.summary,
+        impact: candidate.impact,
+        recommendation: candidate.recommendation,
+        evidence: candidate.evidence || [],
+        report_hint: candidate.report_hint,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || response.statusText);
+    bitacoraCandidateIds.add(candidate.id);
+    renderCandidateList();
+    showToast(data.already_exists ? 'Este candidato ya estaba en la bitácora.' : 'Candidato incluido en CANDIDATOS.md.');
+  } catch (error) {
+    showToast(`No se pudo incluir en bitácora: ${error.message}`, 'error');
+  }
+}
+
+async function copyVisibleMarkdown() {
+  if (!visibleCandidates.length) {
+    showToast('No hay candidatos visibles para copiar.', 'error');
+    return;
+  }
+  await copyText(visibleCandidates.map(candidate => candidate.report_hint || candidate.title).join('\n\n---\n\n'));
+  showToast('Candidatos visibles copiados en Markdown.');
+}
+
+function downloadVisibleMarkdown() {
+  if (!visibleCandidates.length) {
+    showToast('No hay candidatos visibles para exportar.', 'error');
+    return;
+  }
+  const content = visibleCandidates.map(candidate => candidate.report_hint || candidate.title).join('\n\n---\n\n');
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `hallazgos-candidatos-${ORG_NAME.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.md`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function toggleReviewed(id) {
+  const reviewed = getReviewedSet();
+  if (reviewed.has(id)) {
+    reviewed.delete(id);
+  } else {
+    reviewed.add(id);
+  }
+  saveReviewedSet(reviewed);
+  renderCandidateList();
+}
+
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.style.position = 'fixed';
+  area.style.left = '-9999px';
+  document.body.appendChild(area);
+  area.select();
+  document.execCommand('copy');
+  area.remove();
+}
+
+function formatDate(value) {
+  try {
+    return new Date(value).toLocaleString();
+  } catch (_) {
+    return value;
+  }
+}
+
+function escHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escAttr(value) {
+  return escHtml(value);
+}
+
+function jsAttr(value) {
+  return escHtml(String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('candidateToast');
+  toast.textContent = message;
+  toast.style.borderColor = type === 'error' ? 'rgba(239,68,68,.55)' : 'rgba(78,205,196,.45)';
+  toast.style.color = type === 'error' ? '#fecaca' : '#d9fffb';
+  toast.style.opacity = '1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2800);
+}
+</script>
+{% endblock %}

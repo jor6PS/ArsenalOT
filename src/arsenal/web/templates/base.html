@@ -6,9 +6,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ArsenalOT{% endblock %}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css?v=sidebar-20260428-2">
     {% block extra_css %}{% endblock %}
     <!-- Early theme + sidebar state to prevent flash -->
@@ -176,6 +173,10 @@
                         <a href="/pentest/{{ org_url }}/recon/findings" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/findings' %} sidebar-item--active{% endif %}" title="Findings">
                             <span class="sidebar-item-icon">{{ icons.icon('finding', 'svg-icon') }}</span>
                             <span class="sidebar-item-label">Findings</span>
+                        </a>
+                        <a href="/pentest/{{ org_url }}/recon/finding-candidates" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/finding-candidates' %} sidebar-item--active{% endif %}" title="Hallazgos candidatos">
+                            <span class="sidebar-item-icon">{{ icons.icon('finding', 'svg-icon') }}</span>
+                            <span class="sidebar-item-label">Candidatos</span>
                         </a>
                         <a href="/pentest/{{ org_url }}/recon/visibility-diagram" class="sidebar-item sidebar-item--sub{% if path == '/pentest/' ~ org_url ~ '/recon/visibility-diagram' %} sidebar-item--active{% endif %}" title="Diagrama de visibilidad">
                             <span class="sidebar-item-icon">{{ icons.icon('network', 'svg-icon') }}</span>
