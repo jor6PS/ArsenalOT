@@ -304,6 +304,49 @@
     color: #bfdbfe;
   }
 
+  .visibility-priority-selector {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 34px;
+    padding: 0.28rem;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.68);
+  }
+
+  .visibility-priority-title {
+    padding: 0 0.28rem;
+    color: #94a3b8;
+    font-size: 0.72rem;
+    font-weight: 800;
+  }
+
+  .visibility-priority-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    min-height: 28px;
+    padding: 0.34rem 0.52rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: #94a3b8;
+    font-size: 0.74rem;
+    font-weight: 750;
+    cursor: pointer;
+    transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+  }
+
+  .visibility-priority-option input {
+    margin: 0;
+  }
+
+  .visibility-priority-option--active {
+    color: #bfdbfe;
+    background: rgba(59, 130, 246, 0.18);
+    border-color: rgba(96, 165, 250, 0.34);
+  }
+
   .visibility-purdue-toggle {
     display: inline-flex;
     align-items: center;
@@ -578,7 +621,7 @@
   .visibility-links {
     position: absolute;
     inset: 0;
-    z-index: 3;
+    z-index: 0;
     pointer-events: none;
     overflow: visible;
   }
@@ -595,7 +638,7 @@
 
   .visibility-board {
     position: relative;
-    z-index: 1;
+    z-index: 2;
   }
 
   .visibility-system {
@@ -1326,6 +1369,18 @@
           </div>
         </div>
 
+        <div class="visibility-priority-selector" id="visibilityPrioritySelector" title="Define cómo resolver selecciones simultáneas de orígenes y destinos">
+          <span class="visibility-priority-title">Priorizar</span>
+          <label class="visibility-priority-option">
+            <input type="radio" name="visibilityPriority" value="origin" data-visibility-priority checked>
+            <span>Destinos desde or&iacute;genes</span>
+          </label>
+          <label class="visibility-priority-option">
+            <input type="radio" name="visibilityPriority" value="destination" data-visibility-priority>
+            <span>Or&iacute;genes hacia destinos</span>
+          </label>
+        </div>
+
         <div class="visibility-layer-strip" id="layerFilterMenu">
           <span class="visibility-layer-title" id="layerFilterToggle">Capas <strong>0/0</strong></span>
           <div class="visibility-layer-options" id="layerFilters">
@@ -1578,6 +1633,11 @@
     document.querySelectorAll('[data-filter-mode]').forEach((button) => {
       button.classList.toggle('visibility-mode-btn--active', button.dataset.filterMode === currentFilterMode);
     });
+    document.querySelectorAll('[data-visibility-priority]').forEach((input) => {
+      const isActive = input.value === currentFilterMode;
+      input.checked = isActive;
+      input.closest('.visibility-priority-option')?.classList.toggle('visibility-priority-option--active', isActive);
+    });
     const layerToggle = document.getElementById('layerFilterToggle');
     if (layerToggle) {
       layerToggle.classList.toggle('visibility-mode-btn--active', isLayerFilterActive());
@@ -1610,11 +1670,15 @@
   }
 
   function isOriginFilterApplied(data = currentDiagramData) {
-    return currentFilterMode === 'origin' && isOriginFilterActive(data);
+    return currentFilterMode === 'origin'
+      && selectedOriginIds.size > 0
+      && (data?.origins || []).length > 0;
   }
 
   function isDestinationFilterApplied(data = currentDiagramData) {
-    return currentFilterMode === 'destination' && isDestinationFilterActive(data);
+    return currentFilterMode === 'destination'
+      && selectedDestinationIds.size > 0
+      && destinationOptions(data).length > 0;
   }
 
   function isCriticalFilterApplied(data = currentDiagramData) {
@@ -1646,6 +1710,10 @@
     if (!['origin', 'destination', 'critical'].includes(mode)) return;
     currentFilterMode = mode;
     updateModeControls();
+    if (currentDiagramData) {
+      renderOriginFilters(currentDiagramData);
+      renderDestinationFilters(currentDiagramData);
+    }
     updateDiagramSelection();
   }
 
@@ -1693,7 +1761,7 @@
           ${filteredOrigins.length} visible(s)${filteredOrigins.length !== origins.length ? ` de ${origins.length}` : ''}${filteredOrigins.length ? ` · ${selectedVisibleCount} marcado(s)` : ''}
         `
       : `
-          <strong>Sin filtro</strong>
+          <strong>${currentFilterMode === 'origin' ? 'Todos los or&iacute;genes activos' : 'Sin restricci&oacute;n por origen'}</strong>
           <br>
           ${filteredOrigins.length} visible(s)${filteredOrigins.length !== origins.length ? ` de ${origins.length}` : ''}${origins.length ? ` · se incluyen ${origins.length} origen(es)` : ''}
         `;
@@ -1765,7 +1833,7 @@
           ${filteredDestinations.length} visible(s)${filteredDestinations.length !== destinations.length ? ` de ${destinations.length}` : ''}${filteredDestinations.length ? ` · ${selectedVisibleCount} marcado(s)` : ''}
         `
       : `
-          <strong>Sin filtro</strong>
+          <strong>${currentFilterMode === 'destination' ? 'Todos los destinos activos' : 'Sin restricci&oacute;n por destino'}</strong>
           <br>
           ${filteredDestinations.length} visible(s)${filteredDestinations.length !== destinations.length ? ` de ${destinations.length}` : ''}${destinations.length ? ` · se incluyen ${destinations.length} destino(s)` : ''}
         `;
@@ -2981,6 +3049,44 @@
     return simplified;
   }
 
+  function fallbackOrthogonalRoute(start, end, descriptor, systemRects, width, height) {
+    const margin = 34;
+    const minTop = Math.min(...systemRects.map((rect) => rect.top));
+    const maxBottom = Math.max(...systemRects.map((rect) => rect.bottom));
+    const minLeft = Math.min(...systemRects.map((rect) => rect.left));
+    const maxRight = Math.max(...systemRects.map((rect) => rect.right));
+
+    if (purdueModeEnabled) {
+      const topLane = Math.max(18, Math.round(minTop - margin));
+      const bottomLane = Math.min(height - 18, Math.round(maxBottom + margin));
+      const useBottom = Math.abs(start.y - bottomLane) + Math.abs(end.y - bottomLane)
+        <= Math.abs(start.y - topLane) + Math.abs(end.y - topLane);
+      const laneY = useBottom ? bottomLane : topLane;
+      return normalizePath([
+        start,
+        { x: start.x, y: laneY },
+        { x: end.x, y: laneY },
+        end,
+      ]);
+    }
+
+    const leftLane = Math.max(18, Math.round(minLeft - margin));
+    const rightLane = Math.min(width - 18, Math.round(maxRight + margin));
+    const sourcePrefersRight = descriptor?.sourceSide !== 'left';
+    const targetPrefersRight = descriptor?.targetSide !== 'left';
+    const useRight = sourcePrefersRight || targetPrefersRight
+      ? Math.abs(start.x - rightLane) + Math.abs(end.x - rightLane)
+        <= Math.abs(start.x - leftLane) + Math.abs(end.x - leftLane) + 160
+      : false;
+    const laneX = useRight ? rightLane : leftLane;
+    return normalizePath([
+      start,
+      { x: laneX, y: start.y },
+      { x: laneX, y: end.y },
+      end,
+    ]);
+  }
+
   function drawVisibilityLinks(selectedLinks) {
     const diagram = document.getElementById('visibilityDiagram');
     const svg = document.getElementById('visibilityLinks');
@@ -3099,7 +3205,7 @@
         return rightWeight - leftWeight;
       })
       .forEach((descriptor) => {
-      const outerPath = routeOrthogonalGrid(
+      const routedOuterPath = routeOrthogonalGrid(
         descriptor.sourcePoints.exit,
         descriptor.targetPoints.exit,
         routingGrid,
@@ -3107,6 +3213,16 @@
         usedSegments,
         traversableCache,
       );
+      const outerPath = routedOuterPath.length
+        ? routedOuterPath
+        : fallbackOrthogonalRoute(
+          descriptor.sourcePoints.exit,
+          descriptor.targetPoints.exit,
+          descriptor,
+          systemRects,
+          width,
+          height,
+        );
       if (!outerPath.length) return;
       const simplifiedOuterPath = simplifyOrthogonalPath(outerPath, systemRects, traversableCache);
       markRouteSegments(simplifiedOuterPath, usedSegments);
@@ -3146,6 +3262,18 @@
     return true;
   }
 
+  function relationMatchesPrioritySelection(relation, layerFilterApplied, criticalFilterApplied, criticalIps) {
+    if (criticalFilterApplied) {
+      return relationMatchesCurrentSelection(relation, false, false, true, layerFilterApplied, criticalIps);
+    }
+
+    if (currentFilterMode === 'destination') {
+      return relationMatchesCurrentSelection(relation, false, isDestinationFilterApplied(), false, layerFilterApplied, null);
+    }
+
+    return relationMatchesCurrentSelection(relation, isOriginFilterApplied(), false, false, layerFilterApplied, null);
+  }
+
   function relationLayerSlice(relation, layerFilterApplied = isLayerFilterApplied()) {
     if (!layerFilterApplied) {
       return {
@@ -3172,7 +3300,7 @@
 
   function destinationMetricsForCurrentState() {
     const metrics = new Map();
-    if (!currentDiagramData || !isOriginFilterApplied()) return metrics;
+    if (!currentDiagramData || currentFilterMode !== 'origin' || selectedOriginIds.size === 0) return metrics;
 
     const networksById = networkMap();
     const layerFilterApplied = isLayerFilterApplied();
@@ -3211,14 +3339,12 @@
 
   function selectedLinksForCurrentState() {
     const links = new Map();
-    const originFilterApplied = isOriginFilterApplied();
-    const destinationFilterApplied = isDestinationFilterApplied();
     const criticalFilterApplied = isCriticalFilterApplied();
     const layerFilterApplied = isLayerFilterApplied();
     const criticalIps = criticalFilterApplied ? selectedCriticalIpSet() : null;
 
     (currentDiagramData?.relations || []).forEach((relation) => {
-      if (!relationMatchesCurrentSelection(relation, originFilterApplied, destinationFilterApplied, criticalFilterApplied, layerFilterApplied, criticalIps)) return;
+      if (!relationMatchesPrioritySelection(relation, layerFilterApplied, criticalFilterApplied, criticalIps)) return;
       const relationSlice = relationLayerSlice(relation, layerFilterApplied);
       const matchedTargetIps = criticalFilterApplied
         ? (relationSlice.targetIps || []).filter((targetIp) => criticalIps.has(targetIp))
@@ -3361,15 +3487,6 @@
           if (origin?.ip) contextEntry.sourceOriginIps.add(origin.ip);
           if (physicalOriginLabel) contextEntry.selectedPhysicalOrigins.add(physicalOriginLabel);
         });
-      });
-    }
-
-    if (destinationFilterApplied) {
-      Array.from(selectedDestinationIds).forEach((networkId) => {
-        targetNetworkIds.add(networkId);
-        activeNetworkIds.add(networkId);
-        const systemId = renderedSystemIdForNetwork(networkId, networksById);
-        if (systemId) targetSystemIds.add(systemId);
       });
     }
 
@@ -3580,7 +3697,7 @@
       }
 
       if (!hasInitializedLayerSelection) {
-        selectedLayerIds = new Set(Array.from(allLayerIds).filter((layerId) => layerId !== 'l2'));
+        selectedLayerIds = new Set(allLayerIds);
         hasInitializedLayerSelection = true;
       } else {
         selectedLayerIds = reconcileSelectedIds(selectedLayerIds, allLayerIds, previousLayerTotal);
@@ -3745,7 +3862,7 @@
 
       .visibility-board {
         position: relative;
-        z-index: 1;
+        z-index: 2;
       }
 
       .visibility-system {
@@ -4619,6 +4736,12 @@
     document.getElementById('clearCriticalSelectionBtn').addEventListener('click', clearCriticalSelection);
     document.getElementById('selectAllLayersBtn').addEventListener('click', selectAllLayers);
     document.getElementById('clearLayerSelectionBtn').addEventListener('click', clearLayerSelection);
+    document.querySelectorAll('[data-visibility-priority]').forEach((input) => {
+      input.addEventListener('change', (event) => {
+        if (!event.target.checked) return;
+        setFilterMode(event.target.value);
+      });
+    });
     document.getElementById('purdueToggleBtn').addEventListener('click', togglePurdueMode);
     document.getElementById('refreshVisibilityBtn').addEventListener('click', loadAccessVectorDiagram);
     document.getElementById('exportVisibilityPngBtn').addEventListener('click', exportVisibilityPng);

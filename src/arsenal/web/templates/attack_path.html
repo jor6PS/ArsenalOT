@@ -83,6 +83,49 @@
     margin-bottom: 0.85rem;
   }
 
+  .attack-layer-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.48rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.85rem;
+    padding: 0.55rem 0.68rem;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.42);
+  }
+
+  .attack-layer-filter-title {
+    color: #bfdbfe;
+    font-size: 0.78rem;
+    font-weight: 900;
+  }
+
+  .attack-layer-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+    padding: 0.42rem 0.58rem;
+    border: 1px solid rgba(59, 130, 246, 0.22);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.72);
+    color: #94a3b8;
+    font-size: 0.76rem;
+    font-weight: 750;
+    cursor: pointer;
+  }
+
+  .attack-layer-option input {
+    margin: 0;
+    accent-color: #3b82f6;
+  }
+
+  .attack-layer-option--selected {
+    border-color: rgba(59, 130, 246, 0.58);
+    background: rgba(30, 64, 175, 0.26);
+    color: #bfdbfe;
+  }
+
   .attack-stat {
     display: inline-flex;
     align-items: center;
@@ -420,6 +463,10 @@
   <section class="attack-path-panel">
     <div class="attack-candidates" id="attackCandidates"></div>
     <div class="attack-path-stats" id="attackPathStats"></div>
+    <div class="attack-layer-filter" id="attackLayerFilter">
+      <span class="attack-layer-filter-title">Capas de visibilidad</span>
+      <span class="attack-empty">Cargando capas...</span>
+    </div>
     <div class="attack-canvas" id="attackCanvas">
       <svg class="attack-links" id="attackLinks" aria-hidden="true"></svg>
       <div class="attack-empty">Cargando assets disponibles...</div>
@@ -430,6 +477,8 @@
 <script>
   const ORG_NAME = "{{ org_name }}";
   let attackPathData = null;
+  let selectedLayerIds = new Set();
+  let hasInitializedLayers = false;
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -456,6 +505,64 @@
     datalist.innerHTML = options
       .map((asset) => `<option value="${escapeHtml(asset.ip)}" label="${escapeHtml(asset.label || asset.ip)}"></option>`)
       .join('');
+  }
+
+  function selectedLayersParam() {
+    const layers = attackPathData?.layers || [];
+    if (!layers.length) return '';
+    if (selectedLayerIds.size >= layers.length) return 'all';
+    return Array.from(selectedLayerIds).sort().join(',');
+  }
+
+  function renderLayerFilter(layers = []) {
+    const container = document.getElementById('attackLayerFilter');
+    if (!container) return;
+
+    if (!layers.length) {
+      container.innerHTML = '<span class="attack-layer-filter-title">Capas de visibilidad</span><span class="attack-empty">Sin capas disponibles</span>';
+      return;
+    }
+
+    if (!hasInitializedLayers) {
+      selectedLayerIds = new Set(
+        layers
+          .filter((layer) => layer.default_selected !== false && layer.id !== 'l2')
+          .map((layer) => layer.id)
+      );
+      if (!selectedLayerIds.size) selectedLayerIds = new Set(layers.map((layer) => layer.id));
+      hasInitializedLayers = true;
+    } else {
+      const availableIds = new Set(layers.map((layer) => layer.id));
+      selectedLayerIds = new Set(Array.from(selectedLayerIds).filter((layerId) => availableIds.has(layerId)));
+      if (!selectedLayerIds.size) selectedLayerIds = new Set(layers.filter((layer) => layer.id !== 'l2').map((layer) => layer.id));
+    }
+
+    container.innerHTML = `
+      <span class="attack-layer-filter-title">Capas de visibilidad</span>
+      ${layers.map((layer) => `
+        <label class="attack-layer-option ${selectedLayerIds.has(layer.id) ? 'attack-layer-option--selected' : ''}" title="${escapeHtml(layer.description || '')}">
+          <input type="checkbox" value="${escapeHtml(layer.id)}" data-attack-layer ${selectedLayerIds.has(layer.id) ? 'checked' : ''}>
+          <span>${escapeHtml(layer.label || layer.id)}</span>
+        </label>
+      `).join('')}
+      <button class="btn btn-secondary btn-sm" type="button" id="selectAllAttackLayersBtn">Todas</button>
+    `;
+
+    container.querySelectorAll('[data-attack-layer]').forEach((input) => {
+      input.addEventListener('change', async (event) => {
+        const layerId = event.target.value;
+        if (event.target.checked) selectedLayerIds.add(layerId);
+        else selectedLayerIds.delete(layerId);
+        renderLayerFilter(layers);
+        await loadAttackPath(document.getElementById('targetIpInput').value.trim());
+      });
+    });
+
+    document.getElementById('selectAllAttackLayersBtn')?.addEventListener('click', async () => {
+      selectedLayerIds = new Set(layers.map((layer) => layer.id));
+      renderLayerFilter(layers);
+      await loadAttackPath(document.getElementById('targetIpInput').value.trim());
+    });
   }
 
   function renderStats(data) {
@@ -656,6 +763,8 @@
   async function loadAttackPath(targetIp = '') {
     const params = new URLSearchParams({ organization: ORG_NAME });
     if (targetIp) params.set('target_ip', targetIp);
+    const layerParam = selectedLayersParam();
+    if (layerParam) params.set('layers', layerParam);
     const response = await fetch(`/api/attack-path?${params.toString()}`);
     if (!response.ok) {
       const detail = await response.text();
@@ -663,6 +772,7 @@
     }
     attackPathData = await response.json();
     populateAssets(attackPathData.asset_options || []);
+    renderLayerFilter(attackPathData.layers || []);
     renderStats(attackPathData);
     renderDiagram(attackPathData);
   }
@@ -674,6 +784,8 @@
     button.textContent = 'Buscando...';
     try {
       const params = new URLSearchParams({ organization: ORG_NAME, min_hops: '2', limit: '80' });
+      const layerParam = selectedLayersParam();
+      if (layerParam) params.set('layers', layerParam);
       const response = await fetch(`/api/attack-path/candidates?${params.toString()}`);
       if (!response.ok) {
         const detail = await response.text();

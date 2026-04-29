@@ -192,6 +192,7 @@ def _seed_scans(storage, organization: str) -> List[int]:
             "hosts": [
                 host("10.10.10.10", "DC-CORP-01", "Microsoft", "Windows Server 2019", [svc(53, "domain", "Microsoft DNS", "10.0"), svc(88, "kerberos", "Microsoft Kerberos"), svc(389, "ldap", "Active Directory LDAP"), svc(445, "microsoft-ds", "Windows SMB", "SMBv1 compatible")]),
                 host("10.10.10.25", "FILE-BACKUP-01", "Dell", "Windows Server 2016", [svc(445, "microsoft-ds", "Windows SMB"), svc(3389, "ms-wbt-server", "RDP", "NLA disabled")]),
+                host("10.10.10.55", "CORP-LAPTOP", "Lenovo", "Windows 11", [], "host_discovery"),
                 host("10.20.10.25", "JUMPBOX-OT", "VMware", "Windows Server 2019", [svc(3389, "ms-wbt-server", "RDP"), svc(5985, "winrm", "Microsoft HTTPAPI")]),
                 host("10.20.10.40", "WSUS-OT-DMZ", "Microsoft", "Windows Server 2016", [svc(8530, "http", "Microsoft WSUS"), svc(445, "microsoft-ds", "Windows SMB")]),
                 host("10.30.20.15", "HMI-MEZCLADO-01", "Siemens", "Windows 10 IoT", [svc(80, "http", "WinCC Runtime", "7.5"), svc(5900, "vnc", "RealVNC", "5.3")]),

@@ -1643,7 +1643,63 @@ def _network_for_asset_ip(target_ip: str, networks: list) -> Optional[dict]:
     return matches[0][1]
 
 
-def _origin_graph_for_attack_path(diagram: dict, target_ip: str, target_network: dict) -> dict:
+def _normalize_attack_path_layers(layer_values: Optional[str], available_layers: list) -> Optional[set]:
+    available_ids = {
+        str(layer.get("id"))
+        for layer in available_layers
+        if layer.get("id")
+    }
+    if not layer_values:
+        return {
+            layer_id for layer_id in available_ids
+            if _DIAGRAM_LAYER_META.get(layer_id, {}).get("sort_order", 999) >= 1
+        } or available_ids
+
+    raw_values = {
+        str(value or "").strip().lower()
+        for value in str(layer_values).split(",")
+        if str(value or "").strip()
+    }
+    if not raw_values or "all" in raw_values or "*" in raw_values:
+        return None
+
+    selected = {layer_id for layer_id in raw_values if layer_id in available_ids}
+    return selected or set()
+
+
+def _filter_attack_path_relation_layers(relation: dict, selected_layers: Optional[set]) -> Optional[dict]:
+    if selected_layers is None:
+        return relation
+
+    matched_layers = [
+        layer_key for layer_key in relation.get("layer_keys") or []
+        if layer_key in selected_layers
+    ]
+    if not matched_layers:
+        return None
+
+    target_ips = set()
+    scan_ids = set()
+    layers = relation.get("layers") or {}
+    for layer_key in matched_layers:
+        layer_entry = layers.get(layer_key) or {}
+        target_ips.update(layer_entry.get("target_ips") or [])
+        scan_ids.update(layer_entry.get("scan_ids") or [])
+
+    if not target_ips:
+        return None
+
+    filtered = dict(relation)
+    filtered["layer_keys"] = matched_layers
+    filtered["target_ips"] = sorted(target_ips, key=_diagram_ip_sort_key)
+    filtered["scan_ids"] = sorted(scan_ids)
+    filtered["visible_host_count"] = len(target_ips)
+    filtered["scan_count"] = len(scan_ids)
+    return filtered
+
+
+def _origin_graph_for_attack_path(diagram: dict, target_ip: str, target_network: dict,
+                                  selected_layers: Optional[set] = None) -> dict:
     origins = {origin["id"]: origin for origin in diagram.get("origins", [])}
     origin_by_ip = {
         origin["ip"]: origin
@@ -1654,7 +1710,10 @@ def _origin_graph_for_attack_path(diagram: dict, target_ip: str, target_network:
     direct_relations = {}
     origin_edges = {}
 
-    for relation in diagram.get("relations", []):
+    for raw_relation in diagram.get("relations", []):
+        relation = _filter_attack_path_relation_layers(raw_relation, selected_layers)
+        if not relation:
+            continue
         source_id = relation.get("source_origin_id")
         target_ips = set(relation.get("target_ips") or [])
         if not source_id or source_id not in origins:
@@ -1790,17 +1849,26 @@ def _origin_graph_for_attack_path(diagram: dict, target_ip: str, target_network:
 
 
 @router.get("/api/attack-path")
-async def get_attack_path(organization: str, target_ip: Optional[str] = None):
+async def get_attack_path(organization: str, target_ip: Optional[str] = None, layers: Optional[str] = None):
     """Devuelve el grafo de caminos de ataque hacia un asset objetivo."""
     try:
         org = organization.upper()
         diagram = await get_visibility_diagram(org)
+        selected_layers = _normalize_attack_path_layers(layers, diagram.get("layers", []))
         asset_options = _attack_path_asset_options(diagram, org)
+        layers_payload = []
+        for layer in diagram.get("layers", []):
+            layer_id = layer.get("id")
+            item = dict(layer)
+            item["selected"] = selected_layers is None or layer_id in selected_layers
+            item["default_selected"] = _DIAGRAM_LAYER_META.get(layer_id, {}).get("sort_order", 999) >= 1
+            layers_payload.append(item)
         selected_ip = str(target_ip or "").strip()
         if not selected_ip:
             return {
                 "organization": org,
                 "asset_options": asset_options,
+                "layers": layers_payload,
                 "target": None,
                 "target_network": None,
                 "columns": [],
@@ -1826,6 +1894,7 @@ async def get_attack_path(organization: str, target_ip: Optional[str] = None):
             return {
                 "organization": org,
                 "asset_options": asset_options,
+                "layers": layers_payload,
                 "target": {
                     "ip": selected_ip,
                     "label": selected_option["label"] if selected_option else selected_ip,
@@ -1845,10 +1914,11 @@ async def get_attack_path(organization: str, target_ip: Optional[str] = None):
                 "message": "No se ha encontrado una red asociada a la IP objetivo.",
             }
 
-        graph = _origin_graph_for_attack_path(diagram, selected_ip, target_network)
+        graph = _origin_graph_for_attack_path(diagram, selected_ip, target_network, selected_layers)
         return {
             "organization": org,
             "asset_options": asset_options,
+            "layers": layers_payload,
             "target": {
                 "ip": selected_ip,
                 "label": selected_option["label"] if selected_option else selected_ip,
@@ -1874,16 +1944,17 @@ async def get_attack_path(organization: str, target_ip: Optional[str] = None):
 
 
 @router.get("/api/attack-path/candidates")
-async def get_attack_path_candidates(organization: str, min_hops: int = 2, limit: int = 50):
+async def get_attack_path_candidates(organization: str, min_hops: int = 2, limit: int = 50,
+                                     layers: Optional[str] = None):
     """Devuelve assets que generan attack paths con al menos min_hops saltos."""
     try:
         org = organization.upper()
         min_hops = max(2, int(min_hops or 2))
         limit = max(1, min(200, int(limit or 50)))
-        base = await get_attack_path(org)
+        base = await get_attack_path(org, layers=layers)
         candidates = []
         for asset in base.get("asset_options", []):
-            data = await get_attack_path(org, asset["ip"])
+            data = await get_attack_path(org, asset["ip"], layers=layers)
             stats = data.get("stats") or {}
             if (stats.get("max_hops") or 0) >= min_hops:
                 candidates.append({
