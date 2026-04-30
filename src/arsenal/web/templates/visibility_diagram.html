@@ -643,6 +643,7 @@
 
   .visibility-system {
     position: absolute;
+    box-sizing: border-box;
     border: 2px dashed rgba(148, 163, 184, 0.24);
     border-radius: 18px;
     background: transparent;
@@ -1412,6 +1413,12 @@
   const VISIBILITY_URL_PARAMS = new URLSearchParams(window.location.search);
   const VISIBILITY_REQUESTED_ORIGIN_IP = VISIBILITY_URL_PARAMS.get('origin_ip') || '';
   const VISIBILITY_REQUESTED_ORIGIN_ID = VISIBILITY_URL_PARAMS.get('origin_id') || '';
+  const VISIBILITY_REQUESTED_LAYER_IDS = new Set(
+    (VISIBILITY_URL_PARAMS.get('layers') || '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
   const VISIBILITY_CAPTURE_MODE = VISIBILITY_URL_PARAMS.get('capture') === '1';
   const VISIBILITY_FORCED_THEME = VISIBILITY_URL_PARAMS.get('theme') || '';
   if (VISIBILITY_FORCED_THEME === 'light' || VISIBILITY_FORCED_THEME === 'dark') {
@@ -1514,6 +1521,25 @@
 
   function layerOptions(data) {
     return [...(data?.layers || [])].sort((left, right) => (left.sort_order || 0) - (right.sort_order || 0));
+  }
+
+  function l3PlusLayerIds(data) {
+    const layers = layerOptions(data);
+    const l3Layer = layers.find((layer) => layer.id === 'l3');
+    const l3SortOrder = Number.isFinite(Number(l3Layer?.sort_order)) ? Number(l3Layer.sort_order) : 1;
+    return new Set(layers
+      .filter((layer) => {
+        if (layer.id === 'l2') return false;
+        const sortOrder = Number(layer.sort_order);
+        return Number.isFinite(sortOrder) ? sortOrder >= l3SortOrder : true;
+      })
+      .map((layer) => layer.id));
+  }
+
+  function defaultLayerIds(data, availableIds) {
+    const requestedIds = Array.from(VISIBILITY_REQUESTED_LAYER_IDS).filter((layerId) => availableIds.has(layerId));
+    if (requestedIds.length) return new Set(requestedIds);
+    return l3PlusLayerIds(data);
   }
 
   function sortIpValues(values) {
@@ -2438,6 +2464,70 @@
         </div>
       </article>
     `;
+  }
+
+  function stabilizeRenderedLayout() {
+    const board = document.querySelector('#visibilityDiagram .visibility-board');
+    if (!board || !currentLayout?.positions) return false;
+
+    const entries = Array.from(board.querySelectorAll('[data-system-id]'))
+      .map((element) => {
+        const position = currentLayout.positions.get(element.dataset.systemId);
+        if (!position) return null;
+        return {
+          element,
+          id: element.dataset.systemId,
+          columnIndex: Number.isFinite(position.columnIndex) ? position.columnIndex : 0,
+          top: position.top || 0,
+          height: Math.max(Math.ceil(element.offsetHeight), Math.ceil(position.height || 0), 1),
+        };
+      })
+      .filter(Boolean);
+
+    if (!entries.length) return false;
+
+    const columns = new Map();
+    entries.forEach((entry) => {
+      if (!columns.has(entry.columnIndex)) columns.set(entry.columnIndex, []);
+      columns.get(entry.columnIndex).push(entry);
+    });
+
+    const verticalMargin = purdueModeEnabled ? 54 : Math.max(44, Math.min(72, Math.min(...entries.map((entry) => entry.top)) || 54));
+    const minGap = purdueModeEnabled ? 110 : 34;
+    const requiredHeight = Math.max(
+      currentLayout.height || 0,
+      ...Array.from(columns.values()).map((column) => {
+        const totalHeight = column.reduce((sum, entry) => sum + entry.height, 0);
+        return totalHeight + (Math.max(0, column.length - 1) * minGap) + (verticalMargin * 2);
+      }),
+    );
+
+    let changed = Math.abs((currentLayout.height || 0) - requiredHeight) > 1;
+    currentLayout.height = requiredHeight;
+    board.style.height = `${requiredHeight}px`;
+
+    columns.forEach((column) => {
+      column.sort((left, right) => left.top - right.top);
+      const totalHeight = column.reduce((sum, entry) => sum + entry.height, 0);
+      const availableHeight = Math.max(0, requiredHeight - (verticalMargin * 2));
+      const gap = column.length > 1
+        ? Math.max(minGap, Math.floor((availableHeight - totalHeight) / (column.length - 1)))
+        : 0;
+      const contentHeight = totalHeight + (gap * Math.max(0, column.length - 1));
+      let top = verticalMargin + Math.max(0, Math.round((availableHeight - contentHeight) / 2));
+
+      column.forEach((entry) => {
+        const position = currentLayout.positions.get(entry.id);
+        const roundedTop = Math.round(top);
+        if (Math.abs((position.top || 0) - roundedTop) > 1) changed = true;
+        position.top = roundedTop;
+        position.height = entry.height;
+        entry.element.style.top = `${roundedTop}px`;
+        top += entry.height + gap;
+      });
+    });
+
+    return changed;
   }
 
   function buildResultsOverviewUrl(origin, network) {
@@ -3604,6 +3694,7 @@
       element.classList.toggle('visibility-system--target', hasFocusedSelection && targetSystemIds.has(systemId));
     });
 
+    stabilizeRenderedLayout();
     requestAnimationFrame(refreshLinkPositions);
   }
 
@@ -3710,6 +3801,8 @@
       const allCriticalIds = new Set(criticalOptions(currentDiagramData).map((criticalHost) => criticalHost.id));
       const allLayerIds = new Set(layerOptions(currentDiagramData).map((layer) => layer.id));
       const requestedOriginId = requestedOriginFilterId(allOriginIds);
+      const initialLayerIds = defaultLayerIds(currentDiagramData, allLayerIds);
+      const forceRequestedLayerSelection = VISIBILITY_CAPTURE_MODE || VISIBILITY_REQUESTED_LAYER_IDS.size > 0;
 
       if (requestedOriginId) {
         selectedOriginIds = new Set([requestedOriginId]);
@@ -3740,8 +3833,8 @@
         selectedCriticalIds = reconcileSelectedIds(selectedCriticalIds, allCriticalIds, previousCriticalTotal);
       }
 
-      if (!hasInitializedLayerSelection) {
-        selectedLayerIds = new Set(allLayerIds);
+      if (forceRequestedLayerSelection || !hasInitializedLayerSelection) {
+        selectedLayerIds = initialLayerIds;
         hasInitializedLayerSelection = true;
       } else {
         selectedLayerIds = reconcileSelectedIds(selectedLayerIds, allLayerIds, previousLayerTotal);

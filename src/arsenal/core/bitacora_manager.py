@@ -571,6 +571,7 @@ class BitacoraManager:
         'web':     'Web (L7)',
         'ioxid':   'IOXID (L7)',
     }
+    _L3_PLUS_TECHNIQUES = {'ping', 'ports', 'web', 'ioxid'}
 
     @staticmethod
     def _method_to_technique(discovery_method: Optional[str], has_mac: bool,
@@ -1012,17 +1013,17 @@ class BitacoraManager:
                     (scan['id'],)
                 ).fetchall():
                     ip = h['ip_address']
-                    all_hosts.setdefault(ip, {
-                        'hostname': h['hostname'],
-                        'mac_address': h['mac_address'],
-                        'vendor': h['vendor'],
-                    })
                     tech = self._method_to_technique(
                         h['discovery_method'],
                         bool(h['mac_address']),
                         has_port=h['port'] is not None,
                     )
-                    if tech:
+                    if tech and tech in self._L3_PLUS_TECHNIQUES:
+                        all_hosts.setdefault(ip, {
+                            'hostname': h['hostname'],
+                            'mac_address': h['mac_address'],
+                            'vendor': h['vendor'],
+                        })
                         host_techniques.setdefault(ip, set()).add(tech)
         finally:
             conn.close()
@@ -1157,6 +1158,7 @@ class BitacoraManager:
         base_url = os.environ.get("ARSENALOT_WEB_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
         params = _urlencode({
             "origin_ip": origin_ip,
+            "layers": "l3,l7",
             "capture": "1",
             "theme": "light",
         })
@@ -1171,6 +1173,7 @@ class BitacoraManager:
                 from selenium.webdriver.firefox.service import Service as FirefoxService
                 from selenium.webdriver.chrome.options import Options as ChromeOptions
                 from selenium.webdriver.chrome.service import Service as ChromeService
+                from selenium.webdriver.common.by import By
                 from selenium.webdriver.support.ui import WebDriverWait
             except Exception as exc:
                 raise RuntimeError(f"Selenium no está disponible: {exc}") from exc
@@ -1222,19 +1225,37 @@ class BitacoraManager:
             WebDriverWait(driver, 45).until(
                 lambda current: current.execute_script("return window.ARSENAL_VISIBILITY_READY === true;")
             )
-            data_url = driver.execute_async_script(
-                """
-                const done = arguments[arguments.length - 1];
-                Promise.resolve(window.exportVisibilityPngDataUrl())
-                  .then((value) => done(value))
-                  .catch((error) => done({ error: String(error && error.message ? error.message : error) }));
-                """
-            )
-            if isinstance(data_url, dict) and data_url.get("error"):
-                raise RuntimeError(data_url["error"])
-            if not isinstance(data_url, str) or not data_url.startswith("data:image/png;base64,"):
-                raise RuntimeError("El frontend no devolvió un PNG válido")
-            png_bytes = _base64.b64decode(data_url.split(",", 1)[1])
+
+            try:
+                driver.execute_async_script(
+                    """
+                    const done = arguments[arguments.length - 1];
+                    requestAnimationFrame(() => {
+                      requestAnimationFrame(() => {
+                        if (typeof refreshLinkPositions === 'function') refreshLinkPositions();
+                        done(true);
+                      });
+                    });
+                    """
+                )
+                element = driver.find_element(By.ID, "visibilityDiagram")
+                png_bytes = element.screenshot_as_png
+                if not png_bytes or len(png_bytes) < 1024:
+                    raise RuntimeError("La captura DOM del diagrama está vacía")
+            except Exception:
+                data_url = driver.execute_async_script(
+                    """
+                    const done = arguments[arguments.length - 1];
+                    Promise.resolve(window.exportVisibilityPngDataUrl())
+                      .then((value) => done(value))
+                      .catch((error) => done({ error: String(error && error.message ? error.message : error) }));
+                    """
+                )
+                if isinstance(data_url, dict) and data_url.get("error"):
+                    raise RuntimeError(data_url["error"])
+                if not isinstance(data_url, str) or not data_url.startswith("data:image/png;base64,"):
+                    raise RuntimeError("El frontend no devolvió un PNG válido")
+                png_bytes = _base64.b64decode(data_url.split(",", 1)[1])
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(png_bytes)
             _open_permissions(output_path)
