@@ -136,6 +136,98 @@ def parse_specific_web_targets(target_range: str):
             targets.append({"ip_address": host, "port": port, "protocol": "tcp"})
     return targets
 
+
+def write_command_evidence(evidence_file: Path, command: list, stdout: str = "",
+                           stderr: str = "", returncode: int = None,
+                           started_at: datetime = None, completed_at: datetime = None):
+    """Guarda stdout/stderr reales de una herramienta dentro del directorio evidence."""
+    try:
+        completed_at = completed_at or datetime.now()
+        lines = [
+            f"started_at: {(started_at or completed_at).isoformat()}",
+            f"completed_at: {completed_at.isoformat()}",
+            f"command: {' '.join(command)}",
+        ]
+        if returncode is not None:
+            lines.append(f"returncode: {returncode}")
+        lines.extend(["", "stdout:", stdout or ""])
+        lines.extend(["", "stderr:", stderr or ""])
+        evidence_file.parent.mkdir(parents=True, exist_ok=True)
+        evidence_file.write_text("\n".join(lines), encoding="utf-8", errors="replace")
+    except Exception as e:
+        print(f"⚠️ No se pudo guardar evidencia en {evidence_file}: {e}")
+
+
+def force_nmap_xml_output(command_line: str, xml_path: Path) -> list:
+    """Asegura que un comando Nmap personalizado escriba el XML esperado en evidence."""
+    args = shlex.split(command_line)
+    forced_args = []
+    has_xml_output = False
+    xml_prefix = str(xml_path.with_suffix(""))
+    i = 0
+
+    while i < len(args):
+        arg = args[i]
+        if arg == "-oX":
+            forced_args.extend(["-oX", str(xml_path)])
+            has_xml_output = True
+            i += 2
+            continue
+        if arg.startswith("-oX") and arg != "-oX":
+            forced_args.extend(["-oX", str(xml_path)])
+            has_xml_output = True
+            i += 1
+            continue
+        if arg == "-oA":
+            forced_args.extend(["-oA", xml_prefix])
+            has_xml_output = True
+            i += 2
+            continue
+        if arg.startswith("-oA") and arg != "-oA":
+            forced_args.extend(["-oA", xml_prefix])
+            has_xml_output = True
+            i += 1
+            continue
+        forced_args.append(arg)
+        i += 1
+
+    if not has_xml_output:
+        forced_args.extend(["-oX", str(xml_path)])
+    return forced_args
+
+
+def run_command_with_evidence(cmd_args: list, evidence_file: Path, register_process):
+    started_at = datetime.now()
+    try:
+        process = subprocess.Popen(
+            cmd_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        register_process(process)
+        stdout, stderr = process.communicate()
+        write_command_evidence(
+            evidence_file,
+            cmd_args,
+            stdout=stdout,
+            stderr=stderr,
+            returncode=process.returncode,
+            started_at=started_at,
+            completed_at=datetime.now(),
+        )
+        return process, stdout, stderr
+    except Exception as e:
+        write_command_evidence(
+            evidence_file,
+            cmd_args,
+            stderr=str(e),
+            returncode=None,
+            started_at=started_at,
+            completed_at=datetime.now(),
+        )
+        raise
+
 @router.get("/api/scans/list")
 async def get_scans_list(organization: Optional[str] = None, location: Optional[str] = None):
     """Obtiene lista de escaneos para dropdowns."""
@@ -379,6 +471,11 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
         img_dir = evidence_dir / "img"
         source_dir = evidence_dir / "source"
         nmap_xml_path = evidence_dir / "nmap_scan.xml"
+        nmap_log_path = evidence_dir / "nmap_scan.log"
+        ping_xml_path = evidence_dir / "ping_scan.xml"
+        ping_log_path = evidence_dir / "ping_scan.log"
+        arp_evidence_path = evidence_dir / "arp_scan.txt"
+        host_discovery_nmap_log_path = evidence_dir / "host_discovery_nmap_ping.log"
         
         # Crear directorios necesarios
         evidence_dir.mkdir(parents=True, exist_ok=True)
@@ -443,15 +540,11 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     # Execute custom command
                     cmd_args = shlex.split(custom_cmd)
                     
-                    # Usar Popen para registrar el proceso antes de que bloquee
-                    process = subprocess.Popen(
+                    process, stdout, stderr = run_command_with_evidence(
                         cmd_args,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True
+                        arp_evidence_path,
+                        register_process,
                     )
-                    register_process(process)
-                    stdout, stderr = process.communicate()
                     
                     # Extract IPs (+ MAC/vendor when present) using HostDiscovery utility
                     host_discovery = HostDiscovery(interface=config.interface)
@@ -465,7 +558,9 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                     discovered_ips = host_discovery.discover_hosts(
                         config.target_range, 
                         process_callback=register_process,
-                        is_cancelled_callback=is_scan_cancelled
+                        is_cancelled_callback=is_scan_cancelled,
+                        arp_evidence_file=str(arp_evidence_path),
+                        icmp_evidence_file=str(host_discovery_nmap_log_path),
                     )
                 
                 if is_scan_cancelled():
@@ -511,23 +606,18 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
             target_str = ' '.join(current_targets)
             
             try:
-                # Archivo temporal para resultados de Ping
-                ping_xml_path = evidence_dir / "ping_scan.xml"
-                
                 # Validar comando personalizado
                 custom_cmd = config.custom_ping_command
                 placeholder = "El comando aparecerá aquí"
                 
                 if custom_cmd and custom_cmd.strip() and placeholder not in custom_cmd:
                     print(f"[Scan {scan_id}] 📡 Fase 2: Ejecutando comando personalizado: {custom_cmd}")
-                    cmd_str = custom_cmd
-                    if '-oX' not in cmd_str:
-                        cmd_str += f" -oX {shlex.quote(str(ping_xml_path))}"
-                    
-                    cmd_args = shlex.split(cmd_str)
-                    process = subprocess.Popen(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                    register_process(process)
-                    stdout, stderr = process.communicate()
+                    cmd_args = force_nmap_xml_output(custom_cmd, ping_xml_path)
+                    process, stdout, stderr = run_command_with_evidence(
+                        cmd_args,
+                        ping_log_path,
+                        register_process,
+                    )
                     
                     if process.returncode == 0 or (os.path.exists(ping_xml_path) and os.path.getsize(ping_xml_path) > 0):
                         xml_file = str(ping_xml_path)
@@ -542,7 +632,8 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         ot_ports=False, # No puertos en ping scan
                         it_ports=False,
                         output_file=str(ping_xml_path),
-                        process_callback=register_process
+                        process_callback=register_process,
+                        command_evidence_file=str(ping_log_path),
                     )
                 
                 if xml_file and Path(xml_file).exists():
@@ -618,14 +709,12 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                 
                 if custom_cmd and custom_cmd.strip() and placeholder not in custom_cmd:
                     print(f"[Scan {scan_id}] 📡 Fase 3: Ejecutando comando personalizado: {custom_cmd}")
-                    cmd_str = custom_cmd
-                    if '-oX' not in cmd_str:
-                        cmd_str += f" -oX {shlex.quote(str(nmap_xml_path))}"
-                    
-                    cmd_args = shlex.split(cmd_str)
-                    process = subprocess.Popen(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                    register_process(process)
-                    stdout, stderr = process.communicate()
+                    cmd_args = force_nmap_xml_output(custom_cmd, nmap_xml_path)
+                    process, stdout, stderr = run_command_with_evidence(
+                        cmd_args,
+                        nmap_log_path,
+                        register_process,
+                    )
                     
                     if process.returncode == 0 or (os.path.exists(nmap_xml_path) and os.path.getsize(nmap_xml_path) > 0):
                         xml_file = str(nmap_xml_path)
@@ -645,7 +734,8 @@ def run_scan_background(scan_id: int, config: ScanConfig, ws_id: str):
                         enable_versions=config.nmap_versions,
                         enable_vulns=config.nmap_vulns,
                         output_file=str(nmap_xml_path),
-                        process_callback=register_process
+                        process_callback=register_process,
+                        command_evidence_file=str(nmap_log_path),
                     )
                 
                 if is_scan_cancelled(): return

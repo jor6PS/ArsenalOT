@@ -104,6 +104,22 @@
                 style="display: none; flex: 1; min-width: 100px;">
                 👁️ Ver XML
             </button>
+            <button class="btn btn-primary btn-sm" id="downloadPingBtn" onclick="downloadScanEvidence('nmap_ping')"
+                style="display: none; flex: 1; min-width: 100px;">
+                📥 Descargar Ping
+            </button>
+            <button class="btn btn-info btn-sm" id="viewPingBtn" onclick="viewScanEvidence('nmap_ping')"
+                style="display: none; flex: 1; min-width: 100px;">
+                👁️ Ver Ping
+            </button>
+            <button class="btn btn-primary btn-sm" id="downloadArpBtn" onclick="downloadScanEvidence('arp')"
+                style="display: none; flex: 1; min-width: 100px;">
+                📥 Descargar ARP
+            </button>
+            <button class="btn btn-info btn-sm" id="viewArpBtn" onclick="viewScanEvidence('arp')"
+                style="display: none; flex: 1; min-width: 100px;">
+                👁️ Ver ARP
+            </button>
         </div>
     </div>
 
@@ -1060,7 +1076,20 @@
             updateDeleteButtons();
         });
 
-        // Actualizar visibilidad de botones de eliminación y Nmap
+        const scanEvidenceButtonMap = {
+            nmap: { download: 'downloadNmapBtn', view: 'viewNmapBtn', label: 'XML de Nmap' },
+            nmap_ping: { download: 'downloadPingBtn', view: 'viewPingBtn', label: 'Nmap Ping' },
+            arp: { download: 'downloadArpBtn', view: 'viewArpBtn', label: 'ARP' }
+        };
+
+        function hideScanEvidenceButtons() {
+            Object.values(scanEvidenceButtonMap).forEach(cfg => {
+                document.getElementById(cfg.download).style.display = 'none';
+                document.getElementById(cfg.view).style.display = 'none';
+            });
+        }
+
+        // Actualizar visibilidad de botones de eliminación y evidencias de herramienta
         async function updateDeleteButtons() {
             const org = document.getElementById('filterOrg').value;
             const location = document.getElementById('filterLocation').value;
@@ -1070,9 +1099,7 @@
             document.getElementById('deleteLocationBtn').style.display = (org && location) ? 'inline-block' : 'none';
             document.getElementById('deleteScanBtn').style.display = scanId ? 'inline-block' : 'none';
 
-            // Ocultar todos los botones de descarga inicialmente
-            document.getElementById('downloadNmapBtn').style.display = 'none';
-            document.getElementById('viewNmapBtn').style.display = 'none';
+            hideScanEvidenceButtons();
 
             // Si hay un escaneo seleccionado, verificar qué archivos tiene disponibles
             if (scanId && scanId !== '') {
@@ -1080,10 +1107,16 @@
                     const response = await fetch(`/api/scan/${scanId}/info`);
                     const scanInfo = await response.json();
 
-                    // Mostrar botones de Nmap solo si el escaneo tiene archivo XML
-                    if (scanInfo.has_nmap) {
-                        document.getElementById('downloadNmapBtn').style.display = 'inline-block';
-                        document.getElementById('viewNmapBtn').style.display = 'inline-block';
+                    const evidenceKinds = new Set((scanInfo.evidence_files || []).map(item => item.kind));
+                    if (scanInfo.has_nmap) evidenceKinds.add('nmap');
+                    if (scanInfo.has_nmap_ping) evidenceKinds.add('nmap_ping');
+                    if (scanInfo.has_arp) evidenceKinds.add('arp');
+
+                    for (const kind of evidenceKinds) {
+                        const cfg = scanEvidenceButtonMap[kind];
+                        if (!cfg) continue;
+                        document.getElementById(cfg.download).style.display = 'inline-block';
+                        document.getElementById(cfg.view).style.display = 'inline-block';
                     }
 
                 } catch (error) {
@@ -1092,28 +1125,31 @@
             }
         }
 
-        // Descargar XML de Nmap
-        function downloadNmapXML() {
+        function downloadScanEvidence(kind) {
             const scanId = document.getElementById('filterScan').value;
             if (!scanId) {
                 alert('Por favor, selecciona un escaneo primero');
                 return;
             }
-
-            window.location.href = `/api/evidence/nmap/${scanId}`;
+            window.location.href = `/api/evidence/scan/${scanId}/${kind}`;
         }
 
-        // Visualizar XML de Nmap
-        function viewNmapXML() {
+        // Descargar XML de Nmap
+        function downloadNmapXML() {
+            downloadScanEvidence('nmap');
+        }
+
+        function viewScanEvidence(kind) {
             const scanId = document.getElementById('filterScan').value;
             if (!scanId) {
                 alert('Por favor, selecciona un escaneo primero');
                 return;
             }
+            const evidenceLabel = (scanEvidenceButtonMap[kind] || {}).label || 'Evidencia';
 
             // Crear modal
             const modal = document.createElement('div');
-            modal.id = 'nmapXmlModal';
+            modal.id = 'scanEvidenceModal';
             modal.style.cssText = `
             position: fixed;
             top: 0;
@@ -1145,7 +1181,7 @@
 
             const title = document.createElement('h2');
             title.style.cssText = 'margin: 0; font-size: 1.5rem;';
-            title.textContent = `📄 XML de Nmap - Escaneo #${scanId}`;
+            title.textContent = `📄 ${evidenceLabel} - Escaneo #${scanId}`;
 
             const buttonContainer = document.createElement('div');
             buttonContainer.style.cssText = 'display: flex; gap: 0.5rem;';
@@ -1155,7 +1191,7 @@
             downloadBtn.style.cssText = 'background: #3b82f6; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem;';
             downloadBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
-                window.location.href = `/api/evidence/nmap/${scanId}`;
+                window.location.href = `/api/evidence/scan/${scanId}/${kind}`;
             });
 
             const closeBtn = document.createElement('button');
@@ -1171,9 +1207,9 @@
             header.appendChild(title);
             header.appendChild(buttonContainer);
 
-            const xmlContent = document.createElement('pre');
-            xmlContent.id = 'nmapXmlContent';
-            xmlContent.style.cssText = `
+            const evidenceContent = document.createElement('pre');
+            evidenceContent.id = 'scanEvidenceContent';
+            evidenceContent.style.cssText = `
             background: #1e293b;
             color: #e2e8f0;
             padding: 1rem;
@@ -1188,15 +1224,15 @@
             margin: 0;
             flex: 1;
         `;
-            xmlContent.textContent = 'Cargando XML...';
+            evidenceContent.textContent = 'Cargando evidencia...';
 
             content.appendChild(header);
-            content.appendChild(xmlContent);
+            content.appendChild(evidenceContent);
             modal.appendChild(content);
             document.body.appendChild(modal);
 
-            // Cargar XML
-            fetch(`/api/evidence/nmap/${scanId}/view`)
+            // Cargar evidencia
+            fetch(`/api/evidence/scan/${scanId}/${kind}/view`)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error(`Error ${response.status}: ${response.statusText}`);
@@ -1204,17 +1240,16 @@
                     return response.json();
                 })
                 .then(data => {
-                    if (data.xml) {
-                        // Escapar el XML para evitar problemas con caracteres especiales
-                        xmlContent.textContent = data.xml;
+                    if (data.content) {
+                        evidenceContent.textContent = data.content;
                     } else {
-                        xmlContent.textContent = 'No se pudo cargar el XML';
-                        xmlContent.style.color = '#ef4444';
+                        evidenceContent.textContent = 'No se pudo cargar la evidencia';
+                        evidenceContent.style.color = '#ef4444';
                     }
                 })
                 .catch(error => {
-                    xmlContent.textContent = `Error cargando XML: ${error.message}`;
-                    xmlContent.style.color = '#ef4444';
+                    evidenceContent.textContent = `Error cargando evidencia: ${error.message}`;
+                    evidenceContent.style.color = '#ef4444';
                 });
 
             // Cerrar al hacer clic fuera del modal
@@ -1226,12 +1261,17 @@
 
             // Cerrar con ESC
             const escHandler = function (e) {
-                if (e.key === 'Escape' && document.getElementById('nmapXmlModal')) {
-                    document.getElementById('nmapXmlModal').remove();
+                if (e.key === 'Escape' && document.getElementById('scanEvidenceModal')) {
+                    document.getElementById('scanEvidenceModal').remove();
                     document.removeEventListener('keydown', escHandler);
                 }
             };
             document.addEventListener('keydown', escHandler);
+        }
+
+        // Visualizar XML de Nmap
+        function viewNmapXML() {
+            viewScanEvidence('nmap');
         }
 
         async function deleteScan() {

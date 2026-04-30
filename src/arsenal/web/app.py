@@ -108,6 +108,78 @@ app.include_router(recon_nxc_router)
 app.include_router(bitacora_router)
 app.include_router(pwndoc_router)
 
+SCAN_EVIDENCE_DEFS = {
+    "nmap": {
+        "label": "Nmap",
+        "filenames": ["nmap_scan.xml", "nmap_import.xml"],
+        "media_type": "application/xml",
+        "download_name": "nmap_scan_{scan_id}.xml",
+    },
+    "nmap_ping": {
+        "label": "Nmap Ping",
+        "filenames": ["ping_scan.xml"],
+        "media_type": "application/xml",
+        "download_name": "nmap_ping_{scan_id}.xml",
+    },
+    "arp": {
+        "label": "ARP",
+        "filenames": ["arp_scan.txt"],
+        "media_type": "text/plain",
+        "download_name": "arp_scan_{scan_id}.txt",
+    },
+}
+
+
+def _get_scan_record(scan_id: int):
+    conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    try:
+        return conn.execute("""
+            SELECT id, organization_name, location, scan_mode
+            FROM scans WHERE id = ?
+        """, (scan_id,)).fetchone()
+    finally:
+        conn.close()
+
+
+def _scan_evidence_dir(scan) -> Path:
+    scan_dir = storage.get_scan_directory(
+        scan["organization_name"],
+        scan["location"],
+        scan["id"],
+    )
+    return scan_dir / "evidence"
+
+
+def _find_scan_evidence_path(scan, kind: str) -> Optional[Path]:
+    definition = SCAN_EVIDENCE_DEFS.get(kind)
+    if not definition:
+        return None
+
+    evidence_dir = _scan_evidence_dir(scan)
+    for filename in definition["filenames"]:
+        candidate = evidence_dir / filename
+        if candidate.exists() and candidate.is_file() and candidate.stat().st_size > 0:
+            return candidate
+    return None
+
+
+def _get_scan_evidence_items(scan) -> List[Dict]:
+    items = []
+    for kind, definition in SCAN_EVIDENCE_DEFS.items():
+        path = _find_scan_evidence_path(scan, kind)
+        if not path:
+            continue
+        items.append({
+            "kind": kind,
+            "label": definition["label"],
+            "filename": path.name,
+            "size": path.stat().st_size,
+            "download_url": f"/api/evidence/scan/{scan['id']}/{kind}",
+            "view_url": f"/api/evidence/scan/{scan['id']}/{kind}/view",
+        })
+    return items
+
 
 @app.post("/api/scans/cleanup-zombies")
 async def cleanup_zombie_scans_endpoint(max_hours: float = 2.0):
@@ -195,14 +267,11 @@ async def get_scan_status(scan_id: int):
     
     result = dict(scan)
     
-    # Verificar si tiene archivo XML de Nmap
-    scan_dir = storage.get_scan_directory(
-        scan['organization_name'],
-        scan['location'],
-        scan_id
-    )
-    nmap_xml_path = scan_dir / "evidence" / "nmap_scan.xml"
-    result['has_nmap'] = nmap_xml_path.exists() if scan_dir.exists() else False
+    evidence_items = _get_scan_evidence_items(scan)
+    result['evidence_files'] = evidence_items
+    result['has_nmap'] = any(item["kind"] == "nmap" for item in evidence_items)
+    result['has_nmap_ping'] = any(item["kind"] == "nmap_ping" for item in evidence_items)
+    result['has_arp'] = any(item["kind"] == "arp" for item in evidence_items)
     
     phases = storage.get_scan_phases(scan_id)
     result['phases'] = phases
@@ -237,19 +306,15 @@ async def get_scan_info(scan_id: int):
         
         # Acceder correctamente a sqlite3.Row (no tiene .get())
         scan_mode_val = scan['scan_mode'] if scan['scan_mode'] is not None else 'active'
-        # Verificar si tiene archivo XML de Nmap
-        scan_dir = storage.get_scan_directory(
-            scan['organization_name'],
-            scan['location'],
-            scan_id
-        )
-        nmap_xml_path = scan_dir / "evidence" / "nmap_scan.xml"
-        has_nmap = nmap_xml_path.exists() if scan_dir.exists() else False
+        evidence_items = _get_scan_evidence_items(scan)
         
         return {
             "scan_id": scan['id'],
             "scan_mode": scan_mode_val,
-            "has_nmap": has_nmap
+            "has_nmap": any(item["kind"] == "nmap" for item in evidence_items),
+            "has_nmap_ping": any(item["kind"] == "nmap_ping" for item in evidence_items),
+            "has_arp": any(item["kind"] == "arp" for item in evidence_items),
+            "evidence_files": evidence_items,
         }
     except HTTPException:
         raise
@@ -1003,32 +1068,14 @@ async def get_screenshot(scan_id: int, ip: str, port: int):
 async def get_nmap_xml(scan_id: int):
     """Sirve el archivo XML de evidencia de Nmap para un escaneo."""
     try:
-        # Obtener información del escaneo
-        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        scan = cursor.execute("""
-        SELECT organization_name, location FROM scans WHERE id = ?
-        """, (scan_id,)).fetchone()
-        conn.close()
-        
+        scan = _get_scan_record(scan_id)
         if not scan:
             raise HTTPException(status_code=404, detail="Escaneo no encontrado")
-        
-        scan_dir = storage.get_scan_directory(
-            scan['organization_name'], 
-            scan['location'], 
-            scan_id
-        )
-        
-        nmap_xml_path = scan_dir / "evidence" / "nmap_scan.xml"
-        
-        if not nmap_xml_path.exists():
+
+        nmap_xml_path = _find_scan_evidence_path(scan, "nmap")
+        if not nmap_xml_path:
             raise HTTPException(status_code=404, detail="Archivo XML de Nmap no encontrado para este escaneo")
-        
-        # Leer y servir el archivo XML
-        from fastapi.responses import FileResponse
+
         return FileResponse(
             path=str(nmap_xml_path),
             media_type="application/xml",
@@ -1046,32 +1093,16 @@ async def get_nmap_xml(scan_id: int):
 async def view_nmap_xml(scan_id: int):
     """Sirve el archivo XML de Nmap para visualización (sin descarga forzada)."""
     try:
-        # Obtener información del escaneo
-        conn = sqlite3.connect(str(storage.db_path), timeout=30.0)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        scan = cursor.execute("""
-            SELECT organization_name, location FROM scans WHERE id = ?
-        """, (scan_id,)).fetchone()
-        conn.close()
-        
+        scan = _get_scan_record(scan_id)
         if not scan:
             raise HTTPException(status_code=404, detail="Escaneo no encontrado")
-        
-        scan_dir = storage.get_scan_directory(
-            scan['organization_name'], 
-            scan['location'], 
-            scan_id
-        )
-        
-        nmap_xml_path = scan_dir / "evidence" / "nmap_scan.xml"
-        
-        if not nmap_xml_path.exists():
+
+        nmap_xml_path = _find_scan_evidence_path(scan, "nmap")
+        if not nmap_xml_path:
             raise HTTPException(status_code=404, detail="Archivo XML de Nmap no encontrado")
-        
+
         # Leer el contenido del XML
-        with open(nmap_xml_path, 'r', encoding='utf-8') as f:
+        with open(nmap_xml_path, 'r', encoding='utf-8', errors='replace') as f:
             xml_content = f.read()
         
         return JSONResponse(content={"xml": xml_content})
@@ -1079,6 +1110,54 @@ async def view_nmap_xml(scan_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo XML de Nmap: {str(e)}")
+
+
+@app.get("/api/evidence/scan/{scan_id}/{kind}")
+async def download_scan_evidence(scan_id: int, kind: str):
+    """Descarga una evidencia de herramienta asociada a un escaneo."""
+    definition = SCAN_EVIDENCE_DEFS.get(kind)
+    if not definition:
+        raise HTTPException(status_code=404, detail="Tipo de evidencia no soportado")
+
+    scan = _get_scan_record(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Escaneo no encontrado")
+
+    evidence_path = _find_scan_evidence_path(scan, kind)
+    if not evidence_path:
+        raise HTTPException(status_code=404, detail="Evidencia no encontrada para este escaneo")
+
+    filename = definition["download_name"].format(scan_id=scan_id)
+    return FileResponse(
+        path=str(evidence_path),
+        media_type=definition["media_type"],
+        filename=filename,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.get("/api/evidence/scan/{scan_id}/{kind}/view")
+async def view_scan_evidence(scan_id: int, kind: str):
+    """Devuelve el contenido textual de una evidencia para verla en la UI."""
+    definition = SCAN_EVIDENCE_DEFS.get(kind)
+    if not definition:
+        raise HTTPException(status_code=404, detail="Tipo de evidencia no soportado")
+
+    scan = _get_scan_record(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Escaneo no encontrado")
+
+    evidence_path = _find_scan_evidence_path(scan, kind)
+    if not evidence_path:
+        raise HTTPException(status_code=404, detail="Evidencia no encontrada para este escaneo")
+
+    content = evidence_path.read_text(encoding="utf-8", errors="replace")
+    return JSONResponse(content={
+        "kind": kind,
+        "label": definition["label"],
+        "filename": evidence_path.name,
+        "content": content,
+    })
 
 @app.get("/api/evidence/source/{scan_id}/{ip}/{port}")
 async def get_source_code(scan_id: int, ip: str, port: int):

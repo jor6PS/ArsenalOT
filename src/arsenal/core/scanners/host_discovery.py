@@ -36,6 +36,33 @@ class HostDiscovery:
         self.timeout = timeout
         self.max_threads = max_threads
         self.current_process: Optional[subprocess.Popen] = None
+
+    def _write_command_evidence(self, evidence_file: Optional[str], command: List[str],
+                                stdout: str = "", stderr: str = "",
+                                returncode: Optional[int] = None,
+                                started_at: Optional[datetime] = None,
+                                completed_at: Optional[datetime] = None,
+                                note: Optional[str] = None):
+        """Guarda una transcripcion real de la ejecucion de un comando."""
+        if not evidence_file:
+            return
+        try:
+            completed_at = completed_at or datetime.now()
+            lines = [
+                f"started_at: {(started_at or completed_at).isoformat()}",
+                f"completed_at: {completed_at.isoformat()}",
+                f"command: {' '.join(command)}",
+            ]
+            if returncode is not None:
+                lines.append(f"returncode: {returncode}")
+            if note:
+                lines.extend(["", "note:", note])
+            lines.extend(["", "stdout:", stdout or ""])
+            lines.extend(["", "stderr:", stderr or ""])
+            with open(evidence_file, "w", encoding="utf-8", errors="replace") as fh:
+                fh.write("\n".join(lines))
+        except Exception as e:
+            print(f"⚠️  No se pudo guardar evidencia de comando: {e}")
     
     def get_local_ip(self) -> str:
         """Obtiene la IP local de la máquina."""
@@ -46,7 +73,8 @@ class HostDiscovery:
         except Exception:
             return '127.0.0.1'
     
-    def arp_scan(self, target_range: str, process_callback: Optional[callable] = None) -> Dict[str, Dict]:
+    def arp_scan(self, target_range: str, process_callback: Optional[callable] = None,
+                 evidence_file: Optional[str] = None) -> Dict[str, Dict]:
         """
         Ejecuta un escaneo ARP en la interfaz especificada.
 
@@ -60,9 +88,18 @@ class HostDiscovery:
             Dict IP -> {mac_address, vendor} con la información de cada host descubierto
         """
         discovered: Dict[str, Dict] = {}
+        started_at = datetime.now()
 
         # Verificar si arp-scan está disponible
         if not shutil.which("arp-scan"):
+            self._write_command_evidence(
+                evidence_file,
+                ["arp-scan", "--interface", self.interface, target_range],
+                stderr="arp-scan no está instalado o no está en PATH",
+                returncode=None,
+                started_at=started_at,
+                note="La fase ARP se solicitó, pero el binario arp-scan no estaba disponible.",
+            )
             return discovered
 
         # Construir comando arp-scan
@@ -86,6 +123,15 @@ class HostDiscovery:
                     pass
 
             stdout, stderr = self.current_process.communicate()
+            self._write_command_evidence(
+                evidence_file,
+                cmd,
+                stdout=stdout,
+                stderr=stderr,
+                returncode=self.current_process.returncode,
+                started_at=started_at,
+                completed_at=datetime.now(),
+            )
 
             if self.current_process.returncode == 0 or stdout:
                 # Formato de salida arp-scan: IP\tMAC\tVendor  (una línea por host)
@@ -129,13 +175,29 @@ class HostDiscovery:
                         discovered[ip_str] = {'mac_address': mac_str, 'vendor': vendor}
 
         except subprocess.TimeoutExpired:
+            self._write_command_evidence(
+                evidence_file,
+                cmd,
+                stderr="Timeout ejecutando arp-scan",
+                returncode=None,
+                started_at=started_at,
+                completed_at=datetime.now(),
+            )
             pass
         except Exception as e:
+            self._write_command_evidence(
+                evidence_file,
+                cmd,
+                stderr=str(e),
+                returncode=None,
+                started_at=started_at,
+                completed_at=datetime.now(),
+            )
             print(f"⚠️  Error en ARP scan: {e}")
 
         return discovered
     
-    def icmp_ping_scan(self, target_range: str) -> Set[str]:
+    def icmp_ping_scan(self, target_range: str, evidence_file: Optional[str] = None) -> Set[str]:
         """
         Escaneo ICMP usando nmap -sn (ping scan).
 
@@ -166,11 +228,21 @@ class HostDiscovery:
                 '-oG', '-',  # salida grepable por stdout
                 target_range,
             ]
+            started_at = datetime.now()
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=total_timeout,
+            )
+            self._write_command_evidence(
+                evidence_file,
+                cmd,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                returncode=result.returncode,
+                started_at=started_at,
+                completed_at=datetime.now(),
             )
 
             # Formato grepable: "Host: 1.2.3.4 (hostname)\tStatus: Up"
@@ -180,6 +252,15 @@ class HostDiscovery:
                     if m and self._is_valid_ip(m.group(1)):
                         discovered.add(m.group(1))
         except Exception as e:
+            if 'cmd' in locals():
+                self._write_command_evidence(
+                    evidence_file,
+                    cmd,
+                    stderr=str(e),
+                    returncode=None,
+                    started_at=locals().get('started_at') or datetime.now(),
+                    completed_at=datetime.now(),
+                )
             print(f"⚠️  Error en ICMP ping scan: {e}")
 
         return discovered
@@ -280,7 +361,9 @@ class HostDiscovery:
     
     def discover_hosts(self, target_range: str, techniques: Optional[List[str]] = None,
                       process_callback: Optional[callable] = None,
-                      is_cancelled_callback: Optional[callable] = None) -> Dict[str, Dict]:
+                      is_cancelled_callback: Optional[callable] = None,
+                      arp_evidence_file: Optional[str] = None,
+                      icmp_evidence_file: Optional[str] = None) -> Dict[str, Dict]:
         """
         Descubre hosts usando múltiples técnicas de forma inteligente.
 
@@ -310,7 +393,11 @@ class HostDiscovery:
         if 'arp' in techniques:
             if is_cancelled_callback and is_cancelled_callback(): return all_discovered
             print("   📡 Ejecutando ARP scan...")
-            arp_results = self.arp_scan(target_range, process_callback=process_callback)
+            arp_results = self.arp_scan(
+                target_range,
+                process_callback=process_callback,
+                evidence_file=arp_evidence_file,
+            )
             all_discovered.update(arp_results)
             print(f"      ✓ Descubiertos {len(arp_results)} hosts vía ARP")
             if is_cancelled_callback and is_cancelled_callback(): return all_discovered
@@ -319,7 +406,7 @@ class HostDiscovery:
         if 'icmp' in techniques:
             if is_cancelled_callback and is_cancelled_callback(): return all_discovered
             print("   📡 Ejecutando ICMP ping scan...")
-            icmp_results = self.icmp_ping_scan(target_range)
+            icmp_results = self.icmp_ping_scan(target_range, evidence_file=icmp_evidence_file)
             for ip in icmp_results:
                 if ip not in all_discovered:
                     all_discovered[ip] = {'mac_address': None, 'vendor': None}
@@ -398,4 +485,3 @@ class HostDiscovery:
             return not (ip.is_multicast or ip.is_reserved or ip.is_loopback)
         except ValueError:
             return False
-

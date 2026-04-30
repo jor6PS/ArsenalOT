@@ -18,6 +18,7 @@ import socket
 import threading
 from typing import List, Optional, Dict, Set
 from pathlib import Path
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
@@ -142,6 +143,29 @@ class PortScanner:
         self.output_file = output_file
         self.max_threads = max_threads
         self.current_process: Optional[subprocess.Popen] = None
+
+    def _write_command_evidence(self, evidence_file: Optional[str], command: List[str],
+                                stdout: str = "", stderr: str = "",
+                                returncode: Optional[int] = None,
+                                started_at: Optional[datetime] = None,
+                                completed_at: Optional[datetime] = None):
+        if not evidence_file:
+            return
+        try:
+            completed_at = completed_at or datetime.now()
+            lines = [
+                f"started_at: {(started_at or completed_at).isoformat()}",
+                f"completed_at: {completed_at.isoformat()}",
+                f"command: {' '.join(command)}",
+            ]
+            if returncode is not None:
+                lines.append(f"returncode: {returncode}")
+            lines.extend(["", "stdout:", stdout or ""])
+            lines.extend(["", "stderr:", stderr or ""])
+            with open(evidence_file, "w", encoding="utf-8", errors="replace") as fh:
+                fh.write("\n".join(lines))
+        except Exception as e:
+            print(f"⚠️  No se pudo guardar evidencia de Nmap: {e}")
     
     def format_ports_list(self, ports: List[int]) -> str:
         """Formatea una lista de puertos en formato Nmap."""
@@ -259,7 +283,8 @@ class PortScanner:
             enable_versions: bool = False,
             enable_vulns: bool = False,
             output_file: Optional[str] = None,
-            process_callback: Optional[callable] = None) -> str:
+            process_callback: Optional[callable] = None,
+            command_evidence_file: Optional[str] = None) -> str:
         """
         Ejecuta un escaneo de puertos con Nmap mejorado.
         
@@ -305,6 +330,7 @@ class PortScanner:
         
         try:
             # Ejecutar Nmap usando Popen para permitir seguimiento/cancelación
+            started_at = datetime.now()
             self.current_process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -321,6 +347,15 @@ class PortScanner:
             
             stdout, stderr = self.current_process.communicate()
             returncode = self.current_process.returncode
+            self._write_command_evidence(
+                command_evidence_file,
+                cmd,
+                stdout=stdout,
+                stderr=stderr,
+                returncode=returncode,
+                started_at=started_at,
+                completed_at=datetime.now(),
+            )
             
             # Crear un objeto similar al resultado de subprocess.run para compatibilidad mínima interna
             class DummyResult:
@@ -411,13 +446,35 @@ class PortScanner:
                 raise Exception(f"Nmap falló (código {result.returncode}): {error_msg}")
         except FileNotFoundError:
             error_msg = "Nmap no está instalado o no está en PATH"
+            self._write_command_evidence(
+                command_evidence_file,
+                cmd,
+                stderr=error_msg,
+                started_at=locals().get('started_at') or datetime.now(),
+                completed_at=datetime.now(),
+            )
             print(f"❌ Error: {error_msg}")
             raise Exception(error_msg)
         except subprocess.TimeoutExpired:
             error_msg = "Nmap excedió el tiempo límite"
+            self._write_command_evidence(
+                command_evidence_file,
+                cmd,
+                stderr=error_msg,
+                started_at=locals().get('started_at') or datetime.now(),
+                completed_at=datetime.now(),
+            )
             print(f"❌ Error: {error_msg}")
             raise Exception(error_msg)
         except Exception as e:
+            if command_evidence_file and 'returncode' not in locals():
+                self._write_command_evidence(
+                    command_evidence_file,
+                    cmd,
+                    stderr=str(e),
+                    started_at=locals().get('started_at') or datetime.now(),
+                    completed_at=datetime.now(),
+                )
             # Re-lanzar errores ya formateados
             if "Nmap falló" in str(e) or "no está instalado" in str(e) or "excedió" in str(e):
                 raise
