@@ -47,6 +47,11 @@ function toggleTheme() {
     applyTheme(current === 'dark' ? 'light' : 'dark');
 }
 
+function forcedThemeFromUrl() {
+    const theme = new URLSearchParams(window.location.search).get('theme');
+    return theme === 'light' || theme === 'dark' ? theme : null;
+}
+
 // ── Sidebar ───────────────────────────────────────────────────────
 function setSidebarCollapsed(collapsed) {
     const sidebar = document.getElementById('sidebar');
@@ -77,8 +82,8 @@ function sidebarGroupToggle(groupId) {
 
 // ── Init ──────────────────────────────────────────────────────────
 (function initArsenalUI() {
-    // Apply saved theme
-    const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
+    // Apply forced URL theme for capture/export pages, otherwise saved theme.
+    const savedTheme = forcedThemeFromUrl() || localStorage.getItem(THEME_KEY) || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
 
     // Apply saved sidebar state
@@ -181,4 +186,3 @@ async function safeFetch(url, options = {}) {
         throw error;
     }
 }
-

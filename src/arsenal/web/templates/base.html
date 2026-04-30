@@ -11,8 +11,13 @@
     <!-- Early theme + sidebar state to prevent flash -->
     <script>
         (function() {
-            var t = localStorage.getItem('arsenal-theme');
-            if (t) document.documentElement.setAttribute('data-theme', t);
+            var forcedTheme = new URLSearchParams(window.location.search).get('theme');
+            if (forcedTheme === 'light' || forcedTheme === 'dark') {
+                document.documentElement.setAttribute('data-theme', forcedTheme);
+            } else {
+                var t = localStorage.getItem('arsenal-theme');
+                if (t) document.documentElement.setAttribute('data-theme', t);
+            }
             var s = localStorage.getItem('arsenal-sidebar');
             if (s === 'collapsed') document.documentElement.style.setProperty('--sidebar-w', '68px');
         })();

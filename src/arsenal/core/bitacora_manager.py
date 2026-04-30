@@ -16,6 +16,7 @@ import re
 import shutil
 import hashlib
 import sqlite3
+import time
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
@@ -1101,6 +1102,7 @@ class BitacoraManager:
 
         network_list = list(networks.values())
         network_list.sort(key=lambda n: (n['system'].lower(), not n['known'], n['range']))
+
         return {
             'org_name': org_name,
             'location': location,
@@ -1111,6 +1113,7 @@ class BitacoraManager:
             'host_count': len(all_hosts),
             'source_network': source_network,
             'networks': network_list,
+            'selected_origin_id': f"origin:{ip_filter}" if ip_filter else None,
         }
 
     def _draw_text_wrapped(self, draw, text: str, xy: Tuple[int, int],
@@ -1141,9 +1144,117 @@ class BitacoraManager:
             y += (bbox[3] - bbox[1]) + line_spacing
         return y
 
+    def _render_visibility_diagram_frontend_png(self, data: Dict, output_path: Path) -> None:
+        """Usa el exportador PNG real del frontend con el filtro del origen aplicado."""
+        import base64 as _base64
+        import shutil as _shutil
+        from urllib.parse import quote as _quote, urlencode as _urlencode
+
+        origin_ip = str(data.get('myip') or '').strip()
+        if not origin_ip or origin_ip == 'sin IP':
+            raise ValueError("El exportador frontend necesita una IP de origen")
+
+        base_url = os.environ.get("ARSENALOT_WEB_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+        params = _urlencode({
+            "origin_ip": origin_ip,
+            "capture": "1",
+            "theme": "light",
+        })
+        url = f"{base_url}/pentest/{_quote(str(data.get('org_name') or ''), safe='')}/recon/visibility-diagram?{params}"
+
+        driver = None
+        errors = []
+        try:
+            try:
+                from selenium import webdriver
+                from selenium.webdriver.firefox.options import Options as FirefoxOptions
+                from selenium.webdriver.firefox.service import Service as FirefoxService
+                from selenium.webdriver.chrome.options import Options as ChromeOptions
+                from selenium.webdriver.chrome.service import Service as ChromeService
+                from selenium.webdriver.support.ui import WebDriverWait
+            except Exception as exc:
+                raise RuntimeError(f"Selenium no está disponible: {exc}") from exc
+
+            def start_firefox():
+                options = FirefoxOptions()
+                options.add_argument("-headless")
+                firefox_path = _shutil.which("firefox")
+                geckodriver_path = _shutil.which("geckodriver")
+                if firefox_path:
+                    options.binary_location = firefox_path
+                if geckodriver_path:
+                    service_env = dict(os.environ)
+                    service_env.pop("XAUTHORITY", None)
+                    service_env["MOZ_HEADLESS"] = "1"
+                    return webdriver.Firefox(
+                        service=FirefoxService(executable_path=geckodriver_path, env=service_env),
+                        options=options,
+                    )
+                return webdriver.Firefox(options=options)
+
+            def start_chrome():
+                options = ChromeOptions()
+                chromium_path = _shutil.which("chromium") or _shutil.which("chromium-browser") or _shutil.which("google-chrome")
+                chromedriver_path = _shutil.which("chromedriver")
+                if chromium_path:
+                    options.binary_location = chromium_path
+                options.add_argument("--headless=new")
+                options.add_argument("--no-sandbox")
+                options.add_argument("--disable-dev-shm-usage")
+                options.add_argument("--disable-gpu")
+                if chromedriver_path:
+                    return webdriver.Chrome(service=ChromeService(executable_path=chromedriver_path), options=options)
+                return webdriver.Chrome(options=options)
+
+            for starter in (start_firefox, start_chrome):
+                try:
+                    driver = starter()
+                    break
+                except Exception as exc:
+                    errors.append(str(exc))
+                    driver = None
+            if driver is None:
+                raise RuntimeError("; ".join(errors) or "No se pudo iniciar navegador headless")
+
+            driver.set_page_load_timeout(45)
+            driver.set_window_size(1440, 1000)
+            driver.get(url)
+            WebDriverWait(driver, 45).until(
+                lambda current: current.execute_script("return window.ARSENAL_VISIBILITY_READY === true;")
+            )
+            data_url = driver.execute_async_script(
+                """
+                const done = arguments[arguments.length - 1];
+                Promise.resolve(window.exportVisibilityPngDataUrl())
+                  .then((value) => done(value))
+                  .catch((error) => done({ error: String(error && error.message ? error.message : error) }));
+                """
+            )
+            if isinstance(data_url, dict) and data_url.get("error"):
+                raise RuntimeError(data_url["error"])
+            if not isinstance(data_url, str) or not data_url.startswith("data:image/png;base64,"):
+                raise RuntimeError("El frontend no devolvió un PNG válido")
+            png_bytes = _base64.b64decode(data_url.split(",", 1)[1])
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(png_bytes)
+            _open_permissions(output_path)
+        finally:
+            if driver is not None:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+
     def _render_visibility_diagram_png(self, data: Dict, output_path: Path) -> None:
         """Genera un PNG claro siguiendo el formato visual del diagrama de resultados."""
         from PIL import Image, ImageDraw, ImageFont
+
+        if data.get('selected_origin_id'):
+            try:
+                self._render_visibility_diagram_frontend_png(data, output_path)
+                return
+            except Exception:
+                pass
 
         def font(size: int, bold: bool = False):
             candidates = (
@@ -1354,9 +1465,18 @@ class BitacoraManager:
         if not data:
             return False
         label = self._ip_label(myip)
-        image_name = f"visibilidad_{self._slug_filename(location)}_{self._slug_filename(label)}.png"
-        image_path = self._diagrams_dir(org_name) / image_name
+        image_base = f"visibilidad_{self._slug_filename(location)}_{self._slug_filename(label)}"
+        image_name = f"{image_base}_{time.time_ns()}.png"
+        image_dir = self._diagrams_dir(org_name)
+        image_path = image_dir / image_name
         self._render_visibility_diagram_png(data, image_path)
+        stale_images = [image_dir / f"{image_base}.png", *image_dir.glob(f"{image_base}_*.png")]
+        for stale in stale_images:
+            if stale != image_path and stale.exists():
+                try:
+                    stale.unlink()
+                except OSError:
+                    pass
         rel_image_path = f"{DIAGRAMAS_SUBDIR}/{image_name}"
         block = self._build_visibility_diagram_block(rel_image_path, data)
         content = note_path.read_text(encoding='utf-8')

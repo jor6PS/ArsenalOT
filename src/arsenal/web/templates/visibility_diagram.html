@@ -1409,6 +1409,19 @@
 <script>
   const ORG_NAME = "{{ org_name }}";
   const FILTER_MENU_IDS = ['originFilterMenu', 'destinationFilterMenu', 'criticalFilterMenu'];
+  const VISIBILITY_URL_PARAMS = new URLSearchParams(window.location.search);
+  const VISIBILITY_REQUESTED_ORIGIN_IP = VISIBILITY_URL_PARAMS.get('origin_ip') || '';
+  const VISIBILITY_REQUESTED_ORIGIN_ID = VISIBILITY_URL_PARAMS.get('origin_id') || '';
+  const VISIBILITY_CAPTURE_MODE = VISIBILITY_URL_PARAMS.get('capture') === '1';
+  const VISIBILITY_FORCED_THEME = VISIBILITY_URL_PARAMS.get('theme') || '';
+  if (VISIBILITY_FORCED_THEME === 'light' || VISIBILITY_FORCED_THEME === 'dark') {
+    document.documentElement.setAttribute('data-theme', VISIBILITY_FORCED_THEME);
+  }
+  if (VISIBILITY_CAPTURE_MODE) {
+    document.documentElement.classList.add('visibility-capture-mode');
+  }
+  window.ARSENAL_VISIBILITY_READY = false;
+  window.ARSENAL_VISIBILITY_EXPORT_DATA_URL = null;
   let currentDiagramData = null;
   let currentLayout = null;
   let currentFilterMode = 'origin';
@@ -1720,6 +1733,25 @@
   function reconcileSelectedIds(selectedIds, availableIds, previousTotal) {
     if (!previousTotal || selectedIds.size >= previousTotal) return new Set(availableIds);
     return new Set(Array.from(selectedIds).filter((id) => availableIds.has(id)));
+  }
+
+  function requestedOriginFilterId(availableIds) {
+    const explicitId = VISIBILITY_REQUESTED_ORIGIN_ID.trim();
+    if (explicitId && availableIds.has(explicitId)) return explicitId;
+    const originIp = VISIBILITY_REQUESTED_ORIGIN_IP.trim();
+    if (!originIp) return '';
+    const candidateId = `origin:${originIp}`;
+    return availableIds.has(candidateId) ? candidateId : '';
+  }
+
+  function markVisibilityReady() {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        refreshLinkPositions();
+        window.ARSENAL_VISIBILITY_READY = true;
+        document.dispatchEvent(new CustomEvent('arsenal:visibility-ready'));
+      });
+    });
   }
 
   function bindFilterToggle(toggleId, mode, menuId) {
@@ -3656,6 +3688,8 @@
     const previousCriticalTotal = criticalOptions(currentDiagramData).length;
     const previousLayerTotal = layerOptions(currentDiagramData).length;
 
+    window.ARSENAL_VISIBILITY_READY = false;
+    window.ARSENAL_VISIBILITY_EXPORT_DATA_URL = null;
     diagram.innerHTML = '<svg class="visibility-links" id="visibilityLinks" aria-hidden="true"></svg><div class="visibility-empty">Cargando diagrama...</div>';
     originFilters.innerHTML = '<div class="visibility-empty">Cargando or&iacute;genes...</div>';
     destinationFilters.innerHTML = '<div class="visibility-empty">Cargando destinos...</div>';
@@ -3675,8 +3709,17 @@
       const allDestinationIds = new Set(destinationOptions(currentDiagramData).map((destination) => destination.id));
       const allCriticalIds = new Set(criticalOptions(currentDiagramData).map((criticalHost) => criticalHost.id));
       const allLayerIds = new Set(layerOptions(currentDiagramData).map((layer) => layer.id));
+      const requestedOriginId = requestedOriginFilterId(allOriginIds);
 
-      if (!hasInitializedCriticalSelection && !hasInitializedOriginSelection && !hasInitializedDestinationSelection) {
+      if (requestedOriginId) {
+        selectedOriginIds = new Set([requestedOriginId]);
+        selectedDestinationIds = new Set(allDestinationIds);
+        selectedCriticalIds = new Set();
+        currentFilterMode = 'origin';
+        hasInitializedCriticalSelection = true;
+        hasInitializedOriginSelection = true;
+        hasInitializedDestinationSelection = true;
+      } else if (!hasInitializedCriticalSelection && !hasInitializedOriginSelection && !hasInitializedDestinationSelection) {
         if (allCriticalIds.size) {
           selectedCriticalIds = new Set(allCriticalIds);
           selectedOriginIds = new Set();
@@ -3711,6 +3754,7 @@
       renderLayerFilters(currentDiagramData);
       renderVisibilityDiagram(currentDiagramData);
       updateModeControls();
+      markVisibilityReady();
     } catch (error) {
       console.error(error);
       currentDiagramData = null;
@@ -4298,7 +4342,7 @@
     }
   }
 
-  async function exportVisibilityPng() {
+  async function exportVisibilityPng(returnDataUrl = false) {
     const btn = document.getElementById('exportVisibilityPngBtn');
     const diagram = document.getElementById('visibilityDiagram');
     const linksSvg = document.getElementById('visibilityLinks');
@@ -4597,6 +4641,12 @@
 
       context.restore();
 
+      if (returnDataUrl) {
+        const dataUrl = canvas.toDataURL('image/png');
+        window.ARSENAL_VISIBILITY_EXPORT_DATA_URL = dataUrl;
+        return dataUrl;
+      }
+
       const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (!pngBlob) throw new Error('No se pudo generar la imagen PNG');
 
@@ -4610,11 +4660,28 @@
       setTimeout(() => URL.revokeObjectURL(downloadUrl), 30000);
     } catch (err) {
       console.error('Export PNG error:', err);
-      alert('No se pudo exportar el PNG. Prueba en Chrome/Edge con el diagrama completamente cargado.');
+      if (!returnDataUrl) {
+        alert('No se pudo exportar el PNG. Prueba en Chrome/Edge con el diagrama completamente cargado.');
+      }
+      return null;
     } finally {
       if (btn) btn.disabled = false;
     }
   }
+
+  async function exportVisibilityPngDataUrl() {
+    if (!window.ARSENAL_VISIBILITY_READY) {
+      await new Promise((resolve) => {
+        document.addEventListener('arsenal:visibility-ready', resolve, { once: true });
+        setTimeout(resolve, 5000);
+      });
+    }
+    refreshLinkPositions();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return exportVisibilityPng(true);
+  }
+
+  window.exportVisibilityPngDataUrl = exportVisibilityPngDataUrl;
 
   function exportVisibilityDrawio() {
     if (!currentDiagramData || !currentLayout) {
